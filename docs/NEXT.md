@@ -13,56 +13,58 @@ to `main`. `npm install && npm run dev` → http://localhost:3000.
 | 2. All 11 event modules | ✅ including `buyAHome` with synthetic accounts |
 | 3. Design system + chart | ✅ new `Northstar_UX` direction (PLAN.md §7) |
 | 4. Three tabs | ✅ Accounts, Cash Flow, Events all reading from `PlanResult` |
-| 5. Event drawer | ❌ **next up** |
-| 6. Assumptions + priority rules UI | ❌ |
+| 5. Event drawer | ✅ generated from zod schemas, live preview, delete cascade |
+| 6. Assumptions + priority rules UI | ❌ **next up** |
 | 7. Scenario A/B comparison | ❌ (switcher works; comparison does not) |
+
+Plans now persist to localStorage (`northstar:plans:v1`) with undo.
 
 Verify with `npm run lint && npm test && npm run build` — all three are green.
 
 ## What is NOT real yet
 
-These are visible in the UI but inert. Nothing behind them.
+- **`Edit assumptions`** — rendered `disabled`. This is step 6.
+- **Scenario switcher** swaps between two plans but does not *compare* them;
+  `compareToScenarioExternalId` is unimplemented. There is also no way to
+  create, rename, duplicate or delete a scenario from the UI.
+- **Accounts cannot be edited.** Balances, growth rates and withdrawal settings
+  are only what `samplePlan.ts` seeds. The store has no account actions yet.
+- **Priority rules are seeded and unreachable.** The waterfalls work, but there
+  is no UI to reorder them — that is the other half of step 6.
+- **Redo exists in the store but has no button** (only Undo is wired).
 
-- **`+ Add event`** — button renders, does nothing. This is step 5.
-- **`Edit assumptions`** — same. Step 6.
-- **Plans are hardcoded** in `src/planner/samplePlan.ts`. There is no
-  persistence at all in the planner — no localStorage, no editing. (The *old*
-  simulator had localStorage; that code is in `src/lib/storage.ts` and is
-  currently unused by the planner.)
-- **Scenario switcher** swaps between two hardcoded sample plans. It does not
-  compare them; `compareToScenarioExternalId` is unimplemented.
+## Next task, concretely: assumptions & priority rules (step 6)
 
-## Next task, concretely: the event drawer (step 5)
+`Edit assumptions` is currently `disabled`. Open it as a second drawer (reuse
+`.ns-drawer` and the `Field`/`ConfigField` primitives from
+`src/planner/drawer/EventDrawer.tsx` — pull those into a shared `fields.tsx`
+first rather than copying them).
 
-The engine side is already done — every event kind exports a zod `schema` and a
-`defaults(ctx)` from `packages/engine/src/events/`. The drawer should be
-generated from those, not hand-written per kind.
+It needs three sections:
 
-1. Add `EventDrawer.tsx` under `src/planner/drawer/`. Right-side panel, same
-   token vocabulary as `planner.css`.
-2. `+ Add event` opens a kind picker — the 11 entries from `EVENT_MODULES`,
-   grouped income/cost, using `codeFor`/`labelFor` from
-   `src/planner/presentation.ts`.
-3. Picking a kind creates a draft from `mod.defaults(ctx)` and renders a form
-   from `mod.schema`. A generic zod→field renderer covers all 11: `z.number()`
-   → numeric input, `z.boolean()` → toggle, `.min/.max` → slider bounds.
-   Read the `.describe()`/jsdoc on each config field for labels.
-4. **Edit a draft clone, commit on Save.** Live-preview the draft in the chart
-   (ghosted line) but do not touch the committed plan until Save, so Cancel is
-   free. This is PLAN.md §6.1.
-5. Clicking an existing pin or Gantt bar should open the drawer for that event.
-   The selection plumbing already exists — `ChartSelection` carries `eventId`.
-6. **Deleting an event must cascade to its synthetic accounts.** Filter on
-   `sourceEventId`. Warn in the confirm: *"This also removes the Home and
-   Mortgage accounts."*
+1. **Plan settings** — `inflationRate`, `projectionYears`, `baselineIncome`,
+   `baselineExpenses`, `incomeTaxRate`, and a `dollarMode` toggle. The store
+   already has `updateSettings(planId, patch)` wired with undo. `dollarMode`
+   should call the engine's existing `deflate(result, inflationRate)` at render
+   time — do NOT re-run the engine in real dollars.
+2. **Accounts** — a list with per-account growth method/rate, interest rate,
+   withdrawal timing, withdrawal tax rate and penalty. Needs new store actions
+   (`upsertAccount`, `deleteAccount`). Synthetic accounts (`isSynthetic`) must
+   be read-only here; they belong to their event.
+3. **Priority rules** — the two ordered waterfalls, drag to reorder. This is the
+   mechanic Spencer specifically asked for and it currently has no UI at all.
+   `PriorityRule.order` is the sort key; `ruleType` splits the two lists.
 
-Once the drawer can mutate a plan, lift plans into a Zustand store
-(`src/planner/store/planStore.ts`) with a bounded undo stack of whole plan
-snapshots, and persist to localStorage. Keep `runPlan` in a `useMemo` — never
-store the result.
+After that, step 7: scenario management (create/rename/duplicate/delete) and
+A/B comparison via `compareToScenarioExternalId` — render the compared
+scenario as a second, muted line on the chart.
 
 ## Known defects worth fixing
 
+0. **`describeSchema` reads zod's internal `_def`.** It is pinned by
+   `src/planner/drawer/schemaForm.test.ts`, so a zod upgrade that reshapes it
+   fails loudly rather than silently rendering empty forms. If that test breaks
+   after a bump, fix the introspection — do not delete the test.
 1. **Chart pins crowd on long horizons.** At the Retirement scenario's 61-year
    span the early pins overlap horizontally and truncate to `IN WN JO IN`.
    `build()` in `NetWorthChart.tsx` only stacks pins that share a year; it needs

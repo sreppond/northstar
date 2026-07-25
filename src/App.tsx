@@ -5,7 +5,9 @@ import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/700.css';
 import './planner/planner.css';
 
-import { SAMPLE_PLANS } from './planner/samplePlan';
+import { usePlanStore } from './planner/store/planStore';
+import { EventDrawer } from './planner/drawer/EventDrawer';
+import { useEventEditor, withDraft } from './planner/drawer/useEventEditor';
 import { NetWorthChart, type ChartSelection } from './planner/NetWorthChart';
 import { AccountsTab } from './planner/tabs/AccountsTab';
 import { CashFlowTab } from './planner/tabs/CashFlowTab';
@@ -24,15 +26,25 @@ const TABS: { id: TabId; name: string }[] = [
 const WINDOW = 8;
 
 export default function App() {
-  const [planId, setPlanId] = useState(SAMPLE_PLANS[0].id);
   const [tab, setTab] = useState<TabId>('accounts');
   const [winStart, setWinStart] = useState(0);
   const [selected, setSelected] = useState<ChartSelection | null>(null);
 
-  const plan = useMemo(
-    () => SAMPLE_PLANS.find((p) => p.id === planId) ?? SAMPLE_PLANS[0],
-    [planId],
-  );
+  const plans = usePlanStore((s) => s.plans);
+  const planId = usePlanStore((s) => s.activeId);
+  const setActive = usePlanStore((s) => s.setActive);
+  const upsertEvent = usePlanStore((s) => s.upsertEvent);
+  const deleteEvent = usePlanStore((s) => s.deleteEvent);
+  const undo = usePlanStore((s) => s.undo);
+  const canUndo = usePlanStore((s) => s.past.length > 0);
+
+  const editor = useEventEditor();
+
+  const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
+
+  // The draft is merged in for the projection but never written to the store,
+  // so the chart previews an unsaved edit live and Cancel costs nothing.
+  const plan = useMemo(() => withDraft(stored, editor.draft), [stored, editor.draft]);
 
   // The plan is the only source of truth; the result is always derived, never
   // stored. Storing it is how the chart and the table end up disagreeing.
@@ -94,16 +106,17 @@ export default function App() {
         <div className="ns-wordmark">Forecasting</div>
         <div className="ns-badge">Plan</div>
         <div className="ns-scenarios">
-          {SAMPLE_PLANS.map((p) => (
+          {plans.map((p) => (
             <button
               key={p.id}
               type="button"
               className="ns-scenario"
               aria-pressed={p.id === planId}
               onClick={() => {
-                setPlanId(p.id);
+                setActive(p.id);
                 setSelected(null);
                 setWinStart(0);
+                editor.close();
               }}
             >
               <span className="ns-dot" />
@@ -124,10 +137,15 @@ export default function App() {
               {result.startYear}–{result.endYear} · {eventCount} events
             </div>
             <div className="ns-title-actions">
-              <button type="button" className="ns-btn">
+              {canUndo && (
+                <button type="button" className="ns-btn-ghost" onClick={undo}>
+                  Undo
+                </button>
+              )}
+              <button type="button" className="ns-btn" disabled title="Not built yet">
                 Edit assumptions
               </button>
-              <button type="button" className="ns-btn ns-btn-primary">
+              <button type="button" className="ns-btn ns-btn-primary" onClick={editor.startNew}>
                 + Add event
               </button>
             </div>
@@ -164,14 +182,21 @@ export default function App() {
                   {selected.year}
                   {selected.detail ? ` · ${selected.detail}` : ''}
                 </span>
-                <button
-                  type="button"
-                  className="ns-btn-ghost"
-                  style={{ marginLeft: 'auto' }}
-                  onClick={() => setSelected(null)}
-                >
-                  Clear
-                </button>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="ns-btn-ghost"
+                    onClick={() => {
+                      const event = stored.events.find((e) => e.id === selected.eventId);
+                      if (event) editor.edit(event);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button type="button" className="ns-btn-ghost" onClick={() => setSelected(null)}>
+                    Clear
+                  </button>
+                </div>
               </>
             ) : (
               <span className="ns-hint">
@@ -241,6 +266,27 @@ export default function App() {
           )}
         </section>
       </main>
+
+      {editor.open && (
+        <EventDrawer
+          draft={editor.draft}
+          planStartYear={stored.settings.startYear}
+          planEndYear={result.endYear}
+          isNew={editor.isNew}
+          onChange={editor.change}
+          onPickKind={(kind) => editor.pickKind(kind, stored)}
+          onSave={() => {
+            if (editor.draft) upsertEvent(stored.id, editor.draft);
+            editor.close();
+          }}
+          onCancel={editor.close}
+          onDelete={() => {
+            if (editor.draft) deleteEvent(stored.id, editor.draft.id);
+            setSelected(null);
+            editor.close();
+          }}
+        />
+      )}
     </div>
   );
 }

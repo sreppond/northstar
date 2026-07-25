@@ -70,5 +70,12 @@ export function compileEvent(
 }
 
 export * from './kit.js';
-export { income, annualExpense, otherExpense, windfall, buyAHome };
-export { careerBreak, newJob, retirement, socialSecurity, endOfPlan, haveAKid };
+
+// Re-export each module wholesale so consumers get the config SCHEMAS and
+// their inferred types too, not just the module wrapper. The drawer generates
+// its forms from those schemas.
+export * from './income.js';
+export * from './expenses.js';
+export * from './buyAHome.js';
+export * from './work.js';
+export * from './life.js';
