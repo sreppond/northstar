@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { EventKind, PlanEvent } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
 import { codeFor, labelFor, toneFor } from '../presentation';
@@ -200,8 +200,16 @@ function KindGroup({
     <div className="ns-kind-group">
       <div className="ns-kind-title">{title}</div>
       <div className="ns-kind-grid">
-        {kinds.map((kind) => (
-          <button key={kind} type="button" className="ns-kind" onClick={() => onPick(kind)}>
+        {kinds.map((kind, i) => (
+          <button
+            key={kind}
+            type="button"
+            className="ns-kind"
+            // --i staggers the rise-in so the options arrive as a list being
+            // laid down rather than a block appearing.
+            style={{ '--i': i } as CSSProperties}
+            onClick={() => onPick(kind)}
+          >
             <span className={`ns-code ns-code-${toneFor(kind)}`}>{codeFor(kind)}</span>
             <span>{labelFor(kind)}</span>
           </button>

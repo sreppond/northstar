@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { PlanEvent, PlanResult } from '@northstar/engine';
 import { codeFor, summarize, toneFor } from './presentation';
 import { axisMoney, money, signedMoney } from './format';
@@ -108,6 +108,7 @@ export function NetWorthChart({ result, events, rateLabel, selected, onSelect }:
 
           <path d={geometry.area} fill="url(#ns-nw-fill)" />
           <path
+            className="ns-nw-line"
             d={geometry.line}
             fill="none"
             stroke="#12304C"
@@ -157,14 +158,16 @@ export function NetWorthChart({ result, events, rateLabel, selected, onSelect }:
             />
           ))}
 
-          {geometry.pins.map((pin) => (
+          {geometry.pins.map((pin, i) => (
             <button
               key={pin.eventId}
               type="button"
               className={`ns-pin ns-pin-${pin.tone}`}
               aria-pressed={selected?.eventId === pin.eventId}
               title={`${pin.label} · ${pin.year}`}
-              style={{ left: pct(pin.x, VB_W), top: pct(pin.top, VB_H) }}
+              // --i staggers the drop-in left to right, so the pins land in
+              // chronological order rather than all at once.
+              style={{ left: pct(pin.x, VB_W), top: pct(pin.top, VB_H), '--i': i } as CSSProperties}
               onClick={() =>
                 onSelect(
                   selected?.eventId === pin.eventId
