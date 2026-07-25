@@ -226,7 +226,7 @@ export function runPlan(plan: Plan): PlanResult {
 
       if (result.payment > EPSILON) {
         expenses.push({
-          label: `${account.name} — payment`,
+          label: `${account.name} payment`,
           amount: result.payment,
           accountId: account.id,
           sourceEventId: account.sourceEventId,

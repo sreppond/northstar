@@ -592,70 +592,158 @@ tabs unmounted.
 
 ## 7. Visual design
 
-The design system in the zip — **Industry** — is a blueprint/wireframe language,
-and it fits a projection tool unusually well: a forecast *is* a technical
-drawing.
+> **Superseded.** This section originally specified the *Industry* blueprint
+> system (steel-blue wireframe, Barlow Condensed, square corners, `+`
+> registration marks, `FIG. 01` captions, `A.1`/`L.1` row refs). That direction
+> was replaced. The spec below is the current one, taken from `Northstar_UX`.
+
+A soft, modern product surface: white cards on a light neutral ground, generous
+rounding, one blue accent, and a warm amber used **semantically** rather than
+decoratively.
 
 ### 7.1 Tokens
 
 ```
-ground        #f2f2f3      surface  #e9e9ea
-text          #1d1f20      accent   #5980a6   (steel blue, mono scheme)
-divider       color-mix(in srgb, #1d1f20 16%, transparent)
-ramps         --color-neutral-100…900, --color-accent-100…900  (OKLCH, shared L)
-headings      Barlow Condensed 600
-body          Barlow
-radius        2–4px (effectively square)
-spacing       --space-1…8 at 0.85× density (3.4 / 6.8 / 10.2 / 13.6 / 20.4 / 27.2)
-icons         Lucide, stroke-width 1.5
+/* ground & surface */
+--bg            #F4F6F8      page
+--surface       #FFFFFF      cards
+--surface-sub   #FBFCFD      inset panels, table headers, footer bars
+--tint-row      #F4F9FD      the highlighted total row
+--track         #F1F4F7      segmented-control track
+
+/* ink */
+--ink           #16202B      body text
+--ink-deep      #12304C      headline numbers, the net-worth line
+--muted         #6B7C8C      labels, secondary text
+--muted-light   #8A99A7      axis ticks, footnotes
+
+/* lines */
+--border        #E3E9EF      card borders
+--border-strong #DCE4EC      control borders
+--rule          #EDF1F5      row rules
+--rule-light    #F2F5F8      child-row rules
+
+/* accent — blue = income */
+--blue          #2E8BD0      primary button, accent text, hover crosshair
+--blue-press    #2379B8
+--blue-deep     #1D4E77      text on blue tints
+--blue-tint     #E4F1FB      income pin fill
+--blue-tint-2   #E8F2FA      badge fill
+--blue-line     #A9CFEA      income pin border
+--blue-hover    #D2E8F8
+
+/* accent — amber = cost */
+--amber-tint    #FBF0E2      cost pin fill
+--amber-line    #E8C68A      cost pin border
+--amber-deep    #8A5B12      text on amber tints
+--amber-hover   #F7E6CC
+
+font            'DM Sans', system-ui, sans-serif  (400 / 500 / 700)
+radius          18px cards · 14px inset panels · 10–11px controls · 999px pills
+shadow-card     0 1px 3px rgba(18,48,76,0.05)
+shadow-control  0 1px 2px rgba(18,48,76,0.06)
+shadow-tooltip  0 6px 18px rgba(18,48,76,0.22)
+page width      1320px max, 34px gutters
 ```
 
-Take every value from `var(--…)`. Never hardcode a hex.
+**`font-variant-numeric: tabular-nums` on every number.** The KPI strip, the
+axis, the tooltip and all three tables. Columns that jitter as values change is
+the single most common way a financial UI looks amateur.
 
-### 7.2 The rules that define the look
+### 7.2 The semantic colour rule
 
-- **Cards and figures are line drawings, not filled blocks.** Transparent
-  background, hairline border, square corners.
-- **Registration marks.** Every framed object gets `.blueprint` plus four
-  `<i class="corner tl|tr|bl|br">` children rendering `+` crosshairs at the
-  corners. Dropping them breaks the language.
-- **One solid object per screen** — the primary button (`Add event`) is the only
-  accent fill.
-- **Figure captions.** `FIG. 01 — PROJECTED NET WORTH, 2026–2046` in condensed
-  uppercase, with the assumption (`RETURN 6.5%`) right-aligned on the same rule.
-- **Row references.** Table rows carry `A.1`, `A.2`, `L.1` refs in accent —
-  assets numbered, liabilities numbered. This is what makes the table read as a
-  spec sheet rather than a bank statement.
-- **Accent is 3:1 against the ground** — fine for chrome, icons, and large type,
-  **not** for body copy. Use `--color-accent-700` for paragraph-size accent text.
+This is the substantive change from the previous direction, not just a repaint.
+Event colour now encodes **what an event does to cash**:
 
-### 7.3 The chart
+| Colour | Meaning | Events |
+|---|---|---|
+| Blue tint, blue border | Income event | `income`, `newJob`, `windfall`, `socialSecurity` |
+| Amber tint, amber border | Cost event | `annualExpense`, `otherExpense`, `haveAKid`, `buyAHome`, `careerBreak` |
+| Solid navy | Plan boundary | `endOfPlan` |
 
-- Single steel line, light accent fill beneath, dot at the origin year.
-- **Dashed vertical rules** at every year that has an event.
-- **Event pins** above the plot as 3-letter codes in small bordered chips —
-  `RSU RSU JOB RSE KID HSE RSE`, stacking to a second row when a year has two
-  (`KID` under `JOB` in the reference). The `END` pin is filled dark.
-- Pins are **selectable**: clicking one opens its inspector; hovering the plot
-  reads out `{year, netWorth, net flow}`.
-- Hover targets a **year band**, not a point. Snap to the nearest year column.
+The chart legend states it (`Net worth · Income event · Cost event`), so the pin
+row reads as a cash-flow narrative at a glance. `retirement` is the ambiguous
+one — it stops income *and* changes spending; treat it as a cost event so the
+pin row stays a clean "what costs money" scan.
 
-### 7.4 Tabs and tables
+### 7.3 Layout
 
-`ACCOUNTS · CASH FLOW · EVENTS` as a squared segmented control, active tab
-filled dark. To its right, a year-window label (`2026–2033`) with `←` `→`
-paging — the projection is 20 years but only ~8 columns fit. Page the window;
-don't shrink the type.
+**Page header** (outside the card): `Forecasting` 22/700 · a `Plan` pill in blue
+tint · scenario pills. The active scenario is a white pill with a `#C9D8E5`
+border and a solid blue dot; inactive is transparent with a grey dot.
 
-Accounts tab hierarchy: **Net worth** → **Assets** (Cash, Taxable, Tax-deferred,
-Tax-free, Real Estate) → **Liabilities** (Credit Cards, Loans), each group
-expandable to individual accounts.
+**Plan card** (radius 18, `--border`, `shadow-card`):
 
-Cash flow tab: **Income** (a row per source, each with its event icon) →
-**Expenses** (baseline + a row per event) → **Withdrawals** (per account) →
-**Net Cash Flow** as the summary rule.
+1. *Title row* — a 34px rounded-11 blue-tint icon tile, the plan name at 21/700,
+   then `2026–2046 · 9 events` in muted, then right-aligned `Edit assumptions`
+   (outlined) and `+ Add event` (solid blue).
+2. *KPI strip* — **one** bordered, rounded-14 container inset 24px, four equal
+   cells divided by internal 1px lines. Per cell: 13px muted label, 30/700
+   `--ink-deep` value, 12px `--muted-light` note. Not four separate cards.
+3. *Chart* — see §7.4.
+4. *Selection footer* — a `--surface-sub` bar on a `--rule` top border. Empty
+   state: *"Hover the chart for any year, or tap an event marker to see its
+   details."* Selected: a blue-tint ref pill, the label, `year · detail`, and a
+   right-aligned `Clear`.
 
----
+**Data card** (a second card below):
+
+- Pill segmented control on a `--track` background — the active tab is a **white
+  pill at 700** with a soft shadow; inactive is muted 500 text on transparent.
+- Right side: the year window (`2026–2033`) and two 34px square-rounded arrow
+  buttons. The projection runs 20 years and only eight columns fit — page the
+  window, never shrink the type.
+
+### 7.4 The chart
+
+SVG on a `0 0 1176 372` viewBox, plot from x=66 to x=1168.
+
+- Horizontal gridlines in `--border`; a vertical `--border-strong` rule dropped
+  at each event year.
+- Net-worth line: `--ink-deep`, 2.75px, round caps and joins, over a fill that
+  ramps `--blue` 20% → 2% top to bottom. An origin dot in `--blue` at r=4.5.
+- **Event pins**: 32px, radius-10, coloured by §7.2, three-letter code at
+  11/700. Pins colliding in the same year stack downward (`KID` under `JOB`).
+- **Hover** targets a year band, not a point: a `--blue` vertical crosshair, a
+  white-filled r=5.5 dot with a 2.5px blue stroke, and an `--ink-deep` tooltip
+  (radius 12) showing the year, net worth at 20/700, and `Net flow ±X`.
+- Axis labels live in an absolutely-positioned overlay above the SVG rather than
+  as `<text>` — it keeps them in the page font stack and lets them use tabular
+  numerals.
+
+### 7.5 Tables
+
+All three share a `268px repeat(8, 1fr)` grid, labels left, figures right.
+
+| Row type | Style |
+|---|---|
+| Header | `--surface-sub`, 13px muted, caption in the label cell (`Balance sheet`, `Annual cash flow`, `Life events`) |
+| Total | `--tint-row` background, 15/700 `--ink-deep` (`Net worth`, `Net cash flow`) |
+| Group | 14/700 `--ink` (`Assets`, `Liabilities`, `Income`, `Expenses`, `Withdrawals`) |
+| Child | 14/400 `#41525F`, label indented to 34px, `--rule-light` rule, `#FAFCFD` on hover |
+
+**Accounts** → Net worth · Assets (Cash, Taxable investments, Real estate) ·
+Liabilities (Mortgage).
+
+**Cash Flow** → Income (Salary, RSU) · Expenses (Taxes, Living, Children,
+Housing, Down payment) · Withdrawals · Net cash flow.
+
+**Events** → a Gantt: a 26px code chip and label in the left column, pill bars
+across a tick-ruled track carrying an inline summary
+(`2031 · $1.15M, 20% down, 6.25% / 30yr`). The `endOfPlan` marker is a solid
+navy pill right-aligned to its year.
+
+### 7.6 Implementation notes
+
+- **Self-host DM Sans** (`@fontsource/dm-sans`). The design links Google Fonts;
+  a remote font is a render-blocking third-party dependency and is blocked
+  outright on some networks — including this project's build sandbox.
+- The design ships as inline styles. Port it to a **real stylesheet** with these
+  tokens as CSS custom properties, so the values are tunable in one place.
+- Pin collision handling and the year-band hit test are the only genuinely
+  fiddly parts of the chart. Both are why this is hand-rolled SVG rather than a
+  chart library.
+
 
 ## 8. Testing
 

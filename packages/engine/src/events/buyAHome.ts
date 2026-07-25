@@ -135,7 +135,7 @@ export const buyAHome: EventModule<BuyAHomeConfig> = {
         year,
         kind: 'expense',
         amount: carrying,
-        label: `${event.name} — property tax, insurance & upkeep`,
+        label: `${event.name} — tax, insurance & upkeep`,
         sourceEventId: event.id,
         category: 'housing',
       });

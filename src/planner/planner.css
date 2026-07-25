@@ -1,0 +1,736 @@
+/*
+ * Northstar planner surface.
+ *
+ * Tokens and rules come from docs/PLAN.md §7. The design was handed over as
+ * inline styles; it lives here as real classes so every value is tunable in
+ * one place.
+ */
+
+.ns {
+  /* ground & surface */
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-sub: #fbfcfd;
+  --tint-row: #f4f9fd;
+  --track: #f1f4f7;
+
+  /* ink */
+  --ink: #16202b;
+  --ink-deep: #12304c;
+  --muted: #6b7c8c;
+  --muted-light: #8a99a7;
+  --child-ink: #41525f;
+
+  /* lines */
+  --border: #e3e9ef;
+  --border-strong: #dce4ec;
+  --rule: #edf1f5;
+  --rule-light: #f2f5f8;
+  --pill-border: #c9d8e5;
+
+  /* blue = income */
+  --blue: #2e8bd0;
+  --blue-press: #2379b8;
+  --blue-deep: #1d4e77;
+  --blue-tint: #e4f1fb;
+  --blue-tint-2: #e8f2fa;
+  --blue-line: #a9cfea;
+  --blue-hover: #d2e8f8;
+
+  /* amber = cost */
+  --amber-tint: #fbf0e2;
+  --amber-line: #e8c68a;
+  --amber-deep: #8a5b12;
+  --amber-hover: #f7e6cc;
+
+  --shadow-card: 0 1px 3px rgba(18, 48, 76, 0.05);
+  --shadow-control: 0 1px 2px rgba(18, 48, 76, 0.06);
+  --shadow-tooltip: 0 6px 18px rgba(18, 48, 76, 0.22);
+
+  min-height: 100vh;
+  padding-bottom: 72px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ns *,
+.ns *::before,
+.ns *::after {
+  box-sizing: border-box;
+}
+
+/* Every figure is tabular. Columns that jitter as values change is the
+   fastest way a financial UI looks amateur. */
+.ns-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.ns :focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* --- page frame ---------------------------------------------------------- */
+
+.ns-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 34px 16px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.ns-wordmark {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ns-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--blue);
+  background: var(--blue-tint-2);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+.ns-main {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ns-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+/* --- controls ------------------------------------------------------------ */
+
+.ns-scenarios {
+  display: flex;
+  gap: 8px;
+  margin-left: 10px;
+}
+
+.ns-scenario {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.ns-scenario:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.ns-scenario .ns-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--pill-border);
+}
+.ns-scenario[aria-pressed='true'] {
+  color: var(--ink-deep);
+  background: var(--surface);
+  border-color: var(--pill-border);
+  box-shadow: var(--shadow-control);
+}
+.ns-scenario[aria-pressed='true'] .ns-dot {
+  background: var(--blue);
+}
+
+.ns-btn {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.ns-btn:hover {
+  background: var(--bg);
+}
+
+.ns-btn-primary {
+  color: #fff;
+  background: var(--blue);
+  border-color: var(--blue);
+  padding: 10px 18px;
+  box-shadow: 0 1px 2px rgba(46, 139, 208, 0.35);
+}
+.ns-btn-primary:hover {
+  background: var(--blue-press);
+}
+
+.ns-btn-square {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+}
+.ns-btn-square:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ns-btn-square:disabled:hover {
+  background: var(--surface);
+}
+
+.ns-btn-ghost {
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.ns-btn-ghost:hover {
+  background: #eef2f6;
+  color: var(--ink);
+}
+
+/* --- plan card ----------------------------------------------------------- */
+
+.ns-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px 18px;
+}
+
+.ns-title-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--blue-tint-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  flex: none;
+}
+
+.ns-title {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ns-subtle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ns-title-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* KPI strip: ONE bordered container with internal dividers, not four cards. */
+.ns-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0 24px;
+  border: 1px solid #e9eef3;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface-sub);
+}
+.ns-kpi {
+  padding: 16px 20px 18px;
+  border-left: 1px solid #e9eef3;
+}
+.ns-kpi:first-child {
+  border-left: 0;
+}
+.ns-kpi-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.ns-kpi-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink-deep);
+}
+.ns-kpi-note {
+  font-size: 12px;
+  color: var(--muted-light);
+  margin-top: 7px;
+}
+
+/* --- chart --------------------------------------------------------------- */
+
+.ns-chart-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px 4px;
+}
+.ns-chart-head h2 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  margin: 0;
+}
+.ns-legend {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+  align-items: center;
+}
+.ns-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ns-legend-line {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ink-deep);
+}
+.ns-legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.ns-chart {
+  position: relative;
+  padding: 0 24px 8px;
+}
+.ns-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.ns-chart-overlay {
+  position: absolute;
+  inset: 0 24px;
+  pointer-events: none;
+}
+.ns-y-tick,
+.ns-x-tick {
+  position: absolute;
+  font-size: 12px;
+  color: var(--muted-light);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ns-y-tick {
+  transform: translate(-100%, -50%);
+}
+.ns-x-tick {
+  transform: translateX(-50%);
+}
+
+.ns-pin {
+  position: absolute;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-control);
+  /* Above the hover hit bands, so a pin click reaches the pin. */
+  z-index: 2;
+}
+.ns-pin-income {
+  background: var(--blue-tint);
+  border: 1px solid var(--blue-line);
+  color: var(--blue-deep);
+}
+.ns-pin-income:hover {
+  background: var(--blue-hover);
+}
+.ns-pin-cost {
+  background: var(--amber-tint);
+  border: 1px solid var(--amber-line);
+  color: var(--amber-deep);
+}
+.ns-pin-cost:hover {
+  background: var(--amber-hover);
+}
+.ns-pin-end {
+  background: var(--ink-deep);
+  border: 1px solid var(--ink-deep);
+  color: #fff;
+}
+.ns-pin-end:hover {
+  background: var(--blue-deep);
+}
+.ns-pin[aria-pressed='true'] {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.ns-hit {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.ns-tooltip {
+  position: absolute;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: var(--ink-deep);
+  color: #fff;
+  border-radius: 12px;
+  padding: 9px 13px;
+  min-width: 126px;
+  box-shadow: var(--shadow-tooltip);
+}
+.ns-tooltip-year {
+  font-size: 12px;
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+}
+.ns-tooltip-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.ns-tooltip-flow {
+  font-size: 12px;
+  opacity: 0.78;
+}
+
+.ns-selection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--rule);
+  padding: 14px 24px;
+  min-height: 38px;
+  background: var(--surface-sub);
+}
+.ns-ref {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--blue);
+  background: var(--blue-tint-2);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.ns-ref-cost {
+  color: var(--amber-deep);
+  background: var(--amber-tint);
+}
+.ns-selection-label {
+  font-size: 15px;
+  font-weight: 500;
+}
+.ns-hint {
+  font-size: 13px;
+  color: var(--muted-light);
+}
+
+/* --- tabs ---------------------------------------------------------------- */
+
+.ns-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.ns-segmented {
+  display: flex;
+  gap: 4px;
+  background: var(--track);
+  border-radius: 999px;
+  padding: 4px;
+}
+.ns-tab {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 20px;
+  cursor: pointer;
+}
+.ns-tab:hover {
+  color: var(--ink);
+}
+.ns-tab[aria-selected='true'] {
+  font-weight: 700;
+  color: var(--ink-deep);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(18, 48, 76, 0.1);
+}
+.ns-window {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ns-window-label {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- tables -------------------------------------------------------------- */
+
+.ns-grid {
+  display: grid;
+  grid-template-columns: 268px repeat(var(--cols, 8), 1fr);
+}
+.ns-row-head {
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-sub);
+}
+.ns-row-head > div {
+  padding: 11px 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-row-head > div + div {
+  padding: 11px 16px;
+  text-align: right;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-row-total {
+  border-bottom: 1px solid var(--rule);
+  background: var(--tint-row);
+}
+.ns-row-total > div {
+  padding: 13px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-deep);
+}
+.ns-row-total > div + div {
+  padding: 13px 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-row-group {
+  border-bottom: 1px solid var(--rule);
+}
+.ns-row-group > div {
+  padding: 11px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ns-row-group > div + div {
+  padding: 11px 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-row-child {
+  border-bottom: 1px solid var(--rule-light);
+}
+.ns-row-child:hover {
+  background: #fafcfd;
+}
+.ns-row-child > div {
+  padding: 10px 20px 10px 34px;
+  font-size: 14px;
+  color: var(--child-ink);
+}
+/* Labels truncate rather than wrapping. A financial table lives or dies on an
+   even row rhythm; a two-line row breaks the grid and reads as a mistake. */
+.ns-row-child > div:first-child,
+.ns-row-group > div:first-child,
+.ns-row-total > div:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns-row-child > div + div {
+  padding: 10px 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-empty {
+  padding: 28px 20px;
+  font-size: 13px;
+  color: var(--muted-light);
+  text-align: center;
+}
+
+/* --- events gantt -------------------------------------------------------- */
+
+.ns-gantt-head {
+  display: grid;
+  grid-template-columns: 268px 1fr;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-sub);
+}
+.ns-gantt-head > div:first-child {
+  padding: 11px 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-gantt-ticks {
+  position: relative;
+  height: 36px;
+}
+.ns-gantt-tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-gantt-row {
+  display: grid;
+  grid-template-columns: 268px 1fr;
+  border-bottom: 1px solid var(--rule-light);
+}
+.ns-gantt-label {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.ns-code {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.ns-code-income {
+  background: var(--blue-tint);
+  border: 1px solid var(--blue-line);
+  color: var(--blue-deep);
+}
+.ns-code-cost {
+  background: var(--amber-tint);
+  border: 1px solid var(--amber-line);
+  color: var(--amber-deep);
+}
+.ns-code-end {
+  background: var(--ink-deep);
+  color: #fff;
+}
+
+.ns-gantt-track {
+  position: relative;
+  height: 48px;
+  border-left: 1px solid var(--rule);
+}
+.ns-gantt-gridline {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 1px;
+  background: var(--rule-light);
+}
+.ns-bar {
+  position: absolute;
+  top: 11px;
+  height: 26px;
+  min-width: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ns-bar-income {
+  background: var(--blue-tint);
+  border: 1px solid var(--blue-line);
+  color: var(--blue-deep);
+}
+.ns-bar-income:hover {
+  background: var(--blue-hover);
+}
+.ns-bar-cost {
+  background: var(--amber-tint);
+  border: 1px solid var(--amber-line);
+  color: var(--amber-deep);
+}
+.ns-bar-cost:hover {
+  background: var(--amber-hover);
+}
+.ns-bar-end {
+  background: var(--ink-deep);
+  color: #fff;
+  border: 1px solid var(--ink-deep);
+  transform: translateX(-100%);
+  cursor: default;
+}
+
+/* --- warnings ------------------------------------------------------------ */
+
+.ns-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  font-size: 13px;
+  color: var(--amber-deep);
+  background: var(--amber-tint);
+  border-top: 1px solid var(--amber-line);
+}
