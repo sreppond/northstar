@@ -943,3 +943,218 @@
 .ns-btn:disabled:hover {
   background: var(--blue);
 }
+
+/* --- hover detail card --------------------------------------------------- */
+
+.ns-hovercard-anchor {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ns-hovercard {
+  position: fixed;
+  z-index: 60;
+  min-width: 250px;
+  max-width: 340px;
+  background: #16202b;
+  color: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 32px rgba(18, 48, 76, 0.28);
+  pointer-events: none;
+  font-size: 13px;
+  line-height: 1.45;
+  /* Centred on the trigger by CSS, so the card never needs measuring
+     horizontally. Clamped to the viewport so an edge trigger stays readable. */
+  transform: translateX(-50%);
+  max-width: min(340px, calc(100vw - 16px));
+}
+
+.ns-hovercard-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.ns-hovercard-section + .ns-hovercard-section {
+  margin-top: 12px;
+}
+
+.ns-hovercard-heading {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.ns-hovercard-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 2px 0;
+}
+
+.ns-hovercard-label {
+  color: rgba(255, 255, 255, 0.58);
+  flex: 1;
+  min-width: 0;
+}
+
+.ns-hovercard-value {
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* --- account-type row + gear --------------------------------------------- */
+
+.ns-type-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.ns-type-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ns-gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-light);
+  cursor: pointer;
+  /* Revealed on row hover so the balance sheet stays quiet at rest. */
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.ns-row-child:hover .ns-gear,
+.ns-gear:focus-visible {
+  opacity: 1;
+}
+.ns-gear:hover {
+  background: var(--blue-tint-2);
+  color: var(--blue);
+}
+.ns-gear-locked {
+  cursor: default;
+}
+.ns-gear-locked:hover {
+  background: transparent;
+  color: var(--muted-light);
+}
+
+/* --- segmented choice (growth method, withdrawal timing) ----------------- */
+
+.ns-choice {
+  display: flex;
+  gap: 4px;
+  background: var(--track);
+  border-radius: 10px;
+  padding: 3px;
+}
+.ns-choice-opt {
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ns-choice-opt:hover {
+  color: var(--ink);
+}
+.ns-choice-opt[aria-pressed='true'] {
+  font-weight: 700;
+  color: var(--ink-deep);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(18, 48, 76, 0.1);
+}
+
+/* --- read-only synthetic accounts in the settings drawer ----------------- */
+
+.ns-readonly-note {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--surface-sub);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ns-readonly-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ns-readonly-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--child-ink);
+}
+
+/* The assumptions trigger keeps the button's own look. */
+.ns-hovercard-anchor > .ns-btn {
+  white-space: nowrap;
+}
+
+/* Pins are positioned by a wrapper so the hover card can anchor to the button.
+   Centred with a negative margin, NOT translateX: a transform on an ancestor
+   becomes the containing block for `position: fixed` descendants, which would
+   silently reposition every hover card relative to the pin instead of the
+   viewport. Pin is 32px wide, so -16px centres it. */
+.ns-pin-slot {
+  position: absolute;
+  margin-left: -16px;
+  pointer-events: auto;
+  z-index: 2;
+}
+.ns-pin-slot .ns-pin {
+  position: static;
+  transform: none;
+}
+
+.ns-row-add > div:first-child {
+  padding-left: 34px;
+}
+.ns-add-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ns-add-label {
+  font-size: 12px;
+  color: var(--muted-light);
+}
+.ns-add-pill {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.ns-add-pill:hover {
+  color: var(--blue);
+  border-color: var(--blue-line);
+  background: var(--blue-tint-2);
+  border-style: solid;
+}

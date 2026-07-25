@@ -1,5 +1,7 @@
 import type { PlanEvent, PlanResult } from '@northstar/engine';
 import { codeFor, summarize, toneFor } from '../presentation';
+import { eventDetail } from '../detail';
+import { HoverCard } from '../HoverCard';
 import type { ChartSelection } from '../NetWorthChart';
 
 /**
@@ -73,7 +75,9 @@ export function EventsTab({
         return (
           <div key={event.id} className="ns-gantt-row">
             <div className="ns-gantt-label">
-              <span className={`ns-code ns-code-${tone}`}>{code}</span>
+              <HoverCard detail={eventDetail(event)} side="bottom">
+                <span className={`ns-code ns-code-${tone}`}>{code}</span>
+              </HoverCard>
               <span>{event.name}</span>
             </div>
             <div className="ns-gantt-track">

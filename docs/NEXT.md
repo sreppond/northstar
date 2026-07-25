@@ -14,7 +14,8 @@ to `main`. `npm install && npm run dev` → http://localhost:3000.
 | 3. Design system + chart | ✅ new `Northstar_UX` direction (PLAN.md §7) |
 | 4. Three tabs | ✅ Accounts, Cash Flow, Events all reading from `PlanResult` |
 | 5. Event drawer | ✅ generated from zod schemas, live preview, delete cascade |
-| 6. Assumptions + priority rules UI | ❌ **next up** |
+| 5b. Hover detail cards + per-type account settings | ✅ |
+| 6. Assumptions + priority rules UI | 🟡 account settings done; plan settings and priority rules still to do |
 | 7. Scenario A/B comparison | ❌ (switcher works; comparison does not) |
 
 Plans now persist to localStorage (`northstar:plans:v1`) with undo.
@@ -23,14 +24,16 @@ Verify with `npm run lint && npm test && npm run build` — all three are green.
 
 ## What is NOT real yet
 
-- **`Edit assumptions`** — rendered `disabled`. This is step 6.
+- **`Edit assumptions`** — hovering it shows the plan assumptions, but the
+  button is still `disabled`; there is no panel to *edit* them. That is the
+  remaining half of step 6, along with the priority rules.
 - **Scenario switcher** swaps between two plans but does not *compare* them;
   `compareToScenarioExternalId` is unimplemented. There is also no way to
   create, rename, duplicate or delete a scenario from the UI.
-- **Accounts cannot be edited.** Balances, growth rates and withdrawal settings
-  are only what `samplePlan.ts` seeds. The store has no account actions yet.
 - **Priority rules are seeded and unreachable.** The waterfalls work, but there
-  is no UI to reorder them — that is the other half of step 6.
+  is no UI to reorder them — the other half of step 6.
+- **Participants cannot be edited.** Birth year and life expectancy come from
+  `samplePlan.ts`; the hover card reads them but nothing sets them.
 - **Redo exists in the store but has no button** (only Undo is wired).
 
 ## Next task, concretely: assumptions & priority rules (step 6)
@@ -40,24 +43,50 @@ Verify with `npm run lint && npm test && npm run build` — all three are green.
 `src/planner/drawer/EventDrawer.tsx` — pull those into a shared `fields.tsx`
 first rather than copying them).
 
-It needs three sections:
+Account settings are already done (see "The hover/settings pattern" below), so
+this is now two sections:
 
 1. **Plan settings** — `inflationRate`, `projectionYears`, `baselineIncome`,
    `baselineExpenses`, `incomeTaxRate`, and a `dollarMode` toggle. The store
    already has `updateSettings(planId, patch)` wired with undo. `dollarMode`
    should call the engine's existing `deflate(result, inflationRate)` at render
    time — do NOT re-run the engine in real dollars.
-2. **Accounts** — a list with per-account growth method/rate, interest rate,
-   withdrawal timing, withdrawal tax rate and penalty. Needs new store actions
-   (`upsertAccount`, `deleteAccount`). Synthetic accounts (`isSynthetic`) must
-   be read-only here; they belong to their event.
-3. **Priority rules** — the two ordered waterfalls, drag to reorder. This is the
+2. **Priority rules** — the two ordered waterfalls, drag to reorder. This is the
    mechanic Spencer specifically asked for and it currently has no UI at all.
    `PriorityRule.order` is the sort key; `ruleType` splits the two lists.
 
 After that, step 7: scenario management (create/rename/duplicate/delete) and
 A/B comparison via `compareToScenarioExternalId` — render the compared
 scenario as a second, muted line on the chart.
+
+## The hover/settings pattern
+
+One principle, applied in three places: **hovering something shows the
+assumptions behind it, and clicking through edits those same assumptions.**
+
+That only stays true because both read from ONE spec:
+
+- **Accounts** — `packages/engine/src/accountTypes.ts` declares each type's
+  editable fields once. `accountDetail()` renders them read-only into the hover
+  card; `AccountDrawer` renders the identical list as inputs. Adding a field to
+  a type makes it appear in both.
+- **Events** — the hover card and the drawer form are both generated from the
+  event module's zod schema.
+- **Plan** — `planDetail()` builds from `plan.settings` and participants.
+
+`src/planner/HoverCard.tsx` is the shared popover; `src/planner/detail.ts` holds
+the three builders and the one `Detail` shape they produce.
+
+**Balances are modelled by asset TYPE, not by linked account.** The balance
+sheet has one row per `AccountClass`, each with a gear. Synthetic accounts (a
+home and its mortgage from a `buyAHome` event) roll into their class row but are
+read-only there — they belong to their event.
+
+**Gotcha worth remembering:** a CSS `transform` on an ancestor becomes the
+containing block for `position: fixed` descendants. `.ns-pin-slot` originally
+used `translateX(-50%)` and it silently positioned every chart hover card
+relative to the pin instead of the viewport. It centres with a negative margin
+now; don't reintroduce the transform.
 
 ## Known defects worth fixing
 

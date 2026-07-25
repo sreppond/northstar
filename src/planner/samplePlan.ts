@@ -143,6 +143,27 @@ const houseEvents: PlanEvent[] = [
   },
 ];
 
+function retirement401k(): Account {
+  return {
+    id: 'retirement',
+    name: 'Tax-deferred investments',
+    accountClass: 'taxDeferredInvestment',
+    isLiability: false,
+    initialBalance: 64_000,
+    isIncluded: true,
+    growthRateMethod: 'fixed',
+    growthRate: 6.5,
+    yearlyPaycheckContribution: 12_000,
+    // Ordinary income on the way out, plus a penalty before 59.5 — the case
+    // the flat capital-gains treatment on a brokerage does not cover.
+    withdrawalTiming: 'never',
+    withdrawalTaxRate: 24,
+    taxableWithdrawalPercent: 100,
+    penaltyRate: 10,
+    penaltyFreeAge: 59.5,
+  };
+}
+
 function base(id: string, name: string, events: PlanEvent[]): Plan {
   return {
     id,
@@ -161,7 +182,7 @@ function base(id: string, name: string, events: PlanEvent[]): Plan {
     participants: [
       { id: 'p1', name: 'You', birthYear: 1996, lifeExpectancy: 90, isIncluded: true },
     ],
-    accounts: [cash(), brokerage()],
+    accounts: [cash(), brokerage(), retirement401k()],
     events,
     rules: [
       { accountId: 'brokerage', ruleType: 'allocation', order: 1 },

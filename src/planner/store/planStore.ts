@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Plan, PlanEvent } from '@northstar/engine';
+import type { Account, Plan, PlanEvent } from '@northstar/engine';
 import { SAMPLE_PLANS } from '../samplePlan';
 
 /**
@@ -24,6 +24,7 @@ interface PlanState {
   setActive(id: string): void;
 
   upsertEvent(planId: string, event: PlanEvent): void;
+  upsertAccount(planId: string, account: Account): void;
   deleteEvent(planId: string, eventId: string): void;
   updateSettings(planId: string, patch: Partial<Plan['settings']>): void;
 
@@ -57,6 +58,21 @@ export const usePlanStore = create<PlanState>((set, get) => ({
           events: exists
             ? plan.events.map((e) => (e.id === event.id ? event : e))
             : [...plan.events, event],
+        };
+      }),
+    ));
+  },
+
+  upsertAccount(planId, account) {
+    set((state) => commit(state, (plans) =>
+      plans.map((plan) => {
+        if (plan.id !== planId) return plan;
+        const exists = plan.accounts.some((a) => a.id === account.id);
+        return {
+          ...plan,
+          accounts: exists
+            ? plan.accounts.map((a) => (a.id === account.id ? account : a))
+            : [...plan.accounts, account],
         };
       }),
     ));

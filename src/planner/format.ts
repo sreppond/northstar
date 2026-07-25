@@ -33,6 +33,14 @@ function trim(value: number): string {
   return value.toFixed(2).replace(/\.?0+$/, '');
 }
 
+/**
+ * Money for prose and hover cards: drops a trailing .0 so it reads "$148K"
+ * rather than "$148.0K", while keeping "$98.6K" precise.
+ */
+export function detailMoney(value: number): string {
+  return money(value).replace(/\.0+([KM])$/, '$1');
+}
+
 /** Same scale, but always carrying an explicit sign — for net cash flow. */
 export function signedMoney(value: number): string {
   if (Math.abs(value) < 50) return '$0';

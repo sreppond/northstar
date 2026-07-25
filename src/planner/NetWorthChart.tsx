@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { PlanEvent, PlanResult } from '@northstar/engine';
 import { codeFor, summarize, toneFor } from './presentation';
+import { eventDetail } from './detail';
+import { HoverCard } from './HoverCard';
 import { axisMoney, money, signedMoney } from './format';
 
 /**
@@ -158,30 +160,35 @@ export function NetWorthChart({ result, events, rateLabel, selected, onSelect }:
           ))}
 
           {geometry.pins.map((pin) => (
-            <button
+            <div
               key={pin.eventId}
-              type="button"
-              className={`ns-pin ns-pin-${pin.tone}`}
-              aria-pressed={selected?.eventId === pin.eventId}
-              title={`${pin.label} · ${pin.year}`}
+              className="ns-pin-slot"
               style={{ left: pct(pin.x, VB_W), top: pct(pin.top, VB_H) }}
-              onClick={() =>
-                onSelect(
-                  selected?.eventId === pin.eventId
-                    ? null
-                    : {
-                        eventId: pin.eventId,
-                        label: pin.label,
-                        year: pin.year,
-                        detail: pin.detail,
-                        tone: pin.tone,
-                        code: pin.code,
-                      },
-                )
-              }
             >
-              {pin.code}
-            </button>
+              <HoverCard detail={eventDetail(pin.event)} side="bottom">
+                <button
+                  type="button"
+                  className={`ns-pin ns-pin-${pin.tone}`}
+                  aria-pressed={selected?.eventId === pin.eventId}
+                  onClick={() =>
+                    onSelect(
+                      selected?.eventId === pin.eventId
+                        ? null
+                        : {
+                            eventId: pin.eventId,
+                            label: pin.label,
+                            year: pin.year,
+                            detail: pin.detail,
+                            tone: pin.tone,
+                            code: pin.code,
+                          },
+                    )
+                  }
+                >
+                  {pin.code}
+                </button>
+              </HoverCard>
+            </div>
           ))}
 
           {hover && hoverSnapshot && (
@@ -211,6 +218,7 @@ interface Pin {
   tone: 'income' | 'cost' | 'end';
   x: number;
   top: number;
+  event: PlanEvent;
 }
 
 function build(result: PlanResult, events: PlanEvent[]) {
@@ -267,6 +275,7 @@ function build(result: PlanResult, events: PlanEvent[]) {
         tone: toneFor(event.kind),
         x: xFor(event.startYear),
         top: PLOT_TOP - PIN_SIZE / 2 + depth * (PIN_SIZE + PIN_GAP),
+        event,
       };
     });
 

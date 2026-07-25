@@ -5,7 +5,12 @@ import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/700.css';
 import './planner/planner.css';
 
+import type { AccountClass, Account } from '@northstar/engine';
+import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './planner/store/planStore';
+import { HoverCard } from './planner/HoverCard';
+import { planDetail } from './planner/detail';
+import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { useEventEditor, withDraft } from './planner/drawer/useEventEditor';
 import { NetWorthChart, type ChartSelection } from './planner/NetWorthChart';
@@ -38,7 +43,9 @@ export default function App() {
   const undo = usePlanStore((s) => s.undo);
   const canUndo = usePlanStore((s) => s.past.length > 0);
 
+  const upsertAccount = usePlanStore((s) => s.upsertAccount);
   const editor = useEventEditor();
+  const [accountDraft, setAccountDraft] = useState<Account | null>(null);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
 
@@ -49,6 +56,26 @@ export default function App() {
   // The plan is the only source of truth; the result is always derived, never
   // stored. Storing it is how the chart and the table end up disagreeing.
   const result = useMemo(() => runPlan(plan), [plan]);
+
+  // User accounts plus the synthetic ones events create, which the balance
+  // sheet rolls into their class row.
+  const allAccounts: Account[] = useMemo(() => {
+    const synthetic = new Map<string, Account>();
+    for (const row of result.years.flatMap((y) => y.accounts)) {
+      if (synthetic.has(row.accountId)) continue;
+      if (plan.accounts.some((a) => a.id === row.accountId)) continue;
+      synthetic.set(row.accountId, {
+        ...newAccountOfType(row.accountClass),
+        id: row.accountId,
+        name: row.name,
+        accountClass: row.accountClass,
+        isLiability: row.isLiability,
+        isSynthetic: true,
+        initialBalance: row.open || row.close,
+      });
+    }
+    return [...plan.accounts, ...synthetic.values()];
+  }, [plan.accounts, result.years]);
 
   const eventCount = plan.events.filter((e) => e.isIncluded && !e.isHidden).length;
   const first = result.years[0];
@@ -142,9 +169,11 @@ export default function App() {
                   Undo
                 </button>
               )}
-              <button type="button" className="ns-btn" disabled title="Not built yet">
-                Edit assumptions
-              </button>
+              <HoverCard detail={planDetail(plan, result.endYear)} side="bottom">
+                <button type="button" className="ns-btn" disabled>
+                  Edit assumptions
+                </button>
+              </HoverCard>
               <button type="button" className="ns-btn ns-btn-primary" onClick={editor.startNew}>
                 + Add event
               </button>
@@ -254,7 +283,18 @@ export default function App() {
             )}
           </div>
 
-          {tab === 'accounts' && <AccountsTab window={windowYears} />}
+          {tab === 'accounts' && (
+            <AccountsTab
+              window={windowYears}
+              accounts={allAccounts}
+              onEditType={(accountClass: AccountClass) => {
+                const owned = stored.accounts.find(
+                  (a) => a.accountClass === accountClass && !a.isSynthetic,
+                );
+                setAccountDraft(structuredClone(owned ?? newAccountOfType(accountClass)));
+              }}
+            />
+          )}
           {tab === 'cashflow' && <CashFlowTab window={windowYears} />}
           {tab === 'events' && (
             <EventsTab
@@ -266,6 +306,21 @@ export default function App() {
           )}
         </section>
       </main>
+
+      {accountDraft && (
+        <AccountDrawer
+          draft={accountDraft}
+          synthetic={allAccounts.filter(
+            (a) => a.isSynthetic && a.accountClass === accountDraft.accountClass,
+          )}
+          onChange={setAccountDraft}
+          onSave={() => {
+            upsertAccount(stored.id, accountDraft);
+            setAccountDraft(null);
+          }}
+          onCancel={() => setAccountDraft(null)}
+        />
+      )}
 
       {editor.open && (
         <EventDrawer
