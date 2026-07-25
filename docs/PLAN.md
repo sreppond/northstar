@@ -211,11 +211,17 @@ Why this is non-negotiable:
 
 If the engine ever imports React or `fetch`, the design has failed.
 
+> **Amendment (Phase 1).** This section originally said "zero deps". The engine
+> takes exactly one: **zod**. It is isomorphic with no transitive dependencies,
+> so it costs nothing the purity rule was protecting, and it buys a single
+> schema per event kind that validates engine input *and* generates the drawer
+> form. One source of truth beat the purity badge.
+
 ### 3.2 Stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Engine | TypeScript, zero deps | portability, testability |
+| Engine | TypeScript, zod only | portability, testability |
 | UI | React 19 + Vite + TS | already the Northstar stack |
 | State | Zustand (plan draft) + `useMemo` (derived result) | plan is small; result is derived, never stored |
 | Charts | Custom SVG, not a chart library | the blueprint look (§7) needs full control of pins, rules, corner marks |
@@ -666,7 +672,7 @@ A financial engine needs a different test strategy than a CRUD app.
    - `sum(withdrawal.net) ≈ shortfall` when the waterfall did not run dry
 3. **Event-module unit tests.** Each `compileEvent` in isolation. Mortgage
    amortization against a known table (a $920k / 6.5% / 30yr loan has a
-   $5,814.86 monthly payment — pin exactly this).
+   **$5,815.03** monthly payment — pin exactly this).
 4. **Cross-check against a spreadsheet.** Build one plan in Excel by hand and
    assert the engine matches to the cent. Do this once, early. It will find a
    real bug.
