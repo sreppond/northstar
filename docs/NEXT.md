@@ -16,10 +16,11 @@ to `main`. `npm install && npm run dev` → http://localhost:3000.
 | 5. Event drawer | ✅ generated from zod schemas, live preview, delete cascade |
 | 5b. Hover detail cards + per-type account settings | ✅ |
 | 6. Assumptions + priority rules UI | ✅ plan settings, household, and both waterfalls |
-| 7. Scenario management + A/B comparison | ❌ **next up** |
+| 7. Scenario management + A/B comparison | ✅ |
 
-**Phase 1 is otherwise complete.** Every part of the plan is now editable from
-the UI and persists.
+**Phase 1 is complete.** Every part of a plan is editable from the UI and
+persists, and scenarios can be created, renamed, duplicated, deleted and
+compared. Next up is Phase 2 (backend) — see docs/PLAN.md §9.
 
 Plans now persist to localStorage (`northstar:plans:v1`) with undo.
 
@@ -27,9 +28,6 @@ Verify with `npm run lint && npm test && npm run build` — all three are green.
 
 ## What is NOT real yet
 
-- **Scenario switcher** swaps between two plans but does not *compare* them;
-  `compareToScenarioExternalId` is unimplemented. There is also no way to
-  create, rename, duplicate or delete a scenario from the UI. That is step 7.
 - **`projectionYears` is not editable** — the horizon comes from the
   `endOfPlan` event, which is edited like any other event. Fine, but it means
   the assumptions drawer has no horizon control and that may surprise someone.
@@ -37,24 +35,25 @@ Verify with `npm run lint && npm test && npm run build` — all three are green.
 - **A second participant cannot be added.** The drawer edits whoever is in
   `participants`; there is no add/remove.
 
-## Next task, concretely: scenarios (step 7)
+## Next: Phase 2 — the backend
 
-1. **Manage scenarios** — create, rename, duplicate, delete. The store holds a
-   `plans[]` array already; it needs `createPlan`, `duplicatePlan`,
-   `renamePlan`, `deletePlan`, all going through `commit()` so they land on the
-   undo stack. Surface it from the scenario pills in the header (a `+` pill,
-   and a menu on the active one).
-2. **A/B comparison** — `Plan` has no comparison field yet; add
-   `compareToPlanId?: string` to settings. When set, run the compared plan too
-   and draw it as a second, muted line on the chart, with a delta row in the
-   KPI strip. Both runs are cheap, so just call `runPlan` twice.
+Phase 1 is done, so the next milestone is docs/PLAN.md §9 Phase 2: Postgres,
+tRPC and auth, with the plan stored as a JSONB document plus a version integer.
+The engine already runs identically on a server, so a shareable read-only link
+and PDF export come almost free once there is somewhere to put plans.
 
-Smaller things worth doing at some point:
+Worth doing before that, if you want more polish first:
 
 - **Redo button** — the store supports it, nothing calls it.
+- **Keyboard shortcut for undo** (⌘Z), now that there is a lot to undo.
 - **Add/remove participants** in the assumptions drawer, for a two-person
   household. The engine already handles multiple `participants`.
-- **Keyboard shortcut for undo** (⌘Z), now that there is a lot to undo.
+- **Comparison is clipped to the active plan's horizon.** Comparing House
+  (ends 2046) against Retirement (ends 2086) shows only to 2046, which is the
+  right default but is not explained anywhere in the UI.
+- **A new scenario inherits the sample accounts.** `createPlan` clones
+  `SAMPLE_PLANS[0]` and strips the events. Once plans are user-created that
+  should probably be a genuinely empty balance sheet instead.
 
 ## The hover/settings pattern
 
@@ -117,8 +116,8 @@ now; don't reintroduce the transform.
 - **Engine takes zod** as its one dependency, so a single schema drives both
   validation and the drawer form. PLAN.md §3.1 carries the amendment.
 - **Growth applies to the closing balance** — a contribution in year Y first
-  earns in Y+1. Spencer was asked about half-year convention and has not
-  answered; this is still the open question from the engine session.
+  earns in Y+1. Spencer confirmed end-of-year is what he wants; half-year
+  convention is explicitly not needed. Settled, do not revisit.
 - **Flat effective tax rate per account**, matching Monarch, rather than
   progressive brackets. Avoids the withdrawal/bracket fixed point.
 - **Annual time steps**, with monthly stepping only inside mortgage

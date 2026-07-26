@@ -28,6 +28,10 @@ interface PlanState {
   deleteEvent(planId: string, eventId: string): void;
   updateSettings(planId: string, patch: Partial<Plan['settings']>): void;
   replacePlan(plan: Plan): void;
+  createPlan(name: string): void;
+  duplicatePlan(planId: string): void;
+  renamePlan(planId: string, name: string): void;
+  deletePlan(planId: string): void;
 
   undo(): void;
   redo(): void;
@@ -108,6 +112,55 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     set((state) => commit(state, (plans) => plans.map((p) => (p.id === plan.id ? plan : p))));
   },
 
+  createPlan(name) {
+    const fresh: Plan = {
+      ...structuredClone(SAMPLE_PLANS[0]),
+      id: newId(),
+      name,
+      events: structuredClone(SAMPLE_PLANS[0].events).filter((e) => e.kind === 'endOfPlan'),
+    };
+    delete fresh.settings.compareToPlanId;
+    set((state) => ({ ...commit(state, (plans) => [...plans, fresh]), activeId: fresh.id }));
+  },
+
+  duplicatePlan(planId) {
+    const source = get().plans.find((p) => p.id === planId);
+    if (!source) return;
+    const copy: Plan = { ...structuredClone(source), id: newId(), name: `${source.name} copy` };
+    // A duplicate that still points at a comparison would render itself
+    // against its own twin, which reads as a bug.
+    delete copy.settings.compareToPlanId;
+    set((state) => ({ ...commit(state, (plans) => [...plans, copy]), activeId: copy.id }));
+  },
+
+  renamePlan(planId, name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    set((state) => commit(state, (plans) =>
+      plans.map((p) => (p.id === planId ? { ...p, name: trimmed } : p)),
+    ));
+  },
+
+  deletePlan(planId) {
+    const { plans } = get();
+    // Never leave the app with no plan to show.
+    if (plans.length <= 1) return;
+    set((state) => {
+      const remaining = state.plans
+        .filter((p) => p.id !== planId)
+        // Drop any dangling comparison pointing at the deleted plan.
+        .map((p) =>
+          p.settings.compareToPlanId === planId
+            ? { ...p, settings: { ...p.settings, compareToPlanId: undefined } }
+            : p,
+        );
+      return {
+        ...commit(state, () => remaining),
+        activeId: state.activeId === planId ? remaining[0].id : state.activeId,
+      };
+    });
+  },
+
   undo() {
     set((state) => {
       const previous = state.past[state.past.length - 1];
@@ -153,6 +206,10 @@ function commit(
     past: [...state.past, state.plans].slice(-UNDO_LIMIT),
     future: [],
   };
+}
+
+function newId(): string {
+  return `plan-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function loadPlans(): Plan[] {

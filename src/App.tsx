@@ -10,15 +10,16 @@ import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './planner/store/planStore';
 import { HoverCard } from './planner/HoverCard';
 import { planDetail } from './planner/detail';
+import { ScenarioBar } from './planner/ScenarioBar';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { useEventEditor, withDraft } from './planner/drawer/useEventEditor';
-import { NetWorthChart, type ChartSelection } from './planner/NetWorthChart';
+import { NetWorthChart, type ChartSelection, type CompareSeries } from './planner/NetWorthChart';
 import { AccountsTab } from './planner/tabs/AccountsTab';
 import { CashFlowTab } from './planner/tabs/CashFlowTab';
 import { EventsTab } from './planner/tabs/EventsTab';
-import { cagr, money, percent, roundMoney } from './planner/format';
+import { cagr, money, percent, roundMoney, signedMoney } from './planner/format';
 
 type TabId = 'accounts' | 'cashflow' | 'events';
 
@@ -46,6 +47,11 @@ export default function App() {
 
   const upsertAccount = usePlanStore((s) => s.upsertAccount);
   const replacePlan = usePlanStore((s) => s.replacePlan);
+  const updateSettings = usePlanStore((s) => s.updateSettings);
+  const createPlan = usePlanStore((s) => s.createPlan);
+  const duplicatePlan = usePlanStore((s) => s.duplicatePlan);
+  const renamePlan = usePlanStore((s) => s.renamePlan);
+  const deletePlan = usePlanStore((s) => s.deletePlan);
   const editor = useEventEditor();
   const [accountDraft, setAccountDraft] = useState<Account | null>(null);
   const [assumptionsDraft, setAssumptionsDraft] = useState<Plan | null>(null);
@@ -73,6 +79,28 @@ export default function App() {
     [nominal, plan.settings.dollarMode, plan.settings.inflationRate],
   );
 
+  const comparePlan = useMemo(
+    () =>
+      plan.settings.compareToPlanId
+        ? plans.find((p) => p.id === plan.settings.compareToPlanId)
+        : undefined,
+    [plans, plan.settings.compareToPlanId],
+  );
+
+  // A whole extra projection costs microseconds, so comparison is just a
+  // second runPlan rather than anything clever.
+  const compare: CompareSeries | undefined = useMemo(() => {
+    if (!comparePlan) return undefined;
+    const raw = runPlan(comparePlan);
+    return {
+      name: comparePlan.name,
+      result:
+        plan.settings.dollarMode === 'todaysDollars'
+          ? deflate(raw, plan.settings.inflationRate)
+          : raw,
+    };
+  }, [comparePlan, plan.settings.dollarMode, plan.settings.inflationRate]);
+
   // User accounts plus the synthetic ones events create, which the balance
   // sheet rolls into their class row.
   const allAccounts: Account[] = useMemo(() => {
@@ -98,6 +126,12 @@ export default function App() {
   const last = result.years[result.years.length - 1];
   const growth = cagr(first?.netWorth ?? 0, last?.netWorth ?? 0, result.years.length - 1);
 
+  // Compared at the ACTIVE plan's horizon, matching how the chart clips it.
+  const endOfCompare =
+    compare?.result.years.find((y) => y.year === result.endYear)?.netWorth ??
+    compare?.result.years[compare.result.years.length - 1]?.netWorth ??
+    0;
+
   const homeEvent = plan.events.find((e) => e.kind === 'buyAHome' && e.isIncluded);
   const homeConfig = (homeEvent?.config ?? {}) as { price?: number; downPaymentPercent?: number };
 
@@ -110,7 +144,9 @@ export default function App() {
     {
       label: 'Net worth at end',
       value: money(last?.netWorth ?? 0),
-      note: `End of ${result.endYear}`,
+      note: compare
+        ? `${signedMoney((last?.netWorth ?? 0) - endOfCompare)} vs ${compare.name}`
+        : `End of ${result.endYear}`,
     },
     {
       label: 'Annual growth',
@@ -148,25 +184,20 @@ export default function App() {
       <header className="ns-head">
         <div className="ns-wordmark">Forecasting</div>
         <div className="ns-badge">Plan</div>
-        <div className="ns-scenarios">
-          {plans.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className="ns-scenario"
-              aria-pressed={p.id === planId}
-              onClick={() => {
-                setActive(p.id);
-                setSelected(null);
-                setWinStart(0);
-                editor.close();
-              }}
-            >
-              <span className="ns-dot" />
-              {p.name}
-            </button>
-          ))}
-        </div>
+        <ScenarioBar
+          plans={plans}
+          activeId={planId}
+          onSelect={(id) => {
+            setActive(id);
+            setSelected(null);
+            setWinStart(0);
+            editor.close();
+          }}
+          onCreate={() => createPlan(`Scenario ${plans.length + 1}`)}
+          onRename={renamePlan}
+          onDuplicate={duplicatePlan}
+          onDelete={deletePlan}
+        />
       </header>
 
       <main className="ns-main">
@@ -177,7 +208,7 @@ export default function App() {
             </div>
             <div className="ns-title">{plan.name}</div>
             <div className="ns-subtle ns-num">
-              {result.startYear}–{result.endYear} · {eventCount} events
+              {result.startYear}–{result.endYear} · {eventCount} event{eventCount === 1 ? '' : 's'}
             </div>
             <div className="ns-title-actions">
               {canUndo && (
@@ -217,6 +248,7 @@ export default function App() {
               plan.accounts.find((a) => a.growthRateMethod === 'fixed')?.growthRate ?? 0,
             )}
             selected={selected}
+            compare={compare}
             onSelect={setSelected}
           />
 
@@ -278,6 +310,29 @@ export default function App() {
                 </button>
               ))}
             </div>
+            <div className="ns-compare">
+              <label className="ns-compare-label" htmlFor="ns-compare-select">
+                Compare
+              </label>
+              <select
+                id="ns-compare-select"
+                className="ns-select"
+                value={stored.settings.compareToPlanId ?? ''}
+                onChange={(e) =>
+                  updateSettings(stored.id, { compareToPlanId: e.target.value || undefined })
+                }
+              >
+                <option value="">None</option>
+                {plans
+                  .filter((p) => p.id !== stored.id)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
             {tab !== 'events' && (
               <div className="ns-window">
                 <span className="ns-window-label">{windowLabel}</span>

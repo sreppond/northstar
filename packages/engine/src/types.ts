@@ -161,6 +161,11 @@ export interface PlanSettings {
   baselineExpenses: number;
   /** Flat effective tax rate on ordinary income, percent. */
   incomeTaxRate: number;
+  /**
+   * Another plan to draw alongside this one for comparison. Metadata only —
+   * `runPlan` ignores it; the UI runs the other plan separately.
+   */
+  compareToPlanId?: string;
 }
 
 export interface Plan {

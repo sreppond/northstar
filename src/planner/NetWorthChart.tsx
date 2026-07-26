@@ -30,18 +30,25 @@ export interface ChartSelection {
   code: string;
 }
 
+export interface CompareSeries {
+  name: string;
+  result: PlanResult;
+}
+
 interface Props {
   result: PlanResult;
   events: PlanEvent[];
   rateLabel: string;
   selected: ChartSelection | null;
+  /** A second plan drawn alongside, clipped to this plan's horizon. */
+  compare?: CompareSeries;
   onSelect(selection: ChartSelection | null): void;
 }
 
-export function NetWorthChart({ result, events, rateLabel, selected, onSelect }: Props) {
+export function NetWorthChart({ result, events, rateLabel, selected, compare, onSelect }: Props) {
   const [hoverYear, setHoverYear] = useState<number | null>(null);
 
-  const geometry = useMemo(() => build(result, events), [result, events]);
+  const geometry = useMemo(() => build(result, events, compare), [result, events, compare]);
   const hover = hoverYear === null ? null : geometry.pointByYear.get(hoverYear) ?? null;
   const hoverSnapshot =
     hoverYear === null ? null : result.years.find((y) => y.year === hoverYear) ?? null;
@@ -69,6 +76,12 @@ export function NetWorthChart({ result, events, rateLabel, selected, onSelect }:
             />
             Cost event
           </span>
+          {compare && (
+            <span className="ns-legend-item">
+              <span className="ns-legend-line ns-legend-line-compare" />
+              {compare.name}
+            </span>
+          )}
           <span className="ns-legend-item" style={{ color: 'var(--muted-light)' }}>
             Return {rateLabel}
           </span>
@@ -109,6 +122,21 @@ export function NetWorthChart({ result, events, rateLabel, selected, onSelect }:
           ))}
 
           <path d={geometry.area} fill="url(#ns-nw-fill)" />
+
+          {/* The compared plan sits under the active one: muted and dashed, so
+              it reads as reference rather than competing for attention. */}
+          {geometry.compareLine && (
+            <path
+              d={geometry.compareLine}
+              fill="none"
+              stroke="#8A99A7"
+              strokeWidth={2}
+              strokeDasharray="6 5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
           <path
             d={geometry.line}
             fill="none"
@@ -199,6 +227,11 @@ export function NetWorthChart({ result, events, rateLabel, selected, onSelect }:
               <div className="ns-tooltip-year">{hoverSnapshot.year}</div>
               <div className="ns-tooltip-value">{money(hoverSnapshot.netWorth)}</div>
               <div className="ns-tooltip-flow">Net flow {signedMoney(hoverSnapshot.netCashFlow)}</div>
+              {compare && (
+                <div className="ns-tooltip-compare">
+                  {compare.name} {money(compareAt(compare, hoverSnapshot.year))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -221,13 +254,28 @@ interface Pin {
   event: PlanEvent;
 }
 
-function build(result: PlanResult, events: PlanEvent[]) {
+function compareAt(compare: CompareSeries, year: number): number {
+  return compare.result.years.find((y) => y.year === year)?.netWorth ?? 0;
+}
+
+function build(result: PlanResult, events: PlanEvent[], compare?: CompareSeries) {
   const years = result.years;
   const span = Math.max(1, result.endYear - result.startYear);
   const xFor = (year: number) =>
     PLOT_LEFT + ((year - result.startYear) / span) * (PLOT_RIGHT - PLOT_LEFT);
 
-  const maxNetWorth = Math.max(1, ...years.map((y) => y.netWorth));
+  // Clipped to the active plan's horizon: the comparison is "how does the other
+  // plan do over MY window", not a merged timeline.
+  const compareYears =
+    compare?.result.years.filter(
+      (y) => y.year >= result.startYear && y.year <= result.endYear,
+    ) ?? [];
+
+  const maxNetWorth = Math.max(
+    1,
+    ...years.map((y) => y.netWorth),
+    ...compareYears.map((y) => y.netWorth),
+  );
   const top = niceCeiling(maxNetWorth);
   const yFor = (value: number) =>
     PLOT_BOTTOM - (value / top) * (PLOT_BOTTOM - PLOT_TOP);
@@ -287,7 +335,17 @@ function build(result: PlanResult, events: PlanEvent[]) {
     width: bandWidth,
   }));
 
-  return { line, area, gridlines, xTicks, pins, bands, pointByYear, first: points[0] };
+  const compareLine =
+    compareYears.length > 1
+      ? compareYears
+          .map(
+            (y, i) =>
+              `${i === 0 ? 'M' : 'L'}${xFor(y.year).toFixed(2)},${yFor(y.netWorth).toFixed(2)}`,
+          )
+          .join(' ')
+      : undefined;
+
+  return { line, area, compareLine, gridlines, xTicks, pins, bands, pointByYear, first: points[0] };
 }
 
 /** Round a maximum up to a clean axis top so gridline labels read well. */
