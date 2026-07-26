@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import type { Account, AccountFieldSpec } from '@northstar/engine';
+import type { Account } from '@northstar/engine';
 import { ACCOUNT_TYPES, visibleFields } from '@northstar/engine';
-import { stepFor } from './schemaForm';
+import { AccountField } from './fields';
 
 /**
  * Per-account-type settings.
@@ -86,93 +86,5 @@ export function AccountDrawer({ draft, synthetic, onChange, onSave, onCancel }: 
         </footer>
       </aside>
     </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-const GROWTH_OPTIONS = [
-  { value: 'fixed', label: 'Fixed rate' },
-  { value: 'noChange', label: 'No change' },
-] as const;
-
-const TIMING_OPTIONS = [
-  { value: 'always', label: 'Any time' },
-  { value: 'starting_year', label: 'From a year' },
-  { value: 'never', label: 'Never' },
-] as const;
-
-function AccountField({
-  field,
-  value,
-  onChange,
-}: {
-  field: AccountFieldSpec;
-  value: unknown;
-  onChange(value: unknown): void;
-}) {
-  if (field.kind === 'growthMethod' || field.kind === 'withdrawalTiming') {
-    const options = field.kind === 'growthMethod' ? GROWTH_OPTIONS : TIMING_OPTIONS;
-    return (
-      <div className="ns-field">
-        <span className="ns-field-label">{field.label}</span>
-        <div className="ns-choice">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className="ns-choice-opt"
-              aria-pressed={value === opt.value}
-              onClick={() => onChange(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        {field.help && <span className="ns-field-hint">{field.help}</span>}
-      </div>
-    );
-  }
-
-  if (field.kind === 'boolean') {
-    return (
-      <label className="ns-toggle-row">
-        <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
-        <span>{field.label}</span>
-      </label>
-    );
-  }
-
-  const step =
-    field.step ??
-    stepFor({
-      name: String(field.key),
-      label: field.label,
-      kind: 'number',
-      unit: field.unit === 'age' ? 'plain' : field.unit,
-      required: false,
-      integer: field.unit === 'year',
-    });
-
-  return (
-    <label className="ns-field">
-      <span className="ns-field-label">{field.label}</span>
-      <div className="ns-input-wrap">
-        {field.unit === 'currency' && <span className="ns-affix">$</span>}
-        <input
-          className={`ns-input ns-num${field.unit === 'currency' ? ' ns-input-prefixed' : ''}`}
-          type="number"
-          inputMode="decimal"
-          step={step}
-          min={field.min}
-          max={field.max}
-          value={value === undefined || value === null ? '' : String(value)}
-          placeholder={field.min !== undefined ? String(field.min) : ''}
-          onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-        />
-        {field.unit === 'percent' && <span className="ns-affix ns-affix-right">%</span>}
-      </div>
-      {field.help && <span className="ns-field-hint">{field.help}</span>}
-    </label>
   );
 }

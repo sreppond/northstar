@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react';
-import { runPlan } from '@northstar/engine';
+import { deflate, runPlan } from '@northstar/engine';
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/700.css';
 import './planner/planner.css';
 
-import type { AccountClass, Account } from '@northstar/engine';
+import type { AccountClass, Account, Plan } from '@northstar/engine';
 import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './planner/store/planStore';
 import { HoverCard } from './planner/HoverCard';
 import { planDetail } from './planner/detail';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
+import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { useEventEditor, withDraft } from './planner/drawer/useEventEditor';
 import { NetWorthChart, type ChartSelection } from './planner/NetWorthChart';
@@ -44,18 +45,33 @@ export default function App() {
   const canUndo = usePlanStore((s) => s.past.length > 0);
 
   const upsertAccount = usePlanStore((s) => s.upsertAccount);
+  const replacePlan = usePlanStore((s) => s.replacePlan);
   const editor = useEventEditor();
   const [accountDraft, setAccountDraft] = useState<Account | null>(null);
+  const [assumptionsDraft, setAssumptionsDraft] = useState<Plan | null>(null);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
 
-  // The draft is merged in for the projection but never written to the store,
-  // so the chart previews an unsaved edit live and Cancel costs nothing.
-  const plan = useMemo(() => withDraft(stored, editor.draft), [stored, editor.draft]);
+  // Both drawers preview live: whichever draft is open stands in for the
+  // stored plan in the projection, without ever being written to the store.
+  // That is what makes Cancel free.
+  const plan = useMemo(
+    () => withDraft(assumptionsDraft ?? stored, editor.draft),
+    [assumptionsDraft, stored, editor.draft],
+  );
 
   // The plan is the only source of truth; the result is always derived, never
   // stored. Storing it is how the chart and the table end up disagreeing.
-  const result = useMemo(() => runPlan(plan), [plan]);
+  const nominal = useMemo(() => runPlan(plan), [plan]);
+
+  // The engine always runs nominal; today's dollars is a presentation choice.
+  const result = useMemo(
+    () =>
+      plan.settings.dollarMode === 'todaysDollars'
+        ? deflate(nominal, plan.settings.inflationRate)
+        : nominal,
+    [nominal, plan.settings.dollarMode, plan.settings.inflationRate],
+  );
 
   // User accounts plus the synthetic ones events create, which the balance
   // sheet rolls into their class row.
@@ -170,7 +186,11 @@ export default function App() {
                 </button>
               )}
               <HoverCard detail={planDetail(plan, result.endYear)} side="bottom">
-                <button type="button" className="ns-btn" disabled>
+                <button
+                  type="button"
+                  className="ns-btn"
+                  onClick={() => setAssumptionsDraft(structuredClone(stored))}
+                >
                   Edit assumptions
                 </button>
               </HoverCard>
@@ -306,6 +326,19 @@ export default function App() {
           )}
         </section>
       </main>
+
+      {assumptionsDraft && (
+        <AssumptionsDrawer
+          draft={assumptionsDraft}
+          accounts={allAccounts}
+          onChange={setAssumptionsDraft}
+          onSave={() => {
+            replacePlan(assumptionsDraft);
+            setAssumptionsDraft(null);
+          }}
+          onCancel={() => setAssumptionsDraft(null)}
+        />
+      )}
 
       {accountDraft && (
         <AccountDrawer

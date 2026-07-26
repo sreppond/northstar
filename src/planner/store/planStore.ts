@@ -27,6 +27,7 @@ interface PlanState {
   upsertAccount(planId: string, account: Account): void;
   deleteEvent(planId: string, eventId: string): void;
   updateSettings(planId: string, patch: Partial<Plan['settings']>): void;
+  replacePlan(plan: Plan): void;
 
   undo(): void;
   redo(): void;
@@ -101,6 +102,10 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         plan.id === planId ? { ...plan, settings: { ...plan.settings, ...patch } } : plan,
       ),
     ));
+  },
+
+  replacePlan(plan) {
+    set((state) => commit(state, (plans) => plans.map((p) => (p.id === plan.id ? plan : p))));
   },
 
   undo() {

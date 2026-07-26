@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { EventKind, PlanEvent } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
 import { codeFor, labelFor, toneFor } from '../presentation';
-import { describeSchema, stepFor, type FieldDescriptor } from './schemaForm';
+import { describeSchema } from './schemaForm';
+import { ConfigField, Field } from './fields';
 
 /**
  * The right-side event editor.
@@ -209,87 +210,4 @@ function KindGroup({
       </div>
     </div>
   );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="ns-field">
-      <span className="ns-field-label">{label}</span>
-      {children}
-      {hint && <span className="ns-field-hint">{hint}</span>}
-    </label>
-  );
-}
-
-function ConfigField({
-  field,
-  value,
-  onChange,
-}: {
-  field: FieldDescriptor;
-  value: unknown;
-  onChange(value: unknown): void;
-}) {
-  if (field.kind === 'boolean') {
-    const checked = value === undefined ? Boolean(field.defaultValue) : Boolean(value);
-    return (
-      <label className="ns-toggle-row">
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <span>{field.label}</span>
-      </label>
-    );
-  }
-
-  if (field.kind === 'string') {
-    return (
-      <Field label={field.label}>
-        <input
-          className="ns-input"
-          value={value === undefined ? '' : String(value)}
-          onChange={(e) => onChange(e.target.value || undefined)}
-        />
-      </Field>
-    );
-  }
-
-  const shown = value === undefined ? '' : String(value);
-  const placeholder =
-    field.defaultValue !== undefined ? `${field.defaultValue}` : field.required ? 'Required' : 'Optional';
-
-  return (
-    <Field label={field.label} hint={boundsHint(field)}>
-      <div className="ns-input-wrap">
-        {field.unit === 'currency' && <span className="ns-affix">$</span>}
-        <input
-          className={`ns-input ns-num${field.unit === 'currency' ? ' ns-input-prefixed' : ''}`}
-          type="number"
-          inputMode="decimal"
-          step={stepFor(field)}
-          min={field.min}
-          max={field.max}
-          value={shown}
-          placeholder={placeholder}
-          onChange={(e) => {
-            const raw = e.target.value;
-            onChange(raw === '' ? undefined : Number(raw));
-          }}
-        />
-        {field.unit === 'percent' && <span className="ns-affix ns-affix-right">%</span>}
-      </div>
-    </Field>
-  );
-}
-
-function boundsHint(field: FieldDescriptor): string | undefined {
-  if (field.min !== undefined && field.max !== undefined) return `${field.min}–${field.max}`;
-  if (field.max !== undefined) return `Max ${field.max}`;
-  return undefined;
 }

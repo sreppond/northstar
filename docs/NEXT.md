@@ -15,8 +15,11 @@ to `main`. `npm install && npm run dev` → http://localhost:3000.
 | 4. Three tabs | ✅ Accounts, Cash Flow, Events all reading from `PlanResult` |
 | 5. Event drawer | ✅ generated from zod schemas, live preview, delete cascade |
 | 5b. Hover detail cards + per-type account settings | ✅ |
-| 6. Assumptions + priority rules UI | 🟡 account settings done; plan settings and priority rules still to do |
-| 7. Scenario A/B comparison | ❌ (switcher works; comparison does not) |
+| 6. Assumptions + priority rules UI | ✅ plan settings, household, and both waterfalls |
+| 7. Scenario management + A/B comparison | ❌ **next up** |
+
+**Phase 1 is otherwise complete.** Every part of the plan is now editable from
+the UI and persists.
 
 Plans now persist to localStorage (`northstar:plans:v1`) with undo.
 
@@ -24,40 +27,34 @@ Verify with `npm run lint && npm test && npm run build` — all three are green.
 
 ## What is NOT real yet
 
-- **`Edit assumptions`** — hovering it shows the plan assumptions, but the
-  button is still `disabled`; there is no panel to *edit* them. That is the
-  remaining half of step 6, along with the priority rules.
 - **Scenario switcher** swaps between two plans but does not *compare* them;
   `compareToScenarioExternalId` is unimplemented. There is also no way to
-  create, rename, duplicate or delete a scenario from the UI.
-- **Priority rules are seeded and unreachable.** The waterfalls work, but there
-  is no UI to reorder them — the other half of step 6.
-- **Participants cannot be edited.** Birth year and life expectancy come from
-  `samplePlan.ts`; the hover card reads them but nothing sets them.
+  create, rename, duplicate or delete a scenario from the UI. That is step 7.
+- **`projectionYears` is not editable** — the horizon comes from the
+  `endOfPlan` event, which is edited like any other event. Fine, but it means
+  the assumptions drawer has no horizon control and that may surprise someone.
 - **Redo exists in the store but has no button** (only Undo is wired).
+- **A second participant cannot be added.** The drawer edits whoever is in
+  `participants`; there is no add/remove.
 
-## Next task, concretely: assumptions & priority rules (step 6)
+## Next task, concretely: scenarios (step 7)
 
-`Edit assumptions` is currently `disabled`. Open it as a second drawer (reuse
-`.ns-drawer` and the `Field`/`ConfigField` primitives from
-`src/planner/drawer/EventDrawer.tsx` — pull those into a shared `fields.tsx`
-first rather than copying them).
+1. **Manage scenarios** — create, rename, duplicate, delete. The store holds a
+   `plans[]` array already; it needs `createPlan`, `duplicatePlan`,
+   `renamePlan`, `deletePlan`, all going through `commit()` so they land on the
+   undo stack. Surface it from the scenario pills in the header (a `+` pill,
+   and a menu on the active one).
+2. **A/B comparison** — `Plan` has no comparison field yet; add
+   `compareToPlanId?: string` to settings. When set, run the compared plan too
+   and draw it as a second, muted line on the chart, with a delta row in the
+   KPI strip. Both runs are cheap, so just call `runPlan` twice.
 
-Account settings are already done (see "The hover/settings pattern" below), so
-this is now two sections:
+Smaller things worth doing at some point:
 
-1. **Plan settings** — `inflationRate`, `projectionYears`, `baselineIncome`,
-   `baselineExpenses`, `incomeTaxRate`, and a `dollarMode` toggle. The store
-   already has `updateSettings(planId, patch)` wired with undo. `dollarMode`
-   should call the engine's existing `deflate(result, inflationRate)` at render
-   time — do NOT re-run the engine in real dollars.
-2. **Priority rules** — the two ordered waterfalls, drag to reorder. This is the
-   mechanic Spencer specifically asked for and it currently has no UI at all.
-   `PriorityRule.order` is the sort key; `ruleType` splits the two lists.
-
-After that, step 7: scenario management (create/rename/duplicate/delete) and
-A/B comparison via `compareToScenarioExternalId` — render the compared
-scenario as a second, muted line on the chart.
+- **Redo button** — the store supports it, nothing calls it.
+- **Add/remove participants** in the assumptions drawer, for a two-person
+  household. The engine already handles multiple `participants`.
+- **Keyboard shortcut for undo** (⌘Z), now that there is a lot to undo.
 
 ## The hover/settings pattern
 
@@ -76,6 +73,12 @@ That only stays true because both read from ONE spec:
 
 `src/planner/HoverCard.tsx` is the shared popover; `src/planner/detail.ts` holds
 the three builders and the one `Detail` shape they produce.
+`src/planner/drawer/fields.tsx` holds the form primitives all three drawers
+share — add inputs there, not in a drawer.
+
+**Every drawer edits a draft clone and previews it live.** `App.tsx` swaps the
+open draft in for the stored plan when computing the projection, so the chart
+and tables move as you type but nothing is written until Save. Cancel is free.
 
 **Balances are modelled by asset TYPE, not by linked account.** The balance
 sheet has one row per `AccountClass`, each with a gear. Synthetic accounts (a
