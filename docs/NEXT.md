@@ -42,18 +42,20 @@ tRPC and auth, with the plan stored as a JSONB document plus a version integer.
 The engine already runs identically on a server, so a shareable read-only link
 and PDF export come almost free once there is somewhere to put plans.
 
-Worth doing before that, if you want more polish first:
+Still open, in rough priority order:
 
-- **Redo button** — the store supports it, nothing calls it.
-- **Keyboard shortcut for undo** (⌘Z), now that there is a lot to undo.
-- **Add/remove participants** in the assumptions drawer, for a two-person
-  household. The engine already handles multiple `participants`.
 - **Comparison is clipped to the active plan's horizon.** Comparing House
   (ends 2046) against Retirement (ends 2086) shows only to 2046, which is the
   right default but is not explained anywhere in the UI.
-- **A new scenario inherits the sample accounts.** `createPlan` clones
-  `SAMPLE_PLANS[0]` and strips the events. Once plans are user-created that
-  should probably be a genuinely empty balance sheet instead.
+- **No responsive work.** The layout assumes ≥1320px; tables need horizontal
+  scroll containers below that, and the 440px drawer needs to go full-width on
+  a phone.
+- **Deep pin cascades.** Pins now stack until they clear (see below), which on
+  a 60-year plan with clustered early events reaches five rows and covers the
+  top of the plot. Readable, but a "+3 more" collapse past ~4 rows would be
+  better.
+- **`samplePlan.ts` still seeds the two demo scenarios.** Fine while there is
+  no backend; it should become an onboarding flow rather than fake data.
 
 ## The hover/settings pattern
 
@@ -84,6 +86,11 @@ sheet has one row per `AccountClass`, each with a gear. Synthetic accounts (a
 home and its mortgage from a `buyAHome` event) roll into their class row but are
 read-only there — they belong to their event.
 
+**Chart pins stack by overlap, not by year.** Each row remembers its last
+pin's right edge and a pin drops to the first row it clears. Stacking by
+shared year alone worked on a 20-year plan and fell apart on a 60-year one,
+where adjacent years are a few pixels apart.
+
 **Gotcha worth remembering:** a CSS `transform` on an ancestor becomes the
 containing block for `position: fixed` descendants. `.ns-pin-slot` originally
 used `translateX(-50%)` and it silently positioned every chart hover card
@@ -96,20 +103,9 @@ now; don't reintroduce the transform.
    `src/planner/drawer/schemaForm.test.ts`, so a zod upgrade that reshapes it
    fails loudly rather than silently rendering empty forms. If that test breaks
    after a bump, fix the introspection — do not delete the test.
-1. **Chart pins crowd on long horizons.** At the Retirement scenario's 61-year
-   span the early pins overlap horizontally and truncate to `IN WN JO IN`.
-   `build()` in `NetWorthChart.tsx` only stacks pins that share a year; it needs
-   to stack any pin whose x is within ~34px of its left neighbour.
-2. **`Return 6.5%`** in the chart legend is read off the first fixed-growth
-   account, which is a guess. It should come from an explicit plan-level
-   assumption once the assumptions panel exists.
-3. **Legacy simulator is orphaned.** `src/legacy/SimulatorApp.tsx` is the old
-   AI Studio strategic-growth simulator. It still compiles and its deps
-   (recharts, motion, date-fns, tailwind) are still installed, but nothing
-   routes to it. Either add a route or delete it and drop those four deps —
-   that would cut a meaningful chunk of `node_modules` and the CSS bundle.
-4. **No responsive work has been done.** The layout assumes ≥1320px. Tables
-   will need horizontal scroll containers below that.
+1. **`Return 6.5%`** in the chart legend is read off the first fixed-growth
+   account, which is a guess. Now that account settings exist per type, it
+   should either name the account it came from or be dropped.
 
 ## Decisions taken (don't silently revert these)
 
@@ -138,5 +134,13 @@ packages/engine/          pure TS projection engine (no React, no I/O)
   examples/demo.ts        npx tsx examples/demo.ts → a worked 12-year projection
 src/App.tsx               planner shell
 src/planner/              chart, tabs, tokens, presentation rules
-src/legacy/               the old simulator, currently unrouted
+  store/planStore.ts      plans, undo/redo, localStorage
+  drawer/fields.tsx       form primitives shared by all three drawers
+  HoverCard.tsx           the dark detail popover
+  detail.ts               the three Detail builders
 ```
+
+The old AI Studio simulator has been deleted, along with the deps only it
+used (recharts, motion, date-fns, clsx, tailwind-merge, lucide-react and
+Tailwind itself). It is in git history if it is ever wanted back. That took
+the CSS bundle from 53 kB to 22 kB.

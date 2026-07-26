@@ -1395,3 +1395,20 @@
 .ns-window {
   margin-left: 0;
 }
+
+.ns-person + .ns-person {
+  padding-top: 12px;
+  border-top: 1px solid var(--rule-light);
+}
+.ns-person-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ns-person-index {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

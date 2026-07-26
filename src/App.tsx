@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { deflate, runPlan } from '@northstar/engine';
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
@@ -43,7 +43,9 @@ export default function App() {
   const upsertEvent = usePlanStore((s) => s.upsertEvent);
   const deleteEvent = usePlanStore((s) => s.deleteEvent);
   const undo = usePlanStore((s) => s.undo);
+  const redo = usePlanStore((s) => s.redo);
   const canUndo = usePlanStore((s) => s.past.length > 0);
+  const canRedo = usePlanStore((s) => s.future.length > 0);
 
   const upsertAccount = usePlanStore((s) => s.upsertAccount);
   const replacePlan = usePlanStore((s) => s.replacePlan);
@@ -57,6 +59,21 @@ export default function App() {
   const [assumptionsDraft, setAssumptionsDraft] = useState<Plan | null>(null);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
+
+  // ⌘Z / ⇧⌘Z, but never while a field has focus — the browser's own undo
+  // inside a text input is what someone means there.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   // Both drawers preview live: whichever draft is open stands in for the
   // stored plan in the projection, without ever being written to the store.
@@ -212,8 +229,13 @@ export default function App() {
             </div>
             <div className="ns-title-actions">
               {canUndo && (
-                <button type="button" className="ns-btn-ghost" onClick={undo}>
+                <button type="button" className="ns-btn-ghost" onClick={undo} title="Undo (⌘Z)">
                   Undo
+                </button>
+              )}
+              {canRedo && (
+                <button type="button" className="ns-btn-ghost" onClick={redo} title="Redo (⇧⌘Z)">
+                  Redo
                 </button>
               )}
               <HoverCard detail={planDetail(plan, result.endYear)} side="bottom">

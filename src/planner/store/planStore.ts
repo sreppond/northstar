@@ -113,13 +113,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   },
 
   createPlan(name) {
-    const fresh: Plan = {
-      ...structuredClone(SAMPLE_PLANS[0]),
-      id: newId(),
-      name,
-      events: structuredClone(SAMPLE_PLANS[0].events).filter((e) => e.kind === 'endOfPlan'),
-    };
-    delete fresh.settings.compareToPlanId;
+    const fresh = blankPlan(newId(), name, get().plans[0]);
     set((state) => ({ ...commit(state, (plans) => [...plans, fresh]), activeId: fresh.id }));
   },
 
@@ -210,6 +204,45 @@ function commit(
 
 function newId(): string {
   return `plan-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * A genuinely empty plan: no accounts, no events but the required horizon.
+ * It borrows the household and start year from an existing plan, since those
+ * describe the person rather than the scenario, but nothing financial —
+ * inheriting the sample balance sheet made every new scenario a lie.
+ */
+function blankPlan(id: string, name: string, like: Plan | undefined): Plan {
+  const startYear = like?.settings.startYear ?? new Date().getFullYear();
+  const horizon = like?.events.find((e) => e.kind === 'endOfPlan')?.startYear ?? startYear + 20;
+
+  return {
+    id,
+    name,
+    settings: {
+      startYear,
+      projectionYears: horizon - startYear + 1,
+      inflationRate: like?.settings.inflationRate ?? 2.5,
+      dollarMode: like?.settings.dollarMode ?? 'futureDollars',
+      baselineIncome: 0,
+      baselineExpenses: 0,
+      incomeTaxRate: like?.settings.incomeTaxRate ?? 25,
+    },
+    participants: like ? structuredClone(like.participants) : [],
+    accounts: [],
+    events: [
+      {
+        id: `end-${id}`,
+        kind: 'endOfPlan',
+        name: 'End of plan',
+        startYear: horizon,
+        isIncluded: true,
+        isRequired: true,
+        config: {},
+      },
+    ],
+    rules: [],
+  };
 }
 
 function loadPlans(): Plan[] {

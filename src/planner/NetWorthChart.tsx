@@ -305,15 +305,26 @@ function build(result: PlanResult, events: PlanEvent[], compare?: CompareSeries)
     xTicks.push({ year: result.endYear, x: xFor(result.endYear) });
   }
 
-  // Pins stack downward when several land in the same year (KID under JOB).
-  const perYear = new Map<number, number>();
+  // Pins stack downward when they would OVERLAP, not merely when they share a
+  // year. On a 20-year plan same-year is the only collision; on a 60-year one
+  // adjacent years are only a few pixels apart, and stacking by year alone
+  // left them overlapping and unreadable.
+  //
+  // Each row remembers the right edge of its last pin; a pin drops to the
+  // first row it clears.
+  const rowRightEdges: number[] = [];
   const pins: Pin[] = events
     .filter((e) => e.isIncluded && !e.isHidden)
     .filter((e) => e.startYear >= result.startYear && e.startYear <= result.endYear)
     .sort((a, b) => a.startYear - b.startYear)
     .map((event) => {
-      const depth = perYear.get(event.startYear) ?? 0;
-      perYear.set(event.startYear, depth + 1);
+      const x = xFor(event.startYear);
+      const left = x - PIN_SIZE / 2;
+
+      let depth = rowRightEdges.findIndex((edge) => left >= edge);
+      if (depth === -1) depth = rowRightEdges.length;
+      rowRightEdges[depth] = x + PIN_SIZE / 2 + PIN_GAP;
+
       return {
         eventId: event.id,
         year: event.startYear,
@@ -321,7 +332,7 @@ function build(result: PlanResult, events: PlanEvent[], compare?: CompareSeries)
         label: event.name,
         detail: summarize(event),
         tone: toneFor(event.kind),
-        x: xFor(event.startYear),
+        x,
         top: PLOT_TOP - PIN_SIZE / 2 + depth * (PIN_SIZE + PIN_GAP),
         event,
       };

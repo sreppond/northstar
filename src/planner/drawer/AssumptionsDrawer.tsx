@@ -102,9 +102,29 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
             />
           </Section>
 
-          <Section title="Household">
+          <Section
+            title="Household"
+            blurb="Ages drive retirement, Social Security and the end of the plan."
+          >
             {draft.participants.map((person, i) => (
               <div key={person.id} className="ns-person">
+                <div className="ns-person-head">
+                  <span className="ns-person-index">Person {i + 1}</span>
+                  {draft.participants.length > 1 && (
+                    <button
+                      type="button"
+                      className="ns-btn-ghost"
+                      onClick={() =>
+                        onChange({
+                          ...draft,
+                          participants: draft.participants.filter((_, j) => j !== i),
+                        })
+                      }
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
                 <Field label="Name">
                   <input
                     className="ns-input"
@@ -153,6 +173,30 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
                 </div>
               </div>
             ))}
+
+            <div className="ns-add-cell">
+              <button
+                type="button"
+                className="ns-add-pill"
+                onClick={() =>
+                  onChange({
+                    ...draft,
+                    participants: [
+                      ...draft.participants,
+                      {
+                        id: `p-${Math.random().toString(36).slice(2, 8)}`,
+                        name: 'Partner',
+                        birthYear: draft.participants[0]?.birthYear ?? 1990,
+                        lifeExpectancy: draft.participants[0]?.lifeExpectancy ?? 90,
+                        isIncluded: true,
+                      },
+                    ],
+                  })
+                }
+              >
+                + Add person
+              </button>
+            </div>
           </Section>
 
           <Section
