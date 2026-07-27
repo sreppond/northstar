@@ -4,6 +4,25 @@
  * Tokens and rules come from docs/PLAN.md §7. The design was handed over as
  * inline styles; it lives here as real classes so every value is tunable in
  * one place.
+ *
+ * ---------------------------------------------------------------------------
+ * THE JELLY MATERIAL (see §"jelly material" below)
+ *
+ * The surface is lit from above. Anything you can *touch* is a soft body: it
+ * has a lit top edge, a shaded underside, a contact shadow, and it gives when
+ * pressed — squashing wider and shorter the way something with volume does,
+ * then springing back past its resting size before settling.
+ *
+ * Anything you *read* does not move. Not the tables, not the KPI figures, not
+ * the net-worth line. A financial projection earns trust by holding still; a
+ * number that wobbles when it updates reads as a toy. So the jelly is spent
+ * entirely on chrome — buttons, pills, tabs, event pins, form controls — and
+ * the data sits on top of it, flat and calm.
+ *
+ * Inputs invert the metaphor: they are pressed *into* the surface (an inset
+ * well) rather than raised out of it, which is what makes a button next to an
+ * input read instantly as the thing to press.
+ * ---------------------------------------------------------------------------
  */
 
 .ns {
@@ -12,7 +31,7 @@
   --surface: #ffffff;
   --surface-sub: #fbfcfd;
   --tint-row: #f4f9fd;
-  --track: #f1f4f7;
+  --track: #eaeff4;
 
   /* ink */
   --ink: #16202b;
@@ -47,9 +66,72 @@
   --shadow-control: 0 1px 2px rgba(18, 48, 76, 0.06);
   --shadow-tooltip: 0 6px 18px rgba(18, 48, 76, 0.22);
 
+  /* --- jelly material -----------------------------------------------------
+     Four layers make a soft body read as soft: a lit top edge (the light
+     source), a shaded underside (the far wall of a dome), a tight contact
+     shadow (where it meets the page), and a wide ambient one (its mass).
+     Every shadow is tinted with the ink hue rather than black — a neutral
+     shadow on a cool page looks like dirt. */
+
+  --jelly-lit: rgba(255, 255, 255, 0.92);
+
+  --jelly-rise:
+    inset 0 1px 0 var(--jelly-lit),
+    inset 0 -2px 4px rgba(18, 48, 76, 0.055),
+    0 1px 2px rgba(18, 48, 76, 0.07),
+    0 4px 10px -4px rgba(18, 48, 76, 0.12);
+
+  /* Hover: it floats a little higher, so the ambient shadow spreads and the
+     top edge catches more light. */
+  --jelly-rise-hi:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -3px 6px rgba(18, 48, 76, 0.065),
+    0 2px 4px rgba(18, 48, 76, 0.08),
+    0 10px 20px -8px rgba(18, 48, 76, 0.18);
+
+  /* Press: the dome flattens, so the highlight moves to the *bottom* edge and
+     the interior goes into shade. This is what sells the squish. */
+  --jelly-press:
+    inset 0 2px 5px rgba(18, 48, 76, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.6),
+    0 1px 1px rgba(18, 48, 76, 0.05);
+
+  /* Wells: inputs are pushed into the page, not sitting on it. */
+  --jelly-well:
+    inset 0 2px 4px rgba(18, 48, 76, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* Gloss for saturated fills: light pooling on the top of wet candy. */
+  --jelly-gloss: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.26) 0%,
+    rgba(255, 255, 255, 0.07) 45%,
+    rgba(255, 255, 255, 0) 62%
+  );
+
+  /* Motion. Presses go in fast and linear-ish; releases overshoot and settle,
+     which is the whole feeling. --spring is the bouncier curve, saved for the
+     two or three moments that deserve it. */
+  --ease-jelly: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-soft: cubic-bezier(0.22, 0.8, 0.32, 1);
+  --spring: linear(
+    0, 0.026, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%,
+    0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.007 78.9%,
+    1.001 100%
+  );
+  --t-press: 90ms;
+  --t-settle: 280ms;
+
   min-height: 100vh;
   padding-bottom: 72px;
-  background: var(--bg);
+  /* Two very faint pools of light so cards float in an atmosphere rather than
+     on flat grey. Fixed, so scrolling doesn't drag them along. */
+  background:
+    radial-gradient(1200px 520px at 12% -10%, #e9f2fb 0%, rgba(233, 242, 251, 0) 62%),
+    radial-gradient(900px 460px at 92% 2%, #f1f7fc 0%, rgba(241, 247, 252, 0) 58%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -70,6 +152,145 @@
 .ns :focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
+}
+
+/* --- jelly motion system -------------------------------------------------
+
+   Soft bodies share one transform, composed from four variables so a
+   component can keep its own layout offset (a pin is centred with
+   --jx: -50%) while the interaction states drive scale and lift
+   independently. Without this the two would overwrite each other.
+
+   Fallbacks are mandatory: keyframes below are reused by elements that never
+   set --jx, and an unresolvable var() would blank the whole transform. */
+
+.ns-btn,
+.ns-btn-ghost,
+.ns-scenario,
+.ns-tab,
+.ns-kind,
+.ns-pin,
+.ns-bar,
+.ns-toggle-row input[type='checkbox'] {
+  transform: translate(var(--jx, 0px), var(--jy, 0px)) scale(var(--jsx, 1), var(--jsy, 1));
+  transform-origin: center;
+  transition:
+    transform var(--t-settle) var(--ease-jelly),
+    box-shadow 180ms var(--ease-soft),
+    background-color 140ms var(--ease-soft),
+    border-color 140ms var(--ease-soft),
+    color 140ms var(--ease-soft);
+}
+
+/* Buoyant on hover. */
+.ns-btn:hover:not(:disabled),
+.ns-scenario:hover,
+.ns-kind:hover,
+.ns-pin:hover,
+.ns-bar:hover {
+  --jy: -1px;
+}
+
+/* Squash: wider and shorter, because volume is conserved. Written after the
+   hover rules at equal specificity so a press beats a hover. */
+.ns-btn:active:not(:disabled),
+.ns-btn-ghost:active,
+.ns-scenario:active,
+.ns-tab:active,
+.ns-kind:active,
+.ns-pin:active {
+  --jsx: 1.045;
+  --jsy: 0.915;
+  --jy: 1px;
+  transition-duration: var(--t-press);
+  transition-timing-function: var(--ease-soft);
+}
+
+/* A gantt bar can be 600px wide; 4.5% of that is a shove, not a squish. */
+.ns-bar:active {
+  --jsx: 1.012;
+  --jsy: 0.9;
+  --jy: 1px;
+  transition-duration: var(--t-press);
+  transition-timing-function: var(--ease-soft);
+}
+
+@keyframes ns-plop {
+  0% {
+    opacity: 0;
+    transform: translate(var(--jx, 0px), -14px) scale(0.86, 1.16);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(var(--jx, 0px), 2px) scale(1.12, 0.86);
+  }
+  75% {
+    transform: translate(var(--jx, 0px), 0) scale(0.96, 1.05);
+  }
+  90% {
+    transform: translate(var(--jx, 0px), 0) scale(1.02, 0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--jx, 0px), 0) scale(1, 1);
+  }
+}
+
+/* Confirmation squish — fires when an element *becomes* selected, because the
+   animation starts the moment its selector begins matching. */
+@keyframes ns-squish {
+  0% {
+    transform: translate(var(--jx, 0px), 0) scale(1, 1);
+  }
+  32% {
+    transform: translate(var(--jx, 0px), 1px) scale(1.07, 0.89);
+  }
+  64% {
+    transform: translate(var(--jx, 0px), 0) scale(0.98, 1.035);
+  }
+  100% {
+    transform: translate(var(--jx, 0px), 0) scale(1, 1);
+  }
+}
+
+@keyframes ns-rise-in {
+  0% {
+    opacity: 0;
+    transform: translate(var(--jx, 0px), 8px) scale(0.96, 0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--jx, 0px), 0) scale(1, 1);
+  }
+}
+
+@keyframes ns-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.9, 0.88);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1, 1);
+  }
+}
+
+@keyframes ns-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes ns-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* --- page frame ---------------------------------------------------------- */
@@ -93,9 +314,13 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--blue);
-  background: var(--blue-tint-2);
+  background-color: var(--blue-tint-2);
+  background-image: var(--jelly-gloss);
   border-radius: 999px;
   padding: 4px 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 1px rgba(18, 48, 76, 0.05);
 }
 
 .ns-main {
@@ -107,11 +332,16 @@
   gap: 20px;
 }
 
+/* Cards are the one large soft body: a lit top edge and a wide, low ambient
+   shadow. No hover state — a card is a surface, not a control. */
 .ns-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  box-shadow: var(--shadow-card);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(18, 48, 76, 0.05),
+    0 10px 28px -14px rgba(18, 48, 76, 0.16);
   overflow: hidden;
 }
 
@@ -140,18 +370,22 @@
 .ns-scenario:hover {
   background: var(--surface);
   color: var(--ink);
+  box-shadow: var(--jelly-rise);
 }
 .ns-scenario .ns-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
   background: var(--pill-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: background-color 160ms var(--ease-soft);
 }
 .ns-scenario[aria-pressed='true'] {
   color: var(--ink-deep);
   background: var(--surface);
   border-color: var(--pill-border);
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--jelly-rise);
+  animation: ns-squish var(--t-settle) var(--ease-soft);
 }
 .ns-scenario[aria-pressed='true'] .ns-dot {
   background: var(--blue);
@@ -164,37 +398,66 @@
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 11px;
+  border-radius: 13px;
   padding: 10px 16px;
   cursor: pointer;
+  box-shadow: var(--jelly-rise);
 }
-.ns-btn:hover {
-  background: var(--bg);
+.ns-btn:hover:not(:disabled) {
+  background: #fdfefe;
+  box-shadow: var(--jelly-rise-hi);
+}
+.ns-btn:active:not(:disabled) {
+  box-shadow: var(--jelly-press);
 }
 
+/* The primary action is the one place a fill gets gloss — a lit dome of
+   colour, so "Add event" reads as the thing to press from across the page. */
 .ns-btn-primary {
+  position: relative;
   color: #fff;
-  background: var(--blue);
-  border-color: var(--blue);
+  background-color: var(--blue);
+  border-color: var(--blue-press);
   padding: 10px 18px;
-  box-shadow: 0 1px 2px rgba(46, 139, 208, 0.35);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -2px 5px rgba(15, 62, 100, 0.28),
+    0 1px 2px rgba(18, 48, 76, 0.12),
+    0 5px 12px -4px rgba(46, 139, 208, 0.5);
 }
-.ns-btn-primary:hover {
-  background: var(--blue-press);
+.ns-btn-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--jelly-gloss);
+  pointer-events: none;
+}
+.ns-btn-primary:hover:not(:disabled) {
+  background-color: var(--blue-press);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -3px 7px rgba(15, 62, 100, 0.3),
+    0 2px 4px rgba(18, 48, 76, 0.12),
+    0 12px 22px -8px rgba(46, 139, 208, 0.6);
+}
+.ns-btn-primary:active:not(:disabled) {
+  box-shadow:
+    inset 0 3px 7px rgba(11, 51, 84, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.28),
+    0 1px 1px rgba(18, 48, 76, 0.1);
 }
 
 .ns-btn-square {
   width: 34px;
   height: 34px;
   padding: 0;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 .ns-btn-square:disabled {
   opacity: 0.4;
   cursor: default;
-}
-.ns-btn-square:disabled:hover {
-  background: var(--surface);
 }
 
 .ns-btn-ghost {
@@ -203,13 +466,31 @@
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   padding: 6px 10px;
   cursor: pointer;
 }
 .ns-btn-ghost:hover {
   background: #eef2f6;
   color: var(--ink);
+}
+
+/* Disabled controls stay flat on the page — nothing to press, nothing to
+   lift. (This also replaces an older rule that turned every disabled button
+   blue on hover, primary styling leaking onto plain ones.) */
+.ns-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+.ns-btn:disabled:hover {
+  background: var(--surface);
+}
+.ns-btn-primary:disabled {
+  box-shadow: none;
+}
+.ns-btn-primary:disabled:hover {
+  background-color: var(--blue);
 }
 
 /* --- plan card ----------------------------------------------------------- */
@@ -224,13 +505,18 @@
 .ns-title-icon {
   width: 34px;
   height: 34px;
-  border-radius: 11px;
-  background: var(--blue-tint-2);
+  border-radius: 12px;
+  background-color: var(--blue-tint-2);
+  background-image: var(--jelly-gloss);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--blue);
   flex: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 4px rgba(18, 48, 76, 0.05),
+    0 1px 2px rgba(18, 48, 76, 0.06);
 }
 
 .ns-title {
@@ -251,15 +537,20 @@
   align-items: center;
 }
 
-/* KPI strip: ONE bordered container with internal dividers, not four cards. */
+/* KPI strip: ONE bordered container with internal dividers, not four cards.
+   It is a recessed tray — pushed into the card so the figures sit *in* the
+   surface. They are the thing being read, so nothing here moves. */
 .ns-kpis {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   margin: 0 24px;
   border: 1px solid #e9eef3;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
-  background: var(--surface-sub);
+  background: linear-gradient(180deg, #fafcfe 0%, #f5f9fc 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(18, 48, 76, 0.045),
+    0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .ns-kpi {
   padding: 16px 20px 18px;
@@ -323,6 +614,7 @@
   width: 9px;
   height: 9px;
   border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .ns-chart {
@@ -335,6 +627,14 @@
   height: auto;
   overflow: visible;
 }
+
+/* The projection itself never animates. It gets one soft drop shadow so the
+   line reads as a gel ribbon laid on the card rather than ink printed into
+   it — the only jelly cue applied to data, and a static one. */
+.ns-nw-line {
+  filter: drop-shadow(0 2px 3px rgba(18, 48, 76, 0.16));
+}
+
 .ns-chart-overlay {
   position: absolute;
   inset: 0 24px;
@@ -355,14 +655,19 @@
   transform: translateX(-50%);
 }
 
+/* Event pins are the most touchable thing on the page and the one place a
+   full jelly entrance is worth it: a new event plops onto the chart. They
+   only mount when an event is added or the scenario changes, so this is a
+   moment, not a loop — editing an existing event moves the pin silently
+   because React keeps the same element. */
 .ns-pin {
+  --jx: -50%;
   position: absolute;
-  transform: translateX(-50%);
   pointer-events: auto;
   cursor: pointer;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 11px;
   font: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -370,37 +675,48 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-control);
+  box-shadow: var(--jelly-rise);
   /* Above the hover hit bands, so a pin click reaches the pin. */
   z-index: 2;
+  animation: ns-plop 460ms var(--ease-soft) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+.ns-pin:hover {
+  box-shadow: var(--jelly-rise-hi);
+}
+.ns-pin:active {
+  box-shadow: var(--jelly-press);
 }
 .ns-pin-income {
-  background: var(--blue-tint);
+  background-color: var(--blue-tint);
   border: 1px solid var(--blue-line);
   color: var(--blue-deep);
 }
 .ns-pin-income:hover {
-  background: var(--blue-hover);
+  background-color: var(--blue-hover);
 }
 .ns-pin-cost {
-  background: var(--amber-tint);
+  background-color: var(--amber-tint);
   border: 1px solid var(--amber-line);
   color: var(--amber-deep);
 }
 .ns-pin-cost:hover {
-  background: var(--amber-hover);
+  background-color: var(--amber-hover);
 }
 .ns-pin-end {
-  background: var(--ink-deep);
+  background-color: var(--ink-deep);
+  background-image: var(--jelly-gloss);
   border: 1px solid var(--ink-deep);
   color: #fff;
 }
 .ns-pin-end:hover {
-  background: var(--blue-deep);
+  background-color: var(--blue-deep);
 }
+/* Selection re-runs the squish, so clicking a pin feels answered. */
 .ns-pin[aria-pressed='true'] {
   outline: 2px solid var(--blue);
   outline-offset: 1px;
+  animation: ns-squish var(--t-settle) var(--ease-soft);
 }
 
 .ns-hit {
@@ -410,16 +726,25 @@
   pointer-events: auto;
 }
 
+/* The tooltip pops in, then *glides* between years rather than teleporting.
+   130ms is enough to read as a soft body being dragged along and not enough
+   to feel like lag. */
 .ns-tooltip {
   position: absolute;
   transform: translateX(-50%);
+  transform-origin: top center;
   pointer-events: none;
-  background: var(--ink-deep);
+  background-color: var(--ink-deep);
+  background-image: var(--jelly-gloss);
   color: #fff;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 9px 13px;
   min-width: 126px;
-  box-shadow: var(--shadow-tooltip);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    var(--shadow-tooltip);
+  animation: ns-pop-in 220ms var(--ease-jelly) both;
+  transition: left 130ms var(--ease-soft);
 }
 .ns-tooltip-year {
   font-size: 12px;
@@ -451,13 +776,15 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--blue);
-  background: var(--blue-tint-2);
+  background-color: var(--blue-tint-2);
+  background-image: var(--jelly-gloss);
   border-radius: 999px;
   padding: 4px 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .ns-ref-cost {
   color: var(--amber-deep);
-  background: var(--amber-tint);
+  background-color: var(--amber-tint);
 }
 .ns-selection-label {
   font-size: 15px;
@@ -477,12 +804,16 @@
   padding: 14px 20px;
   border-bottom: 1px solid var(--rule);
 }
+/* A groove, so the active tab reads as a bead sitting in a channel. */
 .ns-segmented {
   display: flex;
   gap: 4px;
   background: var(--track);
   border-radius: 999px;
   padding: 4px;
+  box-shadow:
+    inset 0 2px 4px rgba(18, 48, 76, 0.07),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
 }
 .ns-tab {
   font: inherit;
@@ -502,7 +833,8 @@
   font-weight: 700;
   color: var(--ink-deep);
   background: var(--surface);
-  box-shadow: 0 1px 2px rgba(18, 48, 76, 0.1);
+  box-shadow: var(--jelly-rise);
+  animation: ns-squish var(--t-settle) var(--ease-soft);
 }
 .ns-window {
   margin-left: auto;
@@ -517,6 +849,7 @@
 }
 
 /* --- tables -------------------------------------------------------------- */
+/* Deliberately untouched by the jelly layer. These are read, not pressed. */
 
 .ns-grid {
   display: grid;
@@ -644,6 +977,7 @@
   gap: 10px;
   font-size: 14px;
 }
+/* Little beads. Not interactive, so they get the lit edge and nothing else. */
 .ns-code {
   width: 26px;
   height: 26px;
@@ -654,19 +988,23 @@
   align-items: center;
   justify-content: center;
   flex: none;
+  background-image: var(--jelly-gloss);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 1px rgba(18, 48, 76, 0.06);
 }
 .ns-code-income {
-  background: var(--blue-tint);
+  background-color: var(--blue-tint);
   border: 1px solid var(--blue-line);
   color: var(--blue-deep);
 }
 .ns-code-cost {
-  background: var(--amber-tint);
+  background-color: var(--amber-tint);
   border: 1px solid var(--amber-line);
   color: var(--amber-deep);
 }
 .ns-code-end {
-  background: var(--ink-deep);
+  background-color: var(--ink-deep);
   color: #fff;
 }
 
@@ -697,28 +1035,38 @@
   font: inherit;
   font-size: 12px;
   font-weight: 500;
+  background-image: var(--jelly-gloss);
+  box-shadow: var(--jelly-rise);
+}
+.ns-bar:hover {
+  box-shadow: var(--jelly-rise-hi);
+}
+.ns-bar:active {
+  box-shadow: var(--jelly-press);
 }
 .ns-bar-income {
-  background: var(--blue-tint);
+  background-color: var(--blue-tint);
   border: 1px solid var(--blue-line);
   color: var(--blue-deep);
 }
 .ns-bar-income:hover {
-  background: var(--blue-hover);
+  background-color: var(--blue-hover);
 }
 .ns-bar-cost {
-  background: var(--amber-tint);
+  background-color: var(--amber-tint);
   border: 1px solid var(--amber-line);
   color: var(--amber-deep);
 }
 .ns-bar-cost:hover {
-  background: var(--amber-hover);
+  background-color: var(--amber-hover);
 }
+/* The horizon marker is a label, not a control: it keeps its right-anchored
+   offset through --jx and never lifts or squishes. */
 .ns-bar-end {
-  background: var(--ink-deep);
+  --jx: -100%;
+  background-color: var(--ink-deep);
   color: #fff;
   border: 1px solid var(--ink-deep);
-  transform: translateX(-100%);
   cursor: default;
 }
 
@@ -740,10 +1088,14 @@
 .ns-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(18, 48, 76, 0.28);
+  background: rgba(18, 48, 76, 0.26);
+  backdrop-filter: blur(3px) saturate(0.92);
   z-index: 40;
+  animation: ns-fade-in 240ms var(--ease-soft) both;
 }
 
+/* The drawer is the biggest delight-per-pixel win on the page: it arrives on
+   the bouncy spring and rubber-bands once at the end. */
 .ns-drawer {
   position: fixed;
   top: 0;
@@ -753,10 +1105,25 @@
   max-width: 100vw;
   background: var(--surface);
   border-left: 1px solid var(--border);
-  box-shadow: -8px 0 32px rgba(18, 48, 76, 0.14);
+  border-radius: 24px 0 0 24px;
+  box-shadow: -8px 0 32px rgba(18, 48, 76, 0.16);
   display: flex;
   flex-direction: column;
   z-index: 41;
+  animation: ns-drawer-in 480ms var(--spring) both;
+}
+/* The spring overshoots past its resting place, which would flash a sliver of
+   scrim at the right edge. This apron extends the panel off-screen to cover
+   it — cheaper and steadier than damping the curve until it stops bouncing. */
+.ns-drawer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 40px;
+  background: var(--surface);
+  pointer-events: none;
 }
 
 .ns-drawer-head {
@@ -811,7 +1178,7 @@
   color: var(--amber-deep);
   background: var(--amber-tint);
   border: 1px solid var(--amber-line);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -835,6 +1202,9 @@
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+/* Choosing what to add is the one genuinely playful decision in the app, so
+   the options rise into place on a short stagger. It runs once per drawer
+   open, never on a re-render. */
 .ns-kind {
   display: flex;
   align-items: center;
@@ -846,13 +1216,20 @@
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px 12px;
   cursor: pointer;
+  box-shadow: var(--jelly-rise);
+  animation: ns-rise-in 320ms var(--ease-jelly) both;
+  animation-delay: calc(var(--i, 0) * 26ms);
 }
 .ns-kind:hover {
-  background: var(--bg);
+  background: #fdfefe;
   border-color: var(--blue-line);
+  box-shadow: var(--jelly-rise-hi);
+}
+.ns-kind:active {
+  box-shadow: var(--jelly-press);
 }
 
 /* fields */
@@ -871,18 +1248,36 @@
   color: var(--muted-light);
 }
 
+/* Inputs are wells: pressed into the surface, the inverse of a button. That
+   contrast is what makes the form legible at a glance. */
 .ns-input {
   font: inherit;
   font-size: 14px;
   color: var(--ink);
-  background: var(--surface);
+  background: #fbfcfe;
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 9px 12px;
   width: 100%;
+  box-shadow: var(--jelly-well);
+  transition:
+    box-shadow 170ms var(--ease-soft),
+    border-color 170ms var(--ease-soft),
+    background-color 170ms var(--ease-soft);
 }
-.ns-input:focus {
+.ns-input:hover {
+  background: #fff;
+}
+/* The glow ring replaces the global focus outline here rather than stacking
+   with it; blue on white clears the 3:1 contrast a focus indicator needs. */
+.ns-input:focus,
+.ns-input:focus-visible {
+  background: #fff;
   border-color: var(--blue);
+  outline: none;
+  box-shadow:
+    inset 0 2px 4px rgba(18, 48, 76, 0.04),
+    0 0 0 3.5px rgba(46, 139, 208, 0.18);
 }
 
 .ns-input-wrap {
@@ -913,35 +1308,105 @@
   color: var(--ink);
   cursor: pointer;
 }
-.ns-toggle-row input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--blue);
+/* A jelly checkbox: an empty well that fills into a lit bead and squishes as
+   it does. The checkmark springs in behind it. */
+.ns-toggle-row input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: #fbfcfe;
+  box-shadow: var(--jelly-well);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+.ns-toggle-row input[type='checkbox']::after {
+  content: '';
+  width: 9px;
+  height: 5px;
+  border-left: 2.2px solid #fff;
+  border-bottom: 2.2px solid #fff;
+  border-radius: 1px;
+  opacity: 0;
+  transform: translateY(-1px) rotate(-45deg) scale(0.4);
+  transition:
+    transform 260ms var(--ease-jelly),
+    opacity 110ms var(--ease-soft);
+}
+.ns-toggle-row input[type='checkbox']:hover {
+  border-color: var(--blue-line);
+}
+.ns-toggle-row input[type='checkbox']:active {
+  --jsx: 1.12;
+  --jsy: 0.86;
+  transition-duration: var(--t-press);
+}
+.ns-toggle-row input[type='checkbox']:checked {
+  background-color: var(--blue);
+  background-image: var(--jelly-gloss);
+  border-color: var(--blue-press);
+  box-shadow: var(--jelly-rise);
+  animation: ns-squish 300ms var(--ease-soft);
+}
+.ns-toggle-row input[type='checkbox']:checked::after {
+  opacity: 1;
+  transform: translateY(-1px) rotate(-45deg) scale(1);
 }
 
 .ns-btn-danger {
   color: #fff;
-  background: #c0392b;
-  border-color: #c0392b;
+  background-color: #c0392b;
+  border-color: #a93226;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -2px 5px rgba(90, 22, 15, 0.28),
+    0 1px 2px rgba(18, 48, 76, 0.12),
+    0 5px 12px -4px rgba(192, 57, 43, 0.45);
 }
-.ns-btn-danger:hover {
-  background: #a93226;
+.ns-btn-danger:hover:not(:disabled) {
+  background-color: #a93226;
 }
 .ns-btn-danger-ghost {
   color: #c0392b;
   border-color: var(--border-strong);
 }
-.ns-btn-danger-ghost:hover {
+.ns-btn-danger-ghost:hover:not(:disabled) {
   background: #fdf1ef;
   border-color: #e8b3ac;
 }
 
-.ns-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.ns-btn:disabled:hover {
-  background: var(--blue);
+/* --- reduced motion ------------------------------------------------------
+   Jelly is a *look* as much as a behaviour, so the lit edges, gloss and
+   colour changes all stay. Only the movement goes: no squish, no lift, no
+   entrances. Zeroing the scale/lift variables as well as the durations
+   matters — otherwise a press would still snap to a squashed shape, just
+   instantly, which is worse than not moving at all. */
+@media (prefers-reduced-motion: reduce) {
+  .ns *,
+  .ns *::before,
+  .ns *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .ns-btn,
+  .ns-btn-ghost,
+  .ns-scenario,
+  .ns-tab,
+  .ns-kind,
+  .ns-pin,
+  .ns-bar,
+  .ns-toggle-row input[type='checkbox'] {
+    --jsx: 1 !important;
+    --jsy: 1 !important;
+    --jy: 0px !important;
+  }
 }
 
 /* --- hover detail card --------------------------------------------------- */
@@ -1126,7 +1591,11 @@
 }
 .ns-pin-slot .ns-pin {
   position: static;
-  transform: none;
+  /* The slot already centres the pin with margin-left, so the pin must not
+     shift itself by another -50%. Zero the offset variable rather than writing
+     `transform: none` — that would cancel the whole jelly transform and take
+     the squash-and-stretch with it. */
+  --jx: 0px;
 }
 
 .ns-row-add > div:first-child {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import type { PlanEvent, PlanResult } from "@northstar/engine";
 import { codeFor, summarize, toneFor } from "./presentation";
 import { eventDetail } from "./detail";
@@ -168,6 +168,7 @@ export function NetWorthChart({
             )}
 
             <path
+              className="ns-nw-line"
               d={geometry.line}
               fill="none"
               stroke="#12304C"
@@ -242,11 +243,17 @@ export function NetWorthChart({
               />
             ))}
 
-            {geometry.pins.map((pin) => (
+            {geometry.pins.map((pin, i) => (
               <div
                 key={pin.eventId}
                 className="ns-pin-slot"
-                style={{ left: pct(pin.x, VB_W), top: pct(pin.top, VB_H) }}
+                // --i staggers the drop-in left to right, so the pins land in
+                // chronological order rather than all at once. It sits on the
+                // slot rather than the button because the slot is what gets
+                // positioned; custom properties inherit down to .ns-pin.
+                style={
+                  { left: pct(pin.x, VB_W), top: pct(pin.top, VB_H), "--i": i } as CSSProperties
+                }
               >
                 <HoverCard detail={eventDetail(pin.event)} side="bottom">
                   <button
