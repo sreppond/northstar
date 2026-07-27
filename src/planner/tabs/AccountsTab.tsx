@@ -1,8 +1,9 @@
 import type { Account, AccountClass, YearSnapshot } from '@northstar/engine';
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engine';
-import { money } from '../format';
+import { tableMoney } from '../format';
 import { accountDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
+import { Cell } from './DataTable';
 
 /**
  * The balance sheet, one row per ACCOUNT TYPE rather than per linked account.
@@ -104,7 +105,7 @@ export function AccountsTab({
               ) : null}
             </div>
             {cells.map((v, i) => (
-              <div key={i}>{money(v)}</div>
+              <Cell key={i} value={tableMoney(v)} />
             ))}
           </div>
         );
@@ -122,14 +123,14 @@ export function AccountsTab({
       <div className="ns-grid ns-row-total" style={style}>
         <div>Net worth</div>
         {years.map((y) => (
-          <div key={y.year}>{money(y.netWorth)}</div>
+          <Cell key={y.year} value={tableMoney(y.netWorth)} />
         ))}
       </div>
 
       <div className="ns-grid ns-row-group" style={style}>
         <div>Assets</div>
         {years.map((y) => (
-          <div key={y.year}>{money(y.assets)}</div>
+          <Cell key={y.year} value={tableMoney(y.assets)} />
         ))}
       </div>
       {renderGroup(ASSET_CLASSES, false)}
@@ -138,7 +139,7 @@ export function AccountsTab({
       <div className="ns-grid ns-row-group" style={style}>
         <div>Liabilities</div>
         {years.map((y) => (
-          <div key={y.year}>{money(y.liabilities)}</div>
+          <Cell key={y.year} value={tableMoney(y.liabilities)} />
         ))}
       </div>
       {renderGroup(LIABILITY_CLASSES, true)}

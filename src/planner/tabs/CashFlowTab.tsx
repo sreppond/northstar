@@ -1,6 +1,6 @@
 import type { LineItem, YearSnapshot } from '@northstar/engine';
 import { DataTable, type TableRow } from './DataTable';
-import { money, signedMoney } from '../format';
+import { tableMoney, signedTableMoney } from '../format';
 
 /**
  * The tab that pays off the engine's provenance work: every LineItem carries a
@@ -15,10 +15,10 @@ export function CashFlowTab({ window }: { window: YearSnapshot[] }) {
     key: 'income',
     kind: 'group',
     label: 'Income',
-    cells: window.map((y) => money(y.totalIncome)),
+    cells: window.map((y) => tableMoney(y.totalIncome)),
   });
   for (const [label, cells] of groupLines(window, (y) => y.income)) {
-    rows.push({ key: `i-${label}`, kind: 'child', label, cells: cells.map(money) });
+    rows.push({ key: `i-${label}`, kind: 'child', label, cells: cells.map(tableMoney) });
   }
 
   const expenseTotals = window.map((y) => y.totalExpenses + y.totalTaxes);
@@ -26,16 +26,16 @@ export function CashFlowTab({ window }: { window: YearSnapshot[] }) {
     key: 'expenses',
     kind: 'group',
     label: 'Expenses',
-    cells: expenseTotals.map(money),
+    cells: expenseTotals.map(tableMoney),
   });
   rows.push({
     key: 'e-taxes',
     kind: 'child',
     label: 'Taxes',
-    cells: window.map((y) => money(y.totalTaxes)),
+    cells: window.map((y) => tableMoney(y.totalTaxes)),
   });
   for (const [label, cells] of groupLines(window, (y) => y.expenses)) {
-    rows.push({ key: `e-${label}`, kind: 'child', label, cells: cells.map(money) });
+    rows.push({ key: `e-${label}`, kind: 'child', label, cells: cells.map(tableMoney) });
   }
 
   const hasWithdrawals = window.some((y) => y.withdrawals.length > 0);
@@ -44,10 +44,10 @@ export function CashFlowTab({ window }: { window: YearSnapshot[] }) {
       key: 'withdrawals',
       kind: 'group',
       label: 'Withdrawals',
-      cells: window.map((y) => money(total(y.withdrawals))),
+      cells: window.map((y) => tableMoney(total(y.withdrawals))),
     });
     for (const [label, cells] of groupLines(window, (y) => y.withdrawals)) {
-      rows.push({ key: `w-${label}`, kind: 'child', label, cells: cells.map(money) });
+      rows.push({ key: `w-${label}`, kind: 'child', label, cells: cells.map(tableMoney) });
     }
   }
 
@@ -55,7 +55,7 @@ export function CashFlowTab({ window }: { window: YearSnapshot[] }) {
     key: 'net',
     kind: 'total',
     label: 'Net cash flow',
-    cells: window.map((y) => signedMoney(y.netCashFlow)),
+    cells: window.map((y) => signedTableMoney(y.netCashFlow)),
   });
 
   const shortfalls = window.filter((y) => y.unfundedShortfall);
@@ -64,7 +64,9 @@ export function CashFlowTab({ window }: { window: YearSnapshot[] }) {
       key: 'shortfall',
       kind: 'child',
       label: 'Unfunded shortfall',
-      cells: window.map((y) => (y.unfundedShortfall ? money(y.unfundedShortfall) : '—')),
+      // A year with no shortfall now falls out as the same en-dash every other
+      // nil cell uses, so this no longer needs its own placeholder.
+      cells: window.map((y) => tableMoney(y.unfundedShortfall ?? 0)),
     });
   }
 

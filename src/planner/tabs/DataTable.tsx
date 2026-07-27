@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react';
+import { ZERO_DASH } from '../format';
 
 export type RowKind = 'total' | 'group' | 'child';
+
+/**
+ * One numeric cell. A nil balance is dimmed as well as dashed — the point of
+ * the dash is that empty rows stop competing with the figures around them.
+ */
+export function Cell({ value }: { value: string }) {
+  return <div className={value === ZERO_DASH ? 'ns-zero' : undefined}>{value}</div>;
+}
 
 export interface TableRow {
   key: string;
@@ -41,7 +50,7 @@ export function DataTable({
         <div key={row.key} className={`ns-grid ns-row-${row.kind}`} style={style}>
           <div title={typeof row.label === 'string' ? row.label : undefined}>{row.label}</div>
           {row.cells.map((cell, i) => (
-            <div key={i}>{cell}</div>
+            <Cell key={i} value={cell} />
           ))}
         </div>
       ))}

@@ -928,6 +928,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Nil cells. Dimmed as well as dashed — the dash exists so empty rows stop
+   competing with the figures around them, and colour does most of that work.
+   Inherits the row's weight, so a nil total still reads as a total. */
+.ns-zero {
+  color: var(--muted-light);
+}
+
 .ns-empty {
   padding: 28px 20px;
   font-size: 13px;
