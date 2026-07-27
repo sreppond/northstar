@@ -516,17 +516,36 @@ payment     = P × r / (1 − (1+r)^−n)
 |---|---|---|---|
 | `income` | `INC` | amount, startYear, endYear, growthRate, isTaxable | recurring income |
 | `windfall` | `WND` | year, amount, taxRate | one-time income, net of tax |
-| `newJob` | `JOB` | startYear, salary, bonusPercent, annualRaise, retirement contribution %, employer match %, equity grant | replaces prior income; patches accounts with `yearlyPaycheckContribution` |
-| `careerBreak` | `BRK` | startYear, durationYears, incomeReplacementPercent | suppresses income for a span; expenses continue |
-| `haveAKid` | `KID` | birthYear, firstYearCost, annualCost, supportUntilAge, collegeStartAge, collegeAnnualCost, collegeYears | front-loaded first year, then annual to `supportUntilAge`, then a college block |
-| `annualExpense` | `EXP` | amount, startYear, endYear, inflates | recurring expense |
+| `newJob` | `JOB` | startYear, salary, bonusPercent, signingBonus, annualRaise, endYear, **replacesEarnedIncome**, retirement contribution %, employer match %, contributionAccountId, contributionIsPretax | income + contributions; when `replacesEarnedIncome` it zeroes earnings from events that started BEFORE it |
+| `careerBreak` | `BRK` | startYear, durationYears, incomeReplacementPercent, spendingChangePercent, oneTimeCost | suppresses income for a span and adjusts spending over the same window |
+| `haveAKid` | `KID` | birthYear, upfrontCost, annualCost, supportYears, costGrowthRate, collegeStartAge, collegeAnnualCost, collegeYears | one-off upfront cost at birth, annual support from the birth year for `supportYears`, growing at its OWN rate, then a college block |
+| `annualExpense` | `EXP` | amount, startYear, endYear, inflates, growthRate | recurring expense; `growthRate` overrides plan inflation when set |
 | `otherExpense` | `EXP` | year, amount | one-time expense |
-| `retirement` | `RET` | participantId, retirementYear\|age, spendingChangePercent | stops earned income + contributions; opens withdrawals (`withdrawalTiming:'starting_year'`); adjusts baseline spend |
+| `retirement` | `RET` | participantId, retirementYear, spendingChangePercent, **incomeRetentionByEvent**, defaultIncomeRetentionPercent, affectsUnearnedIncome | stops contributions, adjusts baseline spend, and cuts each income line to its own retained percentage |
 | `socialSecurity` | `SSA` | participantId, claimAge, annualBenefit, colaRate | income from claim age, COLA-indexed, to end of plan |
 | `endOfPlan` | `END` | year | sets the horizon; defaults to oldest participant's `birthday + lifeExpectancy` |
 
 `endOfPlan` is `isRequired: true` — every plan has exactly one and it cannot be
 deleted, matching the ghost pin at 2046 in the reference UI.
+
+### 5.1 One structure for every income cut
+
+`newJob`, `careerBreak` and `retirement` all reduce income, so they share a
+single `IncomeSuppression` rather than each special-casing the year loop. It is
+resolved **per income line**, not once per year:
+
+- `replacementPercent` — the blanket case, what every unnamed line drops to.
+- `retentionByEventId` — per-line overrides. Retirement keeps consulting at 40%
+  while wages go to zero.
+- `exemptEventsStartingFrom` — income from events starting in or after this
+  year is untouched. This is what lets a new job zero the salary it replaced
+  without zeroing a job that starts later, and without zeroing itself.
+- `includeUnearned` — off by default, because a rental or a pension usually
+  survives retirement.
+- `affectsBaseline` — whether `settings.baselineIncome` is in scope.
+
+Most restrictive wins when several overlap: two events that both cut income
+must never cancel out into a raise.
 
 ### 5.3 Registry
 

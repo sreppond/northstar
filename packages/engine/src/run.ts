@@ -26,6 +26,7 @@ import {
   type CompileFailure,
   type CompiledEvent,
   type ContributionItem,
+  type IncomeSuppression,
   compileEvent,
 } from './events/index.js';
 
@@ -83,6 +84,9 @@ export function runPlan(plan: Plan): PlanResult {
     (t) => t.year,
   );
   const suppressions = compiled.flatMap((c) => c.incomeSuppressions);
+  // Lets a suppression tell "the salary I replaced" from "a job that starts
+  // after me" without the events themselves having to know about each other.
+  const eventStartYear = new Map(plan.events.map((e) => [e.id, e.startYear]));
   const expenseMultipliers = compiled.flatMap((c) => c.expenseMultipliers);
   const stopContributionsFrom = compiled
     .map((c) => c.stopContributionsFrom)
@@ -167,18 +171,30 @@ export function runPlan(plan: Plan): PlanResult {
 
     const yearFlows = cashFlowsByYear.get(year) ?? [];
 
-    // 3. INCOME -- baseline wages plus event income, with suppression applied
-    //    to earned income only.
-    const replacement = replacementFactor(suppressions, year);
-
-    const baselineIncome = settings.baselineIncome * inflationAt(year) * replacement;
+    // 3. INCOME -- baseline wages plus event income. Suppression is resolved
+    //    per line, so one retirement can keep different fractions of each.
+    const baselineIncome =
+      settings.baselineIncome *
+      inflationAt(year) *
+      replacementFactorFor(suppressions, year, { isEarned: true, isBaseline: true }, eventStartYear);
     if (baselineIncome > EPSILON) {
       income.push({ label: 'Baseline income', amount: baselineIncome, category: 'income' });
     }
     let taxableIncome = baselineIncome;
 
     for (const cf of yearFlows.filter((f) => f.kind === 'income')) {
-      const amount = cf.isEarned ? cf.amount * replacement : cf.amount;
+      const amount =
+        cf.amount *
+        replacementFactorFor(
+          suppressions,
+          year,
+          {
+            sourceEventId: cf.sourceEventId,
+            isEarned: cf.isEarned ?? false,
+            isBaseline: false,
+          },
+          eventStartYear,
+        );
       if (amount <= EPSILON) continue;
       income.push({
         label: cf.label,
@@ -485,17 +501,45 @@ function zeroRow(account: Account, open: number): AccountYear {
   };
 }
 
-/** Most restrictive suppression wins when several overlap. */
-function replacementFactor(
-  suppressions: { fromYear: number; toYear: number; replacementPercent: number }[],
+/**
+ * How much of one income line survives the suppressions active in `year`.
+ *
+ * Resolved per line rather than once per year, because a suppression can now
+ * name individual events: retirement keeps 40% of consulting while wages stop,
+ * and a new job zeroes the salary it replaced but not itself.
+ *
+ * Most restrictive still wins when several overlap — two events that both cut
+ * income should not cancel out into a raise.
+ */
+function replacementFactorFor(
+  suppressions: IncomeSuppression[],
   year: number,
+  line: { sourceEventId?: string; isEarned: boolean; isBaseline: boolean },
+  eventStartYear: Map<string, number>,
 ): number {
   let factor = 1;
+
   for (const s of suppressions) {
-    if (year >= s.fromYear && year <= s.toYear) {
-      factor = Math.min(factor, s.replacementPercent / 100);
+    if (year < s.fromYear || year > s.toYear) continue;
+    if (!line.isEarned && !s.includeUnearned) continue;
+    if (line.isBaseline && s.affectsBaseline === false) continue;
+
+    // A later event's income is not what this suppression was aimed at.
+    if (
+      s.exemptEventsStartingFrom !== undefined &&
+      line.sourceEventId !== undefined &&
+      (eventStartYear.get(line.sourceEventId) ?? -Infinity) >= s.exemptEventsStartingFrom
+    ) {
+      continue;
     }
+
+    const override = line.sourceEventId
+      ? s.retentionByEventId?.[line.sourceEventId]
+      : undefined;
+    const percent = override ?? s.replacementPercent;
+    factor = Math.min(factor, percent / 100);
   }
+
   return factor;
 }
 

@@ -9,9 +9,20 @@ import { type CompileContext, type EventModule, emptyCompiled, yearRange } from 
 export const newJobConfig = z.object({
   salary: z.number().min(0),
   bonusPercent: z.number().min(0).default(0),
+  /** Paid once, in the first year. */
+  signingBonus: z.number().min(0).default(0),
   /** Percent per year. */
   annualRaise: z.number().default(3),
   endYear: z.number().int().optional(),
+  /**
+   * Take the earnings this job replaces to zero. Without it a new role stacks
+   * on top of the salary it succeeded and the plan quietly doubles its income
+   * — the single easiest way to build a forecast that is wrong and looks fine.
+   *
+   * Only earnings from events that started BEFORE this one are affected, so a
+   * job further out still lands normally.
+   */
+  replacesEarnedIncome: z.boolean().default(true),
   /** Percent of salary contributed to `contributionAccountId`. */
   retirementContributionPercent: z.number().min(0).max(100).default(0),
   /** Percent of salary the employer adds. Never touches cash flow. */
@@ -30,7 +41,9 @@ export const newJob: EventModule<NewJobConfig> = {
   defaults: () => ({
     salary: 150_000,
     bonusPercent: 10,
+    signingBonus: 0,
     annualRaise: 3,
+    replacesEarnedIncome: true,
     retirementContributionPercent: 6,
     employerMatchPercent: 3,
     contributionIsPretax: true,
@@ -39,6 +52,33 @@ export const newJob: EventModule<NewJobConfig> = {
   compile(event: PlanEvent, config: NewJobConfig, ctx: CompileContext) {
     const out = emptyCompiled(event.id);
     const end = config.endYear ?? ctx.endYear;
+
+    if (config.replacesEarnedIncome) {
+      out.incomeSuppressions.push({
+        fromYear: event.startYear,
+        toYear: end,
+        replacementPercent: 0,
+        sourceEventId: event.id,
+        // Anything starting this year or later is a separate decision, not the
+        // job being replaced. This is also what stops the rule eating its own
+        // salary, since this event starts in exactly that year.
+        exemptEventsStartingFrom: event.startYear,
+      });
+    }
+
+    if (config.signingBonus > 0 && event.startYear >= ctx.startYear && event.startYear <= ctx.endYear) {
+      out.cashFlows.push({
+        year: event.startYear,
+        kind: 'income',
+        amount: config.signingBonus,
+        label: `${event.name} — signing bonus`,
+        sourceEventId: event.id,
+        taxable: true,
+        // Not marked earned: a suppression should never claw back a bonus that
+        // was already paid out.
+        isEarned: false,
+      });
+    }
 
     for (const year of yearRange(event.startYear, end, ctx)) {
       const base = config.salary * Math.pow(1 + config.annualRaise / 100, year - event.startYear);
@@ -90,8 +130,16 @@ export const newJob: EventModule<NewJobConfig> = {
 
 export const careerBreakConfig = z.object({
   durationYears: z.number().int().min(1).default(1),
-  /** 0 = income fully stops. Expenses continue regardless. */
+  /** 0 = income fully stops. */
   incomeReplacementPercent: z.number().min(0).max(100).default(0),
+  /**
+   * Percent change in living expenses during the break. A sabbatical spent
+   * travelling costs more than a working year, a break at home costs less,
+   * and assuming neither is what makes a career break look free.
+   */
+  spendingChangePercent: z.number().default(0),
+  /** One-off costs the break itself creates — a course, a move, a trip. */
+  oneTimeCost: z.number().min(0).default(0),
 });
 export type CareerBreakConfig = z.infer<typeof careerBreakConfig>;
 
@@ -100,16 +148,43 @@ export const careerBreak: EventModule<CareerBreakConfig> = {
   label: 'Career break',
   code: 'BRK',
   schema: careerBreakConfig,
-  defaults: () => ({ durationYears: 1, incomeReplacementPercent: 0 }),
+  defaults: () => ({
+    durationYears: 1,
+    incomeReplacementPercent: 0,
+    spendingChangePercent: 0,
+    oneTimeCost: 0,
+  }),
 
   compile(event: PlanEvent, config: CareerBreakConfig, ctx: CompileContext) {
     const out = emptyCompiled(event.id);
+    const lastYear = event.startYear + config.durationYears - 1;
+
     out.incomeSuppressions.push({
       fromYear: event.startYear,
-      toYear: event.startYear + config.durationYears - 1,
+      toYear: lastYear,
       replacementPercent: config.incomeReplacementPercent,
       sourceEventId: event.id,
     });
+
+    if (config.spendingChangePercent !== 0) {
+      out.expenseMultipliers.push({
+        fromYear: event.startYear,
+        toYear: lastYear,
+        multiplier: 1 + config.spendingChangePercent / 100,
+        sourceEventId: event.id,
+      });
+    }
+
+    if (config.oneTimeCost > 0 && event.startYear >= ctx.startYear && event.startYear <= ctx.endYear) {
+      out.cashFlows.push({
+        year: event.startYear,
+        kind: 'expense',
+        amount: config.oneTimeCost,
+        label: `${event.name} — one-off`,
+        sourceEventId: event.id,
+      });
+    }
+
     return out;
   },
 };
@@ -122,6 +197,21 @@ export const retirementConfig = z.object({
   participantId: z.string().optional(),
   /** Percent change in baseline living expenses. -20 means spending falls 20%. */
   spendingChangePercent: z.number().default(-20),
+  /**
+   * Percent of an individual income line that continues after this date,
+   * keyed by the event that produces it. Retiring rarely means every source
+   * stops at once — consulting at 30%, a board seat in full, wages at zero.
+   *
+   * Lines not named here fall back to `defaultIncomeRetentionPercent`.
+   */
+  incomeRetentionByEvent: z.record(z.string(), z.number().min(0).max(100)).default({}),
+  /** Applied to baseline income and to any line without its own setting. */
+  defaultIncomeRetentionPercent: z.number().min(0).max(100).default(0),
+  /**
+   * Retirement stops wages. Unearned lines — a rental, a pension, royalties —
+   * usually survive it, so they are left alone unless this is turned on.
+   */
+  affectsUnearnedIncome: z.boolean().default(false),
 });
 export type RetirementConfig = z.infer<typeof retirementConfig>;
 
@@ -136,7 +226,12 @@ export const retirement: EventModule<RetirementConfig> = {
   label: 'Retire',
   code: 'RET',
   schema: retirementConfig,
-  defaults: () => ({ spendingChangePercent: -20 }),
+  defaults: () => ({
+    spendingChangePercent: -20,
+    incomeRetentionByEvent: {},
+    defaultIncomeRetentionPercent: 0,
+    affectsUnearnedIncome: false,
+  }),
 
   compile(event: PlanEvent, config: RetirementConfig, ctx: CompileContext) {
     const out = emptyCompiled(event.id);
@@ -144,8 +239,10 @@ export const retirement: EventModule<RetirementConfig> = {
     out.incomeSuppressions.push({
       fromYear: event.startYear,
       toYear: ctx.endYear,
-      replacementPercent: 0,
+      replacementPercent: config.defaultIncomeRetentionPercent,
       sourceEventId: event.id,
+      retentionByEventId: config.incomeRetentionByEvent,
+      includeUnearned: config.affectsUnearnedIncome,
     });
 
     out.expenseMultipliers.push({

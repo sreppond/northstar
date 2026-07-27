@@ -79,9 +79,9 @@ const houseEvents: PlanEvent[] = [
     startYear: 2028,
     isIncluded: true,
     config: {
-      firstYearCost: 22_500,
+      upfrontCost: 4_500,
       annualCost: 18_000,
-      supportUntilAge: 18,
+      supportYears: 18,
       collegeAnnualCost: 0,
     },
   },
@@ -100,9 +100,9 @@ const houseEvents: PlanEvent[] = [
     startYear: 2030,
     isIncluded: true,
     config: {
-      firstYearCost: 22_500,
+      upfrontCost: 4_500,
       annualCost: 18_000,
-      supportUntilAge: 18,
+      supportYears: 18,
       collegeAnnualCost: 0,
     },
   },

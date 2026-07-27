@@ -7,10 +7,16 @@ import { type CompileContext, type EventModule, emptyCompiled, yearRange } from 
 // ---------------------------------------------------------------------------
 
 export const haveAKidConfig = z.object({
-  /** Birth year carries a one-off higher cost. */
-  firstYearCost: z.number().min(0).default(22_500),
+  /** One-off costs at birth — hospital, gear, the nursery. */
+  upfrontCost: z.number().min(0).default(4_500),
   annualCost: z.number().min(0).default(18_000),
-  supportUntilAge: z.number().int().min(0).default(18),
+  /** How many years the annual cost runs, counting the birth year. */
+  supportYears: z.number().int().min(0).default(18),
+  /**
+   * Percent per year the annual cost grows. Separate from the plan's inflation
+   * because raising a child gets more expensive faster than the basket does.
+   */
+  costGrowthRate: z.number().default(3),
   collegeStartAge: z.number().int().min(0).optional(),
   collegeAnnualCost: z.number().min(0).default(0),
   collegeYears: z.number().int().min(0).default(4),
@@ -23,9 +29,10 @@ export const haveAKid: EventModule<HaveAKidConfig> = {
   code: 'KID',
   schema: haveAKidConfig,
   defaults: () => ({
-    firstYearCost: 22_500,
+    upfrontCost: 4_500,
     annualCost: 18_000,
-    supportUntilAge: 18,
+    supportYears: 18,
+    costGrowthRate: 3,
     collegeStartAge: 18,
     collegeAnnualCost: 30_000,
     collegeYears: 4,
@@ -34,24 +41,27 @@ export const haveAKid: EventModule<HaveAKidConfig> = {
   compile(event: PlanEvent, config: HaveAKidConfig, ctx: CompileContext) {
     const out = emptyCompiled(event.id);
     const birthYear = event.startYear;
-    const inflate = (year: number) => ctx.inflationAt(year) / ctx.inflationAt(birthYear);
+    // The event's own growth rate, not the plan's inflation.
+    const grow = (year: number) => Math.pow(1 + config.costGrowthRate / 100, year - birthYear);
 
-    if (birthYear >= ctx.startYear && birthYear <= ctx.endYear) {
+    if (birthYear >= ctx.startYear && birthYear <= ctx.endYear && config.upfrontCost > 0) {
       out.cashFlows.push({
         year: birthYear,
         kind: 'expense',
-        amount: config.firstYearCost,
-        label: `${event.name} — first year`,
+        amount: config.upfrontCost,
+        label: `${event.name} — upfront`,
         sourceEventId: event.id,
         category: 'children',
       });
     }
 
-    for (const year of yearRange(birthYear + 1, birthYear + config.supportUntilAge - 1, ctx)) {
+    // Annual support runs FROM the birth year: a newborn costs money in year
+    // one, and the upfront figure covers the one-off extras on top.
+    for (const year of yearRange(birthYear, birthYear + config.supportYears - 1, ctx)) {
       out.cashFlows.push({
         year,
         kind: 'expense',
-        amount: config.annualCost * inflate(year),
+        amount: config.annualCost * grow(year),
         label: event.name,
         sourceEventId: event.id,
         category: 'children',
@@ -64,7 +74,7 @@ export const haveAKid: EventModule<HaveAKidConfig> = {
         out.cashFlows.push({
           year,
           kind: 'expense',
-          amount: config.collegeAnnualCost * inflate(year),
+          amount: config.collegeAnnualCost * grow(year),
           label: `${event.name} — college`,
           sourceEventId: event.id,
           category: 'education',

@@ -65,7 +65,7 @@ describe('describeSchema', () => {
       }
       expect(described.length, `${kind} produced no fields`).toBeGreaterThan(0);
       for (const field of described) {
-        expect(field.kind, `${kind}.${field.name}`).toMatch(/number|boolean|string/);
+        expect(field.kind, `${kind}.${field.name}`).toMatch(/number|boolean|string|custom/);
       }
     }
   });
@@ -73,6 +73,22 @@ describe('describeSchema', () => {
   it('detects boolean fields', () => {
     const income = describeSchema(EVENT_MODULES.income.schema);
     expect(income.find((f) => f.name === 'isTaxable')?.kind).toBe('boolean');
+  });
+
+  /**
+   * `custom` means the generic form skips the field and a drawer supplies its
+   * own control. Every one therefore needs a matching bespoke editor, so this
+   * pins the complete list — adding a record to a schema without wiring up a
+   * control would otherwise silently drop it from the UI.
+   */
+  it('marks only the fields that have a bespoke control as custom', () => {
+    const custom: string[] = [];
+    for (const [kind, mod] of Object.entries(EVENT_MODULES)) {
+      for (const field of describeSchema(mod.schema)) {
+        if (field.kind === 'custom') custom.push(`${kind}.${field.name}`);
+      }
+    }
+    expect(custom).toEqual(['retirement.incomeRetentionByEvent']);
   });
 });
 

@@ -928,6 +928,70 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Cash flow row label + its gear. Mirrors .ns-type-cell on the balance sheet
+   so both tables reveal settings the same way. */
+.ns-line-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ns-line-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Retirement's per-income-line retention. One row per line the event can
+   actually act on, so the percentages always mean something. */
+.ns-retain {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.ns-retain-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.ns-retain-row {
+  display: grid;
+  grid-template-columns: auto 1fr 104px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+.ns-retain-row + .ns-retain-row {
+  border-top: 1px solid var(--rule-light);
+}
+.ns-retain-name {
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns-retain-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.ns-retain-input .ns-input {
+  width: 100%;
+  padding-right: 26px;
+}
+.ns-retain-input .ns-affix {
+  position: absolute;
+  right: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
 /* Nil cells. Dimmed as well as dashed — the dash exists so empty rows stop
    competing with the figures around them, and colour does most of that work.
    Inherits the row's weight, so a nil total still reads as a total. */
@@ -983,6 +1047,15 @@
   align-items: center;
   gap: 10px;
   font-size: 14px;
+}
+/* Takes the slack so the gear parks against the right edge of the label
+   column rather than floating next to the text. */
+.ns-gantt-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Little beads. Not interactive, so they get the lit edge and nothing else. */
 .ns-code {
@@ -1507,6 +1580,7 @@
   transition: opacity 120ms ease;
 }
 .ns-row-child:hover .ns-gear,
+.ns-gantt-row:hover .ns-gear,
 .ns-gear:focus-visible {
   opacity: 1;
 }

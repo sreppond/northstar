@@ -63,8 +63,8 @@ export function summarize(event: PlanEvent): string {
         .join(', ');
     case 'haveAKid':
       return [
-        c.firstYearCost !== undefined ? `${money(c.firstYearCost)} year one` : null,
-        c.annualCost !== undefined ? `${money(c.annualCost)}/yr after` : null,
+        c.annualCost !== undefined ? `${money(c.annualCost)}/yr` : null,
+        c.supportYears !== undefined ? `${c.supportYears}yrs` : null,
       ]
         .filter(Boolean)
         .join(', ');

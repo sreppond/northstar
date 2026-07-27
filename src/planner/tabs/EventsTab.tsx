@@ -2,6 +2,7 @@ import type { PlanEvent, PlanResult } from '@northstar/engine';
 import { codeFor, summarize, toneFor } from '../presentation';
 import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
+import { GearIcon } from '../icons';
 import type { ChartSelection } from '../NetWorthChart';
 
 /**
@@ -13,11 +14,13 @@ export function EventsTab({
   result,
   selected,
   onSelect,
+  onEdit,
 }: {
   events: PlanEvent[];
   result: PlanResult;
   selected: ChartSelection | null;
   onSelect(selection: ChartSelection | null): void;
+  onEdit(event: PlanEvent): void;
 }) {
   const { startYear, endYear } = result;
   const span = Math.max(1, endYear - startYear);
@@ -78,7 +81,21 @@ export function EventsTab({
               <HoverCard detail={eventDetail(event)} side="bottom">
                 <span className={`ns-code ns-code-${tone}`}>{code}</span>
               </HoverCard>
-              <span>{event.name}</span>
+              <span className="ns-gantt-name" title={event.name}>
+                {event.name}
+              </span>
+              {/* Same contract as the balance sheet: hover for the assumptions,
+                  click to edit the very same ones. */}
+              <HoverCard detail={eventDetail(event)} side="bottom">
+                <button
+                  type="button"
+                  className="ns-gear"
+                  aria-label={`${event.name} settings`}
+                  onClick={() => onEdit(event)}
+                >
+                  <GearIcon />
+                </button>
+              </HoverCard>
             </div>
             <div className="ns-gantt-track">
               {ticks.map((year) => (
@@ -144,7 +161,7 @@ function spanEnd(event: PlanEvent, planEnd: number): number {
   const c = (event.config ?? {}) as Record<string, number | undefined>;
   switch (event.kind) {
     case 'haveAKid':
-      return Math.min(planEnd, event.startYear + (c.supportUntilAge ?? 18));
+      return Math.min(planEnd, event.startYear + (c.supportYears ?? 18) - 1);
     case 'buyAHome':
       return Math.min(planEnd, c.sellYear ?? planEnd);
     case 'careerBreak':

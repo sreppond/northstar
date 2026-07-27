@@ -37,12 +37,40 @@ export interface ContributionItem {
   pretax: boolean;
 }
 
+/**
+ * Cuts earned income over a window. Retirement, a career break and a new job
+ * that replaces the old one all express themselves through this one structure.
+ *
+ * The defaults describe the simple case — every wage line drops to
+ * `replacementPercent`. The optional fields carve out the two cases that need
+ * more than a blanket cut:
+ *   - a new job supersedes the salary it replaces but not one that starts later
+ *   - retirement keeps different fractions of different income lines
+ */
 export interface IncomeSuppression {
   fromYear: number;
   toYear: number;
   /** 0 = income fully stops; 60 = it drops to 60% of what it would have been. */
   replacementPercent: number;
   sourceEventId: string;
+  /**
+   * Per-source-event overrides of `replacementPercent`, 0-100. Lets retirement
+   * keep a consulting income at 40% while wages go to zero.
+   */
+  retentionByEventId?: Record<string, number>;
+  /**
+   * Income from events starting in or after this year is left alone. A new job
+   * zeroes the salary it replaces without touching one that starts later —
+   * and, since the job's own start year qualifies, without zeroing itself.
+   */
+  exemptEventsStartingFrom?: number;
+  /**
+   * By default only wages are cut. Retirement can opt into cutting unearned
+   * income too, for lines like a rental that genuinely stop.
+   */
+  includeUnearned?: boolean;
+  /** Whether `settings.baselineIncome` is subject to this cut. Defaults true. */
+  affectsBaseline?: boolean;
 }
 
 export interface ExpenseMultiplier {

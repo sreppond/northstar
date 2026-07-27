@@ -62,8 +62,15 @@ Still open, in rough priority order:
 
 ## The hover/settings pattern
 
-One principle, applied in three places: **hovering something shows the
-assumptions behind it, and clicking through edits those same assumptions.**
+One principle, applied everywhere: **hovering something shows the assumptions
+behind it, and clicking through edits those same assumptions.**
+
+Every row that represents something with settings carries a gear, revealed on
+row hover: balance sheet type rows, Gantt event rows, and cash flow lines. A
+cash flow row's gear leads to the event that produced the line — or, for the
+rows the engine builds from plan settings (`Living expenses`, `Baseline
+income`, `Taxes`), to the assumptions drawer. **A gear that leads nowhere is
+worse than no gear**, so rows with no settings behind them get none.
 
 That only stays true because both read from ONE spec:
 
@@ -72,7 +79,16 @@ That only stays true because both read from ONE spec:
   card; `AccountDrawer` renders the identical list as inputs. Adding a field to
   a type makes it appear in both.
 - **Events** — the hover card and the drawer form are both generated from the
-  event module's zod schema.
+  event module's zod schema. A field whose `kind` is `custom` (a zod record)
+  is skipped by the generated form and needs a bespoke control;
+  `schemaForm.test.ts` pins the complete list of them, so adding a record to a
+  schema without wiring up an editor fails the build rather than silently
+  dropping the field from the UI.
+- **Id-shaped config fields render as pickers.** `participantId` and
+  `contributionAccountId` are references to other things in the plan, so
+  `EventDrawer` passes `options` and `ConfigField` renders a select. Add new
+  reference fields to the `choices` map there, never as free text — a raw id
+  input asks the user to know something only the code knows.
 - **Plan** — `planDetail()` builds from `plan.settings` and participants.
 
 `src/planner/HoverCard.tsx` is the shared popover; `src/planner/detail.ts` holds
@@ -144,6 +160,17 @@ now; don't reintroduce the transform.
   income and raises the spending question. Debatable — flag if it reads wrong.
 - **Events outside the horizon are filtered from both chart and Gantt**, with a
   footer count. They contribute nothing to the projection.
+- **A new job zeroes the earnings it replaces by default** (`replacesEarnedIncome`).
+  Off by default would be the safer-looking choice and the wrong one: stacking
+  a new salary on the old one silently doubles a plan's income, and the result
+  looks entirely reasonable. Scoped to events that started *before* the job, so
+  a later job still lands.
+- **Retirement retains income per line**, not with one blanket switch. The
+  drawer lists only the lines the event can actually act on — a percentage that
+  silently does nothing is worse than no control.
+- **A kid's costs grow at their own rate, not plan inflation.** Same for
+  recurring expenses via the optional `growthRate`. Tuition and childcare do
+  not track the general basket.
 
 ## Repo map
 

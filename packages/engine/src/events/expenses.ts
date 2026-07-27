@@ -7,6 +7,12 @@ export const annualExpenseConfig = z.object({
   endYear: z.number().int().optional(),
   /** Grow with the plan's inflation rate. */
   inflates: z.boolean().default(true),
+  /**
+   * Overrides the plan's inflation rate when set. Some costs have their own
+   * curve — health insurance and tuition do not track the general basket, and
+   * forcing them to is how a thirty-year projection drifts.
+   */
+  growthRate: z.number().optional(),
 });
 export type AnnualExpenseConfig = z.infer<typeof annualExpenseConfig>;
 
@@ -22,7 +28,11 @@ export const annualExpense: EventModule<AnnualExpenseConfig> = {
     const end = config.endYear ?? ctx.endYear;
 
     for (const year of yearRange(event.startYear, end, ctx)) {
-      const factor = config.inflates ? ctx.inflationAt(year) / ctx.inflationAt(event.startYear) : 1;
+      const factor = !config.inflates
+        ? 1
+        : config.growthRate !== undefined
+          ? Math.pow(1 + config.growthRate / 100, year - event.startYear)
+          : ctx.inflationAt(year) / ctx.inflationAt(event.startYear);
       out.cashFlows.push({
         year,
         kind: 'expense',

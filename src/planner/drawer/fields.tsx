@@ -121,10 +121,17 @@ export function ConfigField({
   field,
   value,
   onChange,
+  options,
 }: {
   field: FieldDescriptor;
   value: unknown;
   onChange(value: unknown): void;
+  /**
+   * Turns an id-shaped string field into a picker. `participantId` and
+   * `contributionAccountId` are references to things elsewhere in the plan —
+   * as free text they ask the user to know an internal id, which nobody does.
+   */
+  options?: { value: string; label: string }[];
 }) {
   if (field.kind === 'boolean') {
     return (
@@ -137,6 +144,25 @@ export function ConfigField({
   }
 
   if (field.kind === 'string') {
+    if (options) {
+      return (
+        <Field label={field.label}>
+          <select
+            className="ns-input"
+            value={value === undefined ? '' : String(value)}
+            onChange={(e) => onChange(e.target.value || undefined)}
+          >
+            <option value="">{field.required ? 'Choose…' : 'None'}</option>
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      );
+    }
+
     return (
       <Field label={field.label}>
         <input

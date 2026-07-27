@@ -21,7 +21,7 @@ const plan: Plan = {
     { id: 'job', kind: 'newJob', name: 'Reppond (Base)', startYear: 2028, isIncluded: true,
       config: { salary: 250_000, bonusPercent: 0, annualRaise: 0 } },
     { id: 'kid1', kind: 'haveAKid', name: 'Have a kid', startYear: 2028, isIncluded: true,
-      config: { firstYearCost: 22_500, annualCost: 18_000, supportUntilAge: 18, collegeAnnualCost: 0 } },
+      config: { upfrontCost: 4_500, annualCost: 18_000, supportYears: 18, collegeAnnualCost: 0 } },
     { id: 'house', kind: 'buyAHome', name: 'Buy a home', startYear: 2031, isIncluded: true,
       config: { price: 1_150_000, downPaymentPercent: 20, mortgageRate: 6.5, termYears: 30,
                 appreciationRate: 3, propertyTaxRate: 1.1, maintenancePercent: 1 } },

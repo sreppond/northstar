@@ -393,13 +393,21 @@ export default function App() {
               }}
             />
           )}
-          {tab === 'cashflow' && <CashFlowTab window={windowYears} />}
+          {tab === 'cashflow' && (
+            <CashFlowTab
+              window={windowYears}
+              events={plan.events}
+              onEdit={(event) => editor.edit(event)}
+              onEditAssumptions={() => setAssumptionsDraft(structuredClone(stored))}
+            />
+          )}
           {tab === 'events' && (
             <EventsTab
               events={plan.events}
               result={result}
               selected={selected}
               onSelect={setSelected}
+              onEdit={(event) => editor.edit(event)}
             />
           )}
         </section>
@@ -436,6 +444,9 @@ export default function App() {
       {editor.open && (
         <EventDrawer
           draft={editor.draft}
+          allEvents={plan.events}
+          participants={plan.participants}
+          accounts={plan.accounts}
           planStartYear={stored.settings.startYear}
           planEndYear={result.endYear}
           isNew={editor.isNew}

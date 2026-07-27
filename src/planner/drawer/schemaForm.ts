@@ -17,7 +17,12 @@ export type FieldUnit = 'currency' | 'percent' | 'year' | 'plain';
 export interface FieldDescriptor {
   name: string;
   label: string;
-  kind: 'number' | 'boolean' | 'string';
+  /**
+   * `custom` means the generic form cannot render it — a record or a nested
+   * object. The drawer supplies a bespoke control and skips the generated one,
+   * rather than falling through to a number input that writes junk.
+   */
+  kind: 'number' | 'boolean' | 'string' | 'custom';
   unit: FieldUnit;
   required: boolean;
   defaultValue?: unknown;
@@ -48,7 +53,7 @@ export function describeSchema(schema: z.ZodTypeAny): FieldDescriptor[] {
     return {
       name,
       label: humanize(name),
-      kind: typeName === 'ZodBoolean' ? 'boolean' : typeName === 'ZodString' ? 'string' : 'number',
+      kind: kindFor(typeName),
       unit: unitFor(name),
       required,
       defaultValue,
@@ -57,6 +62,21 @@ export function describeSchema(schema: z.ZodTypeAny): FieldDescriptor[] {
       integer: checks.some((c) => c.kind === 'int'),
     };
   });
+}
+
+function kindFor(typeName: string | undefined): FieldDescriptor['kind'] {
+  switch (typeName) {
+    case 'ZodBoolean':
+      return 'boolean';
+    case 'ZodString':
+      return 'string';
+    case 'ZodRecord':
+    case 'ZodArray':
+    case 'ZodObject':
+      return 'custom';
+    default:
+      return 'number';
+  }
 }
 
 interface AnyDef {
@@ -94,7 +114,10 @@ const OVERRIDES: Record<string, string> = {
   collegeYears: 'College (years)',
   insuranceAnnual: 'Insurance (annual)',
   annualBenefit: 'Annual benefit',
-  supportUntilAge: 'Support until age',
+  supportYears: 'Years of child expenses',
+  upfrontCost: 'Upfront costs',
+  annualCost: 'Yearly child expenses',
+  costGrowthRate: 'Change over time',
   collegeStartAge: 'College starts at age',
   spendingChangePercent: 'Spending change',
   incomeReplacementPercent: 'Income replacement',
@@ -102,6 +125,13 @@ const OVERRIDES: Record<string, string> = {
   employerMatchPercent: 'Employer match',
   taxablePercent: 'Taxable share',
   contributionAccountId: 'Contribution account',
+  participantId: 'Person',
+  signingBonus: 'Signing bonus',
+  replacesEarnedIncome: 'Zero out earnings this replaces',
+  affectsUnearnedIncome: 'Also stop unearned income',
+  defaultIncomeRetentionPercent: 'Default income kept',
+  oneTimeCost: 'One-off cost',
+  growthRate: 'Growth rate',
 };
 
 function humanize(name: string): string {

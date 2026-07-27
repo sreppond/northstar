@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { EventKind, PlanEvent } from '@northstar/engine';
+import type { Account, EventKind, Participant, PlanEvent } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
 import { codeFor, labelFor, toneFor } from '../presentation';
 import { describeSchema } from './schemaForm';
@@ -30,6 +30,11 @@ const COST_KINDS: EventKind[] = [
 interface Props {
   /** The event being edited, or null when picking a kind for a new one. */
   draft: PlanEvent | null;
+  /** Every event in the plan — retirement needs to list the income it stops. */
+  allEvents: PlanEvent[];
+  /** Referenced by id from event configs, so the drawer can offer real pickers. */
+  participants: Participant[];
+  accounts: Account[];
   planStartYear: number;
   planEndYear: number;
   isNew: boolean;
@@ -42,6 +47,9 @@ interface Props {
 
 export function EventDrawer({
   draft,
+  allEvents,
+  participants,
+  accounts,
   planStartYear,
   planEndYear,
   isNew,
@@ -67,6 +75,23 @@ export function EventDrawer({
     () => (draft ? describeSchema(EVENT_MODULES[draft.kind].schema) : []),
     [draft],
   );
+
+  // `custom` fields are records the generic form cannot render; each has a
+  // bespoke control below.
+  const generated = useMemo(() => fields.filter((f) => f.kind !== 'custom'), [fields]);
+
+  /** Id-shaped config fields that should be pickers, not free text. */
+  const choices = useMemo(
+    () => ({
+      participantId: participants
+        .filter((p) => p.isIncluded)
+        .map((p) => ({ value: p.id, label: p.name })),
+      contributionAccountId: accounts
+        .filter((a) => !a.isLiability && !a.isSynthetic)
+        .map((a) => ({ value: a.id, label: a.name })),
+    }),
+    [participants, accounts],
+  ) as Record<string, { value: string; label: string }[]>;
 
   const config = (draft?.config ?? {}) as Record<string, unknown>;
 
@@ -126,18 +151,34 @@ export function EventDrawer({
                 />
               </Field>
 
-              {fields.length === 0 && (
+              {generated.length === 0 && draft.kind !== 'retirement' && (
                 <p className="ns-drawer-hint">This event has no settings beyond its year.</p>
               )}
 
-              {fields.map((field) => (
+              {generated.map((field) => (
                 <ConfigField
                   key={field.name}
                   field={field}
                   value={config[field.name]}
+                  options={choices[field.name]}
                   onChange={(v) => setConfig(field.name, v)}
                 />
               ))}
+
+              {/* The one form the schema cannot generate: a row per income line
+                  in the plan, because it depends on the OTHER events. */}
+              {draft.kind === 'retirement' && (
+                <IncomeRetention
+                  targets={retirementTargets(
+                    allEvents,
+                    draft,
+                    config.affectsUnearnedIncome === true,
+                  )}
+                  retention={(config.incomeRetentionByEvent ?? {}) as Record<string, number>}
+                  fallback={Number(config.defaultIncomeRetentionPercent ?? 0)}
+                  onChange={(next) => setConfig('incomeRetentionByEvent', next)}
+                />
+              )}
 
               {validation && (
                 <div className="ns-drawer-errors">
@@ -187,6 +228,101 @@ export function EventDrawer({
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Which income lines a retirement can actually act on.
+ *
+ * Deliberately narrow. Listing a line the suppression cannot touch — a
+ * one-off windfall, a salary that already ended — would invite someone to set
+ * a percentage that silently does nothing, which is worse than not offering
+ * the control at all.
+ */
+export function retirementTargets(
+  events: PlanEvent[],
+  draft: PlanEvent,
+  affectsUnearned: boolean,
+): PlanEvent[] {
+  const year = draft.startYear;
+
+  return events.filter((e) => {
+    if (e.id === draft.id || !e.isIncluded || e.isHidden) return false;
+
+    const c = (e.config ?? {}) as Record<string, unknown>;
+    // One-off money is already banked by the time retirement starts.
+    const recurring = e.kind === 'income' || e.kind === 'newJob' || e.kind === 'socialSecurity';
+    if (!recurring) return false;
+
+    const ends = typeof c.endYear === 'number' ? c.endYear : Infinity;
+    if (ends < year) return false;
+
+    const earned = e.kind === 'newJob' || (e.kind === 'income' && c.isEarned === true);
+    return earned || affectsUnearned;
+  });
+}
+
+function IncomeRetention({
+  targets,
+  retention,
+  fallback,
+  onChange,
+}: {
+  targets: PlanEvent[];
+  retention: Record<string, number>;
+  fallback: number;
+  onChange(next: Record<string, number>): void;
+}) {
+  if (targets.length === 0) {
+    return (
+      <div className="ns-retain">
+        <div className="ns-retain-title">Income after retiring</div>
+        <p className="ns-drawer-hint">
+          No income lines are still running when this starts. Baseline income uses the default
+          above.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ns-retain">
+      <div className="ns-retain-title">Income after retiring</div>
+      <p className="ns-drawer-hint">
+        How much of each line continues. Anything left blank uses the default above.
+      </p>
+
+      {targets.map((event) => {
+        const explicit = retention[event.id];
+        return (
+          <div key={event.id} className="ns-retain-row">
+            <span className={`ns-code ns-code-${toneFor(event.kind)}`}>{codeFor(event.kind)}</span>
+            <span className="ns-retain-name" title={event.name}>
+              {event.name}
+            </span>
+            <div className="ns-retain-input">
+              <input
+                className="ns-input ns-num"
+                type="number"
+                min={0}
+                max={100}
+                step={5}
+                value={explicit ?? ''}
+                placeholder={String(fallback)}
+                aria-label={`${event.name} — percent kept`}
+                onChange={(e) => {
+                  const next = { ...retention };
+                  if (e.target.value === '') delete next[event.id];
+                  else next[event.id] = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                  onChange(next);
+                }}
+              />
+              <span className="ns-affix">%</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function KindGroup({
   title,
