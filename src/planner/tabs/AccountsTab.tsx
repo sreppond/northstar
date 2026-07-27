@@ -111,7 +111,7 @@ export function AccountsTab({
       });
 
   return (
-    <div>
+    <div className="ns-table-scroll">
       <div className="ns-grid ns-row-head" style={style}>
         <div>Balance sheet</div>
         {yearLabels.map((y) => (

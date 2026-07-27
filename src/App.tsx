@@ -20,6 +20,7 @@ import { AccountsTab } from './planner/tabs/AccountsTab';
 import { CashFlowTab } from './planner/tabs/CashFlowTab';
 import { EventsTab } from './planner/tabs/EventsTab';
 import { cagr, money, percent, roundMoney, signedMoney } from './planner/format';
+import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
 
 type TabId = 'accounts' | 'cashflow' | 'events';
 
@@ -29,11 +30,11 @@ const TABS: { id: TabId; name: string }[] = [
   { id: 'events', name: 'Events' },
 ];
 
-/** Only eight year-columns fit; the window pages rather than the type shrinking. */
-const WINDOW = 8;
-
 export default function App() {
   const [tab, setTab] = useState<TabId>('accounts');
+  // The window pages rather than the type shrinking, and how many years fit
+  // depends on the viewport.
+  const columns = yearColumnsFor(useBreakpoint());
   const [winStart, setWinStart] = useState(0);
   const [selected, setSelected] = useState<ChartSelection | null>(null);
 
@@ -188,9 +189,9 @@ export default function App() {
         },
   ];
 
-  const maxStart = Math.max(0, result.years.length - WINDOW);
+  const maxStart = Math.max(0, result.years.length - columns);
   const clampedStart = Math.min(winStart, maxStart);
-  const windowYears = result.years.slice(clampedStart, clampedStart + WINDOW);
+  const windowYears = result.years.slice(clampedStart, clampedStart + columns);
   const windowLabel =
     windowYears.length > 0
       ? `${windowYears[0].year}–${windowYears[windowYears.length - 1].year}`
@@ -363,7 +364,7 @@ export default function App() {
                   className="ns-btn ns-btn-square"
                   aria-label="Earlier years"
                   disabled={clampedStart === 0}
-                  onClick={() => setWinStart(Math.max(0, clampedStart - WINDOW))}
+                  onClick={() => setWinStart(Math.max(0, clampedStart - columns))}
                 >
                   ←
                 </button>
@@ -372,7 +373,7 @@ export default function App() {
                   className="ns-btn ns-btn-square"
                   aria-label="Later years"
                   disabled={clampedStart >= maxStart}
-                  onClick={() => setWinStart(Math.min(maxStart, clampedStart + WINDOW))}
+                  onClick={() => setWinStart(Math.min(maxStart, clampedStart + columns))}
                 >
                   →
                 </button>

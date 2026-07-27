@@ -1412,3 +1412,222 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* ==========================================================================
+   Responsive
+   --------------------------------------------------------------------------
+   Two breakpoints, matched by src/planner/useBreakpoint.ts:
+     ≤1024px  tablet   — KPIs to 2x2, fewer year columns, tighter gutters
+     ≤640px   phone    — everything single column, drawer full-width
+
+   The tables keep their column widths and scroll sideways with the label
+   column pinned. Shrinking a financial table's type to fit is worse than
+   scrolling it.
+   ========================================================================== */
+
+.ns-table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* Rows are individual grids, so they only line up while they share a width. */
+.ns-table-scroll .ns-grid {
+  min-width: max-content;
+}
+
+.ns-grid > div:not(:first-child) {
+  min-width: 84px;
+}
+
+/* Pin the label column so figures stay attributable while scrolling. Each row
+   type paints its own background, or the scrolled cells show through. */
+.ns-grid > div:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.ns-row-head > div:first-child {
+  background: var(--surface-sub);
+}
+.ns-row-total > div:first-child {
+  background: var(--tint-row);
+}
+.ns-row-child:hover > div:first-child {
+  background: #fafcfd;
+}
+.ns-gantt-head > div:first-child,
+.ns-gantt-row > div:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.ns-gantt-head > div:first-child {
+  background: var(--surface-sub);
+}
+
+@media (max-width: 1024px) {
+  .ns-head,
+  .ns-main {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .ns-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ns-scenarios {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .ns-title-row {
+    flex-wrap: wrap;
+    padding: 16px 18px 14px;
+  }
+  .ns-title-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .ns-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    margin: 0 18px;
+  }
+  /* With two per row the left border must restart each row, and the seam
+     between rows needs a top border instead. */
+  .ns-kpi:nth-child(odd) {
+    border-left: 0;
+  }
+  .ns-kpi:nth-child(n + 3) {
+    border-top: 1px solid #e9eef3;
+  }
+
+  .ns-chart,
+  .ns-chart-overlay {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .ns-chart-overlay {
+    inset: 0 14px;
+  }
+  .ns-chart-head {
+    flex-wrap: wrap;
+    padding: 16px 18px 4px;
+  }
+  .ns-legend {
+    margin-left: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .ns-tabbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ns-compare {
+    margin-left: auto;
+  }
+
+  .ns-selection {
+    flex-wrap: wrap;
+    padding: 12px 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ns-head,
+  .ns-main {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .ns-wordmark {
+    font-size: 19px;
+  }
+
+  .ns-card {
+    border-radius: 14px;
+  }
+
+  .ns-kpis {
+    grid-template-columns: 1fr;
+    margin: 0 14px;
+  }
+  .ns-kpi {
+    border-left: 0;
+  }
+  .ns-kpi + .ns-kpi {
+    border-top: 1px solid #e9eef3;
+  }
+  .ns-kpi-value {
+    font-size: 26px;
+  }
+
+  .ns-title {
+    font-size: 18px;
+  }
+  .ns-title-row {
+    gap: 10px;
+    padding: 14px 14px 12px;
+  }
+  /* Buttons go full-width rather than crowding into a strip. */
+  .ns-title-actions {
+    gap: 8px;
+  }
+  .ns-title-actions .ns-btn {
+    flex: 1;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .ns-tabbar {
+    padding: 12px 14px;
+  }
+  .ns-tab {
+    padding: 8px 14px;
+  }
+  .ns-compare {
+    margin-left: 0;
+    width: 100%;
+  }
+  .ns-select {
+    flex: 1;
+  }
+
+  /* A 440px panel on a 390px phone is a panel with a sliver of page behind
+     it. Full-bleed is the only honest option. */
+  .ns-drawer {
+    width: 100%;
+    border-left: 0;
+  }
+
+  /* The label column gives up width before the figures do. */
+  .ns-grid {
+    grid-template-columns: 150px repeat(var(--cols, 8), 1fr);
+  }
+  .ns-row-child > div:first-child {
+    padding-left: 22px;
+  }
+  .ns-gantt-head,
+  .ns-gantt-row {
+    grid-template-columns: 170px 1fr;
+  }
+
+  .ns-hovercard {
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* Below the tablet breakpoint the chart keeps its proportions and scrolls,
+   rather than compressing until the pins collide and the axis clips. */
+@media (max-width: 700px) {
+  .ns-chart-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .ns-chart {
+    min-width: 800px;
+  }
+}

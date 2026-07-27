@@ -41,7 +41,7 @@ export function EventsTab({
   ).length;
 
   return (
-    <div>
+    <div className="ns-table-scroll">
       <div className="ns-gantt-head">
         <div>Life events</div>
         <div className="ns-gantt-ticks">

@@ -17,10 +17,12 @@ to `main`. `npm install && npm run dev` → http://localhost:3000.
 | 5b. Hover detail cards + per-type account settings | ✅ |
 | 6. Assumptions + priority rules UI | ✅ plan settings, household, and both waterfalls |
 | 7. Scenario management + A/B comparison | ✅ |
+| 8. Responsive layout | ✅ phone / tablet / desktop, verified at 390 / 834 / 1600 |
 
 **Phase 1 is complete.** Every part of a plan is editable from the UI and
-persists, and scenarios can be created, renamed, duplicated, deleted and
-compared. Next up is Phase 2 (backend) — see docs/PLAN.md §9.
+persists, scenarios can be created, renamed, duplicated, deleted and compared,
+and the whole thing works on a phone. Next up is Phase 2 (backend) — see
+docs/PLAN.md §9.
 
 Plans now persist to localStorage (`northstar:plans:v1`) with undo.
 
@@ -34,6 +36,10 @@ Verify with `npm run lint && npm test && npm run build` — all three are green.
 - **Redo exists in the store but has no button** (only Undo is wired).
 - **A second participant cannot be added.** The drawer edits whoever is in
   `participants`; there is no add/remove.
+- **Hover cards need a pointer.** The layout is responsive, but a phone has no
+  hover, so the detail cards are desktop-only in practice. Tapping still opens
+  the drawer, which carries the same numbers — the fast read is what's missing.
+  A long-press or tap-to-peek would close the gap.
 
 ## Next: Phase 2 — the backend
 
@@ -47,9 +53,6 @@ Still open, in rough priority order:
 - **Comparison is clipped to the active plan's horizon.** Comparing House
   (ends 2046) against Retirement (ends 2086) shows only to 2046, which is the
   right default but is not explained anywhere in the UI.
-- **No responsive work.** The layout assumes ≥1320px; tables need horizontal
-  scroll containers below that, and the 440px drawer needs to go full-width on
-  a phone.
 - **Deep pin cascades.** Pins now stack until they clear (see below), which on
   a 60-year plan with clustered early events reaches five rows and covers the
   top of the plot. Readable, but a "+3 more" collapse past ~4 rows would be
@@ -90,6 +93,25 @@ read-only there — they belong to their event.
 pin's right edge and a pin drops to the first row it clears. Stacking by
 shared year alone worked on a 20-year plan and fell apart on a 60-year one,
 where adjacent years are a few pixels apart.
+
+## Responsive rules
+
+Three breakpoints, declared once in `src/planner/useBreakpoint.ts` and mirrored
+by the media queries at the bottom of `planner.css`: **phone ≤640**,
+**tablet ≤1024**, **desktop** above. Keep the two in step — the hook exists only
+for what CSS cannot decide.
+
+- **Year columns come from the hook**, not from CSS: 3 / 5 / 8. Fewer columns
+  beats shrinking the type or scrolling eight columns on a phone. `App.tsx`
+  calls `yearColumnsFor(useBreakpoint())`.
+- **Tables scroll horizontally inside `.ns-table-scroll`** with the label column
+  stuck to the left. The sticky cell has to repaint its own background per row
+  type, or rows scroll underneath it.
+- **The chart does not compress.** Below 700px it keeps a `min-width: 800px`
+  inside `.ns-chart-scroll` and the page scrolls it. Squeezing the plot instead
+  collapses the pin cascade into an unreadable pile.
+- **The drawer goes full-width ≤640px**, 440px above.
+- KPI grid reflows 4 → 2 → 1, and the borders between cards reflow with it.
 
 **Gotcha worth remembering:** a CSS `transform` on an ancestor becomes the
 containing block for `position: fixed` descendants. `.ns-pin-slot` originally
@@ -138,6 +160,7 @@ src/planner/              chart, tabs, tokens, presentation rules
   drawer/fields.tsx       form primitives shared by all three drawers
   HoverCard.tsx           the dark detail popover
   detail.ts               the three Detail builders
+  useBreakpoint.ts        phone/tablet/desktop + year-column count
 ```
 
 The old AI Studio simulator has been deleted, along with the deps only it

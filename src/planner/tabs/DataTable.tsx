@@ -27,7 +27,7 @@ export function DataTable({
   const style = { ['--cols' as string]: years.length };
 
   return (
-    <div>
+    <div className="ns-table-scroll">
       <div className="ns-grid ns-row-head" style={style}>
         <div>{caption}</div>
         {years.map((y) => (
