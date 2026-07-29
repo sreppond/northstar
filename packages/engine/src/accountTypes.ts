@@ -19,7 +19,7 @@ export interface AccountFieldSpec {
   key: keyof Account;
   label: string;
   unit: FieldUnit;
-  kind?: 'number' | 'boolean' | 'growthMethod' | 'withdrawalTiming';
+  kind?: 'number' | 'boolean' | 'growthMethod' | 'growthSchedule' | 'withdrawalTiming';
   min?: number;
   max?: number;
   step?: number;
@@ -51,10 +51,10 @@ const balance = (label = 'Balance'): AccountFieldSpec => ({
 
 const growthMethod: AccountFieldSpec = {
   key: 'growthRateMethod',
-  label: 'Growth',
+  label: 'Change over time',
   unit: 'plain',
   kind: 'growthMethod',
-  help: 'Fixed holds one rate. No change keeps the balance flat.',
+  help: 'Fixed holds one rate. Variable steps between rates you set. No change keeps the balance flat.',
 };
 
 const growthRate = (label = 'Expected return'): AccountFieldSpec => ({
@@ -63,6 +63,18 @@ const growthRate = (label = 'Expected return'): AccountFieldSpec => ({
   unit: 'percent',
   step: 0.1,
   showWhen: (a) => a.growthRateMethod === 'fixed',
+});
+
+/**
+ * The anchor list behind a `schedule` account. Rendered as a year/rate editor
+ * rather than a single input, so it declares its own kind.
+ */
+const growthSchedule = (label = 'Expected return'): AccountFieldSpec => ({
+  key: 'growthRateSchedule',
+  label,
+  unit: 'percent',
+  kind: 'growthSchedule',
+  showWhen: (a) => a.growthRateMethod === 'schedule',
 });
 
 const withdrawalTiming: AccountFieldSpec = {
@@ -140,6 +152,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
       balance(),
       growthMethod,
       growthRate(),
+      growthSchedule(),
       {
         key: 'taxableWithdrawalPercent',
         label: 'Embedded gain',
@@ -176,6 +189,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
       balance(),
       growthMethod,
       growthRate(),
+      growthSchedule(),
       {
         key: 'yearlyPaycheckContribution',
         label: 'Annual contribution',
@@ -239,6 +253,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
       balance(),
       growthMethod,
       growthRate(),
+      growthSchedule(),
       {
         key: 'yearlyPaycheckContribution',
         label: 'Annual contribution',
@@ -279,6 +294,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
       balance('Current value'),
       growthMethod,
       growthRate('Appreciation'),
+      growthSchedule('Appreciation'),
       withdrawalTiming,
       withdrawalStartingYear,
     ],
@@ -298,6 +314,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
       balance(),
       growthMethod,
       growthRate('Annual change'),
+      growthSchedule('Annual change'),
       { key: 'withdrawalTaxRate', label: 'Tax on sale', unit: 'percent', min: 0, max: 100 },
       {
         key: 'taxableWithdrawalPercent',

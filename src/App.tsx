@@ -432,6 +432,8 @@ export default function App() {
           synthetic={allAccounts.filter(
             (a) => a.isSynthetic && a.accountClass === accountDraft.accountClass,
           )}
+          planStartYear={stored.settings.startYear}
+          planEndYear={result.endYear}
           onChange={setAccountDraft}
           onSave={() => {
             upsertAccount(stored.id, accountDraft);

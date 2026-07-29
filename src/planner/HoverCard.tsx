@@ -1,11 +1,16 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { Detail } from './detail';
 
 /**
  * The dark detail popover.
  *
- * Positioned `fixed` from the trigger's bounding box so it escapes the plan
- * card's `overflow: hidden` without a portal.
+ * Positioned `fixed` from the trigger's bounding box, and portalled to
+ * `document.body`. `fixed` alone escapes the plan card's `overflow: hidden`,
+ * but not a stacking context: the balance sheet pins its label column with
+ * `position: sticky; z-index: 1`, and that traps the card's own z-index inside
+ * the row. Rows further down the table then painted straight over it. The
+ * portal lifts the card out of every ancestor context.
  *
  * The anchor rect is captured on mouse-enter rather than measured in a layout
  * effect. Measuring after paint meant re-running whenever the (freshly built)
@@ -53,7 +58,9 @@ export function HoverCard({
       onBlur={() => setRect(null)}
     >
       {children}
-      {rect && !disabled && <Card detail={detail} rect={rect} side={side} />}
+      {rect &&
+        !disabled &&
+        createPortal(<Card detail={detail} rect={rect} side={side} />, document.body)}
     </span>
   );
 }

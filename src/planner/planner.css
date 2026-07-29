@@ -1628,6 +1628,91 @@
   box-shadow: 0 1px 2px rgba(18, 48, 76, 0.1);
 }
 
+/* --- variable-rate schedule editor --------------------------------------- */
+
+/* Year | rate | remove. The remove column is reserved even on the pinned
+   first row, so the two inputs stay in one column down the list. */
+.ns-sched-head,
+.ns-sched-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 34px;
+  gap: 8px;
+  align-items: center;
+}
+.ns-sched-row + .ns-sched-row {
+  margin-top: 8px;
+}
+.ns-sched-head {
+  margin-bottom: 2px;
+}
+
+/* The opening year is fixed, so it reads as a value rather than a control —
+   an input you cannot change is a worse lie than plain text in a box. */
+.ns-sched-year-fixed {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  background: var(--surface-sub);
+  box-shadow: none;
+  cursor: default;
+}
+
+.ns-sched-remove-slot {
+  display: block;
+}
+.ns-sched-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted-light);
+  cursor: pointer;
+}
+.ns-sched-remove:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.ns-sched-add {
+  display: inline-flex;
+  /* The field is a flex column, which would otherwise stretch the button to
+     the full drawer width and make it read as the primary action. */
+  align-self: flex-start;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-deep);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-control);
+  cursor: pointer;
+}
+.ns-sched-add:hover {
+  border-color: var(--blue-line);
+  color: var(--blue-deep);
+}
+
+.ns-sched-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 14px;
+}
+.ns-sched-axis {
+  font-size: 11px;
+  fill: var(--muted-light);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- read-only synthetic accounts in the settings drawer ----------------- */
 
 .ns-readonly-note {

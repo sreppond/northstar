@@ -7,7 +7,7 @@
  * field list its settings drawer edits; an event's card from the very zod
  * schema its form is generated from. They cannot drift.
  */
-import type { Account, Participant, Plan, PlanEvent } from '@northstar/engine';
+import type { Account, Participant, Plan, PlanEvent, RateAnchor } from '@northstar/engine';
 import { ACCOUNT_TYPES, EVENT_MODULES, visibleFields } from '@northstar/engine';
 import type { AccountFieldSpec, FieldUnit } from '@northstar/engine';
 import { describeSchema } from './drawer/schemaForm';
@@ -145,7 +145,7 @@ export function accountDetail(account: Account, closingBalance?: number): Detail
 const GROWTH_LABEL: Record<string, string> = {
   fixed: 'Fixed rate',
   noChange: 'No change',
-  schedule: 'Scheduled',
+  schedule: 'Variable rate',
 };
 
 const TIMING_LABEL: Record<string, string> = {
@@ -157,8 +157,24 @@ const TIMING_LABEL: Record<string, string> = {
 function formatAccountValue(raw: unknown, field: AccountFieldSpec): string {
   if (field.kind === 'growthMethod') return GROWTH_LABEL[String(raw)] ?? String(raw);
   if (field.kind === 'withdrawalTiming') return TIMING_LABEL[String(raw)] ?? String(raw);
+  if (field.kind === 'growthSchedule') return formatSchedule(raw);
   if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
   return formatUnit(raw, field.unit);
+}
+
+/**
+ * A schedule on one line: the opening rate, then each step. The card has no
+ * room for a table, and the shape ("3%, 6% from 2031") is what someone is
+ * checking when they hover.
+ */
+function formatSchedule(raw: unknown): string {
+  if (!Array.isArray(raw) || raw.length === 0) return '—';
+  const sorted = [...(raw as RateAnchor[])].sort((a, b) => a.year - b.year);
+  const [first, ...rest] = sorted;
+  return [
+    `${trim(first.rate)}%`,
+    ...rest.map((a) => `${trim(a.rate)}% from ${a.year}`),
+  ].join(', ');
 }
 
 export function formatUnit(raw: unknown, unit: FieldUnit | 'plain'): string {
