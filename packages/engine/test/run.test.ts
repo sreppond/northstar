@@ -19,6 +19,92 @@ describe('runPlan — horizon', () => {
   });
 });
 
+describe('runPlan — growth timing', () => {
+  // §4.3: growth applies to the OPENING balance net of withdrawals. Money paid
+  // in across year Y first earns in Y+1. Growing contributions for a full year
+  // is what made a 5% account report a 7.2% return.
+  it('does not grow contributions in the year they are made', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 2, baselineIncome: 50_000 } as never,
+        accounts: [asset({ id: 'b', name: 'Brokerage', initialBalance: 100_000, growthRate: 10 })],
+        rules: [rule('b', 'allocation', 1)],
+      }),
+    );
+
+    const first = result.years[0].accounts[0];
+    expect(first.contributions).toBeCloseTo(50_000, 6);
+    // 10% of the opening 100k — NOT of 150k.
+    expect(first.growth).toBeCloseTo(10_000, 6);
+    expect(first.close).toBeCloseTo(160_000, 6);
+
+    // The contribution earns from the following year, on the new opening base.
+    expect(result.years[1].accounts[0].growth).toBeCloseTo(16_000, 6);
+  });
+
+  it('grows the balance net of a withdrawal, not the opening balance', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1, baselineExpenses: 20_000 } as never,
+        accounts: [asset({ id: 'b', name: 'Brokerage', initialBalance: 100_000, growthRate: 10 })],
+        rules: [rule('b', 'withdrawal', 1)],
+      }),
+    );
+    const row = result.years[0].accounts[0];
+    expect(row.withdrawals).toBeCloseTo(20_000, 6);
+    expect(row.growth).toBeCloseTo(8_000, 6);
+  });
+});
+
+describe('runPlan — partial first year', () => {
+  const stub = () =>
+    plan({
+      settings: { projectionYears: 2 } as never,
+      accounts: [asset({ id: 'b', name: 'Brokerage', initialBalance: 100_000, growthRate: 5 })],
+    });
+
+  it('prorates the first year of growth and runs full years after it', () => {
+    const result = runPlan(stub(), { firstYearFraction: 5 / 12 });
+
+    // Five months of a 5% year is ~2.08%.
+    expect(result.years[0].accounts[0].close).toBeCloseTo(102_083.33, 2);
+    expect(result.years[1].accounts[0].close).toBeCloseTo(102_083.33 * 1.05, 2);
+  });
+
+  it('runs a whole first year by default, so a plain call is unchanged', () => {
+    expect(runPlan(stub()).years[0].accounts[0].close).toBeCloseTo(105_000, 6);
+  });
+
+  it('clamps a nonsense fraction rather than inventing negative growth', () => {
+    expect(runPlan(stub(), { firstYearFraction: -3 }).years[0].accounts[0].growth).toBe(0);
+    expect(
+      runPlan(stub(), { firstYearFraction: 9 }).years[0].accounts[0].growth,
+    ).toBeCloseTo(5_000, 6);
+  });
+
+  it('charges only the elapsed months of debt interest', () => {
+    const debt = () =>
+      plan({
+        settings: { projectionYears: 1 } as never,
+        // 1%/month against a payment that exactly covers it: interest only.
+        accounts: [
+          liability({
+            id: 'l',
+            name: 'Loan',
+            initialBalance: 100_000,
+            interestRate: 12,
+            plannedPayment: 12_000,
+          }),
+        ],
+      });
+
+    expect(runPlan(debt()).years[0].accounts[0].interest).toBeCloseTo(12_000, 6);
+    expect(
+      runPlan(debt(), { firstYearFraction: 5 / 12 }).years[0].accounts[0].interest,
+    ).toBeCloseTo(5_000, 6);
+  });
+});
+
 describe('runPlan — growth', () => {
   it('compounds at the fixed rate on the closing balance', () => {
     const result = runPlan(

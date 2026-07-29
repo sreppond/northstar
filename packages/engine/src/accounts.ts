@@ -62,23 +62,32 @@ export interface YearAmortization {
  * Annual stepping would materially misstate interest on an amortizing loan --
  * this is the one place the extra precision earns its cost (docs/PLAN.md §4.1).
  * The final payment is trimmed so the balance lands exactly on zero.
+ *
+ * `months` runs a STUB period: a plan opened in July has five months left in
+ * its first year, not twelve, and charging a full year of interest against it
+ * overstates the debt from the very first row.
  */
 export function amortizeYear(
   openingBalance: number,
   annualRatePercent: number,
   annualPayment: number,
+  months = 12,
 ): YearAmortization {
   let balance = openingBalance;
-  if (balance <= 0) return { interest: 0, principal: 0, payment: 0, closing: 0 };
+  if (balance <= 0 || months <= 0) {
+    return { interest: 0, principal: 0, payment: 0, closing: Math.max(0, balance) };
+  }
 
   const monthlyRate = annualRatePercent / 100 / 12;
+  // The payment is a monthly obligation, so a stub year pays it `months` times
+  // rather than spreading a full year's payments over a shorter period.
   const scheduled = annualPayment / 12;
 
   let interestPaid = 0;
   let principalPaid = 0;
   let paid = 0;
 
-  for (let m = 0; m < 12 && balance > 0; m++) {
+  for (let m = 0; m < months && balance > 0; m++) {
     const interest = balance * monthlyRate;
     let principal = scheduled - interest;
 

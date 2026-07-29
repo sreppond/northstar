@@ -32,10 +32,30 @@ import {
 
 const EPSILON = 0.005;
 
-export function runPlan(plan: Plan): PlanResult {
+export interface RunOptions {
+  /**
+   * How much of the FIRST projection year is still ahead, 0–1. A plan opened
+   * on 28 July has ~0.42 of the year left, so a 5% account should return ~2%
+   * that year, not the full 5%.
+   *
+   * Passed in rather than read from a clock: `runPlan` is pure, and a
+   * projection that quietly changes because the date rolled over would break
+   * both the golden tests and byte-identical exports. The UI owns "now".
+   *
+   * Applies to rate-based accrual only — asset growth and debt interest.
+   * Income, expenses and contributions still count a whole year, so a stub
+   * year shows a full year of salary against a partial year of return.
+   */
+  firstYearFraction?: number;
+}
+
+export function runPlan(plan: Plan, options: RunOptions = {}): PlanResult {
   const warnings: string[] = [];
   const { settings } = plan;
   const startYear = settings.startYear;
+
+  const firstYearFraction = clamp01(options.firstYearFraction ?? 1);
+  const yearFraction = (year: number) => (year === startYear ? firstYearFraction : 1);
 
   // --- resolve the horizon before compiling ---------------------------------
   // `endOfPlan` sets it; otherwise fall back to projectionYears. Compilation
@@ -237,7 +257,12 @@ export function runPlan(plan: Plan): PlanResult {
       if (balance <= EPSILON) continue;
 
       const payment = scheduledAnnualPayment(account, balance);
-      const result = amortizeYear(balance, account.interestRate ?? 0, payment);
+      const result = amortizeYear(
+        balance,
+        account.interestRate ?? 0,
+        payment,
+        Math.round(12 * yearFraction(year)),
+      );
       amortization.set(account.id, result);
 
       if (result.payment > EPSILON) {
@@ -433,11 +458,18 @@ export function runPlan(plan: Plan): PlanResult {
 
       const contributions = contributionsByAccount.get(account.id) ?? 0;
       const withdrawals = withdrawalsByAccount.get(account.id) ?? 0;
-      // The waterfall already debited withdrawals from the live balance.
-      const beforeGrowth = (balances.get(account.id) ?? 0) + contributions;
-      const rate = closed.has(account.id) ? 0 : growthRateFor(account, year) / 100;
-      const growth = beforeGrowth * rate;
-      const close = beforeGrowth + growth;
+      // The waterfall already debited withdrawals from the live balance, so
+      // this is the opening balance net of anything drawn out.
+      //
+      // Contributions are DELIBERATELY not in the growth base. Money paid in
+      // across year Y first earns in Y+1 (docs/PLAN.md §4.3). Growing them for
+      // a full year was the single biggest overstatement in the engine: a
+      // $100k account taking $44k of surplus reported $7.2k of "return" on a
+      // 5% rate, half of it earned by money that had not been there a year.
+      const growthBase = balances.get(account.id) ?? 0;
+      const rate = closed.has(account.id) ? 0 : (growthRateFor(account, year) / 100) * yearFraction(year);
+      const growth = growthBase * rate;
+      const close = growthBase + contributions + growth;
 
       balances.set(account.id, close);
 
@@ -564,6 +596,11 @@ function groupBy<T>(items: T[], key: (item: T) => number): Map<number, T[]> {
     else out.set(k, [item]);
   }
   return out;
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1, Math.max(0, value));
 }
 
 function sum(values: number[]): number {

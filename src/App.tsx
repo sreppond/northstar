@@ -21,6 +21,7 @@ import { CashFlowTab } from './planner/tabs/CashFlowTab';
 import { EventsTab } from './planner/tabs/EventsTab';
 import { cagr, money, percent, roundMoney, signedMoney } from './planner/format';
 import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
+import { firstYearFraction } from './planner/yearFraction';
 
 type TabId = 'accounts' | 'cashflow' | 'events';
 
@@ -84,9 +85,18 @@ export default function App() {
     [assumptionsDraft, stored, editor.draft],
   );
 
+  // "Now" enters the projection here and nowhere else — the engine has no
+  // clock. Held in state so a session left open overnight keeps re-running the
+  // same stub year rather than silently changing its numbers mid-edit.
+  const [today] = useState(() => new Date());
+  const stubYear = firstYearFraction(stored.settings.startYear, today);
+
   // The plan is the only source of truth; the result is always derived, never
   // stored. Storing it is how the chart and the table end up disagreeing.
-  const nominal = useMemo(() => runPlan(plan), [plan]);
+  const nominal = useMemo(
+    () => runPlan(plan, { firstYearFraction: stubYear }),
+    [plan, stubYear],
+  );
 
   // The engine always runs nominal; today's dollars is a presentation choice.
   const result = useMemo(
@@ -109,7 +119,7 @@ export default function App() {
   // second runPlan rather than anything clever.
   const compare: CompareSeries | undefined = useMemo(() => {
     if (!comparePlan) return undefined;
-    const raw = runPlan(comparePlan);
+    const raw = runPlan(comparePlan, { firstYearFraction: stubYear });
     return {
       name: comparePlan.name,
       result:
@@ -117,7 +127,7 @@ export default function App() {
           ? deflate(raw, plan.settings.inflationRate)
           : raw,
     };
-  }, [comparePlan, plan.settings.dollarMode, plan.settings.inflationRate]);
+  }, [comparePlan, plan.settings.dollarMode, plan.settings.inflationRate, stubYear]);
 
   // User accounts plus the synthetic ones events create, which the balance
   // sheet rolls into their class row.

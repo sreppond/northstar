@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { PlanEvent, PlanResult } from "@northstar/engine";
 import { codeFor, summarize, toneFor } from "./presentation";
 import { eventDetail } from "./detail";
@@ -13,13 +13,29 @@ import { axisMoney, money, signedMoney } from "./format";
  */
 
 const VB_W = 1176;
-const VB_H = 372;
-const PLOT_LEFT = 66;
+/**
+ * Wide enough that a pin sitting on the very first year clears the y-axis
+ * labels. A pin is 32 wide and centred on its year, so at the old 66 the
+ * opening pin reached back to 50 and sat on top of the topmost label.
+ */
+const PLOT_LEFT = 82;
 const PLOT_RIGHT = 1168;
 const PLOT_TOP = 18;
 const PLOT_BOTTOM = 336;
 const PIN_SIZE = 32;
 const PIN_GAP = 6;
+
+/** Year labels, just under the plot. */
+const AXIS_Y = 350;
+/**
+ * The readout lane. The hover figures used to sit at the top of the plot,
+ * which is exactly where the event pins live — on any year carrying an event
+ * the two stacked on top of each other and neither could be read. Giving the
+ * readout its own reserved band below the axis means the two can never
+ * collide, whatever the plan contains.
+ */
+const READOUT_Y = 378;
+const VB_H = 410;
 
 export interface ChartSelection {
   eventId: string;
@@ -223,7 +239,7 @@ export function NetWorthChart({
               <div
                 key={t.year}
                 className="ns-x-tick"
-                style={{ left: pct(t.x, VB_W), top: "93%" }}
+                style={{ left: pct(t.x, VB_W), top: pct(AXIS_Y, VB_H) }}
               >
                 {t.year}
               </div>
@@ -281,25 +297,22 @@ export function NetWorthChart({
               </div>
             ))}
 
+            {/* Reads left to right in its own lane under the axis, so it never
+              lands on the pins. Laid out as a row rather than a stack: at the
+              bottom of the chart a tall card would push the whole surface
+              down every time the pointer moved. */}
             {hover && hoverSnapshot && (
-              <div
-                className="ns-tooltip"
-                style={{ left: clampPct(hover.x), top: "4%" }}
-              >
-                <div className="ns-tooltip-year">{hoverSnapshot.year}</div>
-                <div className="ns-tooltip-value">
-                  {money(hoverSnapshot.netWorth)}
-                </div>
-                <div className="ns-tooltip-flow">
-                  Net flow {signedMoney(hoverSnapshot.netCashFlow)}
-                </div>
-                {compare && (
-                  <div className="ns-tooltip-compare">
-                    {compare.name}{" "}
-                    {money(compareAt(compare, hoverSnapshot.year))}
-                  </div>
-                )}
-              </div>
+              <Readout
+                x={hover.x}
+                year={hoverSnapshot.year}
+                value={money(hoverSnapshot.netWorth)}
+                flow={`Net flow ${signedMoney(hoverSnapshot.netCashFlow)}`}
+                compareLabel={
+                  compare
+                    ? `${compare.name} ${money(compareAt(compare, hoverSnapshot.year))}`
+                    : undefined
+                }
+              />
             )}
           </div>
         </div>
@@ -464,7 +477,59 @@ function pct(value: number, total: number): string {
 }
 
 /** Keep the tooltip from hanging off either edge of the plot. */
-function clampPct(x: number): string {
-  const raw = (x / VB_W) * 100;
-  return `${Math.min(92, Math.max(8, raw))}%`;
+/**
+ * The hover readout, centred on the year under the pointer and kept inside the
+ * plot.
+ *
+ * The clamp MEASURES rather than guessing at a percentage. This used to be
+ * fixed 8%/92% margins, which held while the readout was a narrow stacked
+ * card; as a row it is far wider — wider again with a comparison in it — and
+ * those margins let it hang off the end of the chart.
+ */
+function Readout({
+  x,
+  year,
+  value,
+  flow,
+  compareLabel,
+}: {
+  x: number;
+  year: number;
+  value: string;
+  flow: string;
+  compareLabel?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent) return;
+
+    const half = el.offsetWidth / 2;
+    const width = parent.clientWidth;
+    // `Math.max(half, …)` keeps the bounds sane if the pill is ever wider than
+    // the plot, which is what a phone-width chart plus a long scenario name
+    // would otherwise produce.
+    setLeft(Math.min(Math.max((x / VB_W) * width, half), Math.max(half, width - half)));
+  }, [x, year, value, flow, compareLabel]);
+
+  return (
+    <div
+      ref={ref}
+      className="ns-tooltip"
+      style={{
+        left: left ?? pct(x, VB_W),
+        top: pct(READOUT_Y, VB_H),
+        // Measured before paint, so this only hides the very first frame.
+        visibility: left === null ? 'hidden' : undefined,
+      }}
+    >
+      <span className="ns-tooltip-year">{year}</span>
+      <span className="ns-tooltip-value">{value}</span>
+      <span className="ns-tooltip-flow">{flow}</span>
+      {compareLabel && <span className="ns-tooltip-compare">{compareLabel}</span>}
+    </div>
+  );
 }

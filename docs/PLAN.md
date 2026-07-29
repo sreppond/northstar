@@ -312,12 +312,26 @@ for each year Y:
 
 Two conventions to fix now:
 
-- **Growth applies to the *closing* balance after flows (step 8 after 6–7).**
-  This is conservative — a contribution made during year Y earns growth only
-  from year Y+1. The alternative (half-year convention: contributions earn ½ a
-  year of growth) is more accurate but harder to explain in a UI. Pick
-  end-of-year, document it in the assumptions panel, and offer half-year as a
-  setting later if anyone asks.
+- **Growth applies to the balance a account *opened* the year with, net of any
+  withdrawal — not to the balance after contributions.** This is conservative:
+  a contribution made during year Y earns growth only from year Y+1. The
+  alternative (half-year convention: contributions earn ½ a year of growth) is
+  more accurate but harder to explain in a UI. Pick end-of-year, document it in
+  the assumptions panel, and offer half-year as a setting later if anyone asks.
+
+  This bullet used to open "growth applies to the *closing* balance after
+  flows", which contradicts its own next sentence — and the engine had followed
+  the wrong half, growing a year's contributions for a full year. Say opening
+  balance; "closing" reads as "after contributions" to everyone who has had to
+  implement it.
+
+- **The first projection year may be a STUB.** A plan whose start year is the
+  current calendar year is already part-spent, so rate-based accrual — asset
+  growth and debt interest — is scaled by the share of the year still ahead
+  (`RunOptions.firstYearFraction`). The engine has no clock: the caller passes
+  the fraction, so the projection stays pure and reproducible. Income,
+  expenses and contributions are NOT prorated yet, so a stub year still counts
+  a full year of salary against a partial year of return.
 - **Everything runs in nominal (future) dollars.** `dollarMode:'todaysDollars'`
   deflates at *presentation* time by `(1+inflation)^-(Y-Y0)`. Never run the
   engine in real dollars — you will double-deflate something.
@@ -833,7 +847,7 @@ import/export. Ships to GitHub Pages like Northstar does today.
 |---|---|---|
 | Annual vs monthly steps | **Annual**, monthly only inside mortgage amortization | 12× cheaper; precision unused elsewhere |
 | Nominal vs real | **Nominal always**, deflate at render | one source of truth; avoids double-deflation |
-| Growth timing | **End of year** (contributions earn from Y+1) | conservative and explainable; half-year later if asked |
+| Growth timing | **Opening balance** (contributions earn from Y+1) | conservative and explainable; half-year later if asked |
 | Tax model | **Flat effective rate per account** | matches Monarch; avoids the bracket fixed-point |
 | Chart library | **Hand-rolled SVG** | pins, dodging, corner marks, year-band hover |
 | Plan storage | **JSONB document** | read/written whole; normalization buys nothing |

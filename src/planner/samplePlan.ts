@@ -164,6 +164,32 @@ function retirement401k(): Account {
   };
 }
 
+/**
+ * A Roth IRA / Roth 401(k). Contributions are made with money already taxed,
+ * so qualified withdrawals come out clean — the mirror image of the
+ * tax-deferred account above, and the reason both are on the sheet by default.
+ */
+function roth(): Account {
+  return {
+    id: 'roth',
+    name: 'Tax-free investments',
+    accountClass: 'taxFreeInvestment',
+    isLiability: false,
+    initialBalance: 22_000,
+    isIncluded: true,
+    growthRateMethod: 'fixed',
+    growthRate: 6.5,
+    yearlyPaycheckContribution: 7_000,
+    // Untaxed on the way out, but earnings still carry the early-withdrawal
+    // penalty, so the waterfall leaves it alone until retirement.
+    withdrawalTiming: 'never',
+    withdrawalTaxRate: 0,
+    taxableWithdrawalPercent: 0,
+    penaltyRate: 10,
+    penaltyFreeAge: 59.5,
+  };
+}
+
 function base(id: string, name: string, events: PlanEvent[]): Plan {
   return {
     id,
@@ -182,7 +208,7 @@ function base(id: string, name: string, events: PlanEvent[]): Plan {
     participants: [
       { id: 'p1', name: 'You', birthYear: 1996, lifeExpectancy: 90, isIncluded: true },
     ],
-    accounts: [cash(), brokerage(), retirement401k()],
+    accounts: [cash(), brokerage(), retirement401k(), roth()],
     events,
     rules: [
       { accountId: 'brokerage', ruleType: 'allocation', order: 1 },
