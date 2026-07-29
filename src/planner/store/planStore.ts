@@ -11,7 +11,7 @@ import { SAMPLE_PLANS } from '../samplePlan';
  * kilobytes; a command pattern would be a lot of machinery to save nothing.
  */
 
-const STORAGE_KEY = 'northstar:plans:v1';
+export const STORAGE_KEY = 'northstar:plans:v1';
 const UNDO_LIMIT = 50;
 
 interface PlanState {
@@ -250,12 +250,30 @@ function loadPlans(): Plan[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(SAMPLE_PLANS);
     const parsed = JSON.parse(raw) as Plan[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return structuredClone(SAMPLE_PLANS);
+    if (!Array.isArray(parsed) || parsed.length === 0 || !parsed.every(isPlanShape)) {
+      return structuredClone(SAMPLE_PLANS);
+    }
     return parsed;
   } catch {
     // Corrupt or unavailable storage should never blank the app.
     return structuredClone(SAMPLE_PLANS);
   }
+}
+
+// A plan saved by an older build can be missing a field the engine now
+// indexes into unconditionally (e.g. `rules`). Reject anything that doesn't
+// match today's shape rather than let a stale record crash the first render.
+function isPlanShape(p: unknown): p is Plan {
+  if (typeof p !== 'object' || p === null) return false;
+  const plan = p as Partial<Plan>;
+  return (
+    Array.isArray(plan.participants) &&
+    Array.isArray(plan.accounts) &&
+    Array.isArray(plan.events) &&
+    Array.isArray(plan.rules) &&
+    typeof plan.settings === 'object' &&
+    plan.settings !== null
+  );
 }
 
 function persist(plans: Plan[]) {
