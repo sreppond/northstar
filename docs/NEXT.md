@@ -53,6 +53,10 @@ Still open, in rough priority order:
 - **Comparison is clipped to the active plan's horizon.** Comparing House
   (ends 2046) against Retirement (ends 2086) shows only to 2046, which is the
   right default but is not explained anywhere in the UI.
+- **The fan is one variable.** `Range` flexes investment returns ±2pp and
+  nothing else. Inflation, longevity and the tax rate are all just as uncertain
+  and are still point estimates. A second axis (or letting the ±2 be edited) is
+  the obvious next step.
 - **Deep pin cascades.** Pins now stack until they clear (see below), which on
   a 60-year plan with clustered early events reaches five rows and covers the
   top of the plot. Readable, but a "+3 more" collapse past ~4 rows would be
@@ -104,6 +108,30 @@ and tables move as you type but nothing is written until Save. Cancel is free.
 sheet has one row per `AccountClass`, each with a gear. Synthetic accounts (a
 home and its mortgage from a `buyAHome` event) roll into their class row but are
 read-only there — they belong to their event.
+
+## The sensitivity fan
+
+`Range` in the chart header runs the plan twice more at ±2 percentage points
+of return and draws the spread. Notes worth keeping:
+
+- **`withReturnShift` is deliberately narrow** (`packages/engine/sensitivity.ts`):
+  liabilities, `noChange` accounts and a home's appreciation are all left
+  alone. It is a sensitivity on the investment portfolio, which is what the
+  label claims. Widening it silently would make the label a lie.
+- **The high path must be in the y-scale ceiling** or the fan clips off the top
+  of the plot.
+- **The area gradient dims to 0.3 when the fan is on.** Stacked with the band
+  it makes the lower edge read as a crossing of the base line — it is not; a
+  test asserts the base always sits inside its own fan.
+- **Endpoint chips are anchored from the RIGHT** (`right: pct(VB_W - x)`), not
+  centred. Centred they hang ~30px off the plot, and the transform that would
+  fix that is the same one that throws hover cards across the page.
+- **`.ns-fan-slot:hover` lifts to z-index 6.** The card lives inside its slot,
+  so at equal depth the other chip paints on top of it.
+
+Note when testing: `.ns-hovercard` is `pointer-events: none`, so
+`elementFromPoint` reads straight through it. Assert paint order via computed
+z-index, not hit testing.
 
 **Chart pins stack by overlap, not by year.** Each row remembers its last
 pin's right edge and a pin drops to the first row it clears. Stacking by

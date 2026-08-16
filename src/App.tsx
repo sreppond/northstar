@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { deflate, runPlan } from '@northstar/engine';
+import {
+  DEFAULT_RETURN_SHIFT,
+  deflate,
+  headlineReturnRate,
+  runPlan,
+  withReturnShift,
+} from '@northstar/engine';
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/700.css';
@@ -15,7 +21,12 @@ import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { useEventEditor, withDraft } from './planner/drawer/useEventEditor';
-import { NetWorthChart, type ChartSelection, type CompareSeries } from './planner/NetWorthChart';
+import {
+  NetWorthChart,
+  type ChartSelection,
+  type CompareSeries,
+  type FanSeries,
+} from './planner/NetWorthChart';
 import { AccountsTab } from './planner/tabs/AccountsTab';
 import { CashFlowTab } from './planner/tabs/CashFlowTab';
 import { EventsTab } from './planner/tabs/EventsTab';
@@ -37,6 +48,7 @@ export default function App() {
   const columns = yearColumnsFor(useBreakpoint());
   const [winStart, setWinStart] = useState(0);
   const [selected, setSelected] = useState<ChartSelection | null>(null);
+  const [showFan, setShowFan] = useState(false);
 
   const plans = usePlanStore((s) => s.plans);
   const planId = usePlanStore((s) => s.activeId);
@@ -118,6 +130,26 @@ export default function App() {
           : raw,
     };
   }, [comparePlan, plan.settings.dollarMode, plan.settings.inflationRate]);
+
+  // Return sensitivity: the same plan under a better and a worse market. Two
+  // more runPlan calls, which cost microseconds — the honest way to show that
+  // the single least reliable input drives most of the spread.
+  const fan: FanSeries | undefined = useMemo(() => {
+    if (!showFan) return undefined;
+    if (headlineReturnRate(plan) === undefined) return undefined;
+
+    const run = (delta: number) => {
+      const raw = runPlan(withReturnShift(plan, delta));
+      return plan.settings.dollarMode === 'todaysDollars'
+        ? deflate(raw, plan.settings.inflationRate)
+        : raw;
+    };
+    return {
+      shift: DEFAULT_RETURN_SHIFT,
+      low: run(-DEFAULT_RETURN_SHIFT),
+      high: run(DEFAULT_RETURN_SHIFT),
+    };
+  }, [showFan, plan]);
 
   // User accounts plus the synthetic ones events create, which the balance
   // sheet rolls into their class row.
@@ -267,11 +299,12 @@ export default function App() {
           <NetWorthChart
             result={result}
             events={plan.events}
-            rateLabel={percent(
-              plan.accounts.find((a) => a.growthRateMethod === 'fixed')?.growthRate ?? 0,
-            )}
+            rateLabel={percent(headlineReturnRate(plan) ?? 0)}
             selected={selected}
             compare={compare}
+            fan={fan}
+            canFan={headlineReturnRate(plan) !== undefined}
+            onToggleFan={() => setShowFan((on) => !on)}
             onSelect={setSelected}
           />
 

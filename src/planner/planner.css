@@ -57,6 +57,13 @@
   --blue-hover: #d2e8f8;
 
   /* amber = cost */
+  /* The fan. Green reads as the better market, amber as the worse — the same
+     pairing the KPI deltas use, so the colours mean one thing app-wide. */
+  --green: #3f9d78;
+  --green-tint: #e6f4ee;
+  --amber-line-strong: #cf9a3f;
+  --fan-band: rgba(46, 139, 208, 0.07);
+
   --amber-tint: #fbf0e2;
   --amber-line: #e8c68a;
   --amber-deep: #8a5b12;
@@ -926,6 +933,110 @@
   padding: 10px 16px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---- Return sensitivity fan ---------------------------------------------
+   The band and its edges are context for the line, never a rival to it: they
+   sit underneath, thinner and dashed, and fade back when one end is focused. */
+.ns-nw-area,
+.ns-fan-band,
+.ns-fan-edge {
+  transition:
+    opacity 220ms var(--ease-soft),
+    stroke-opacity 220ms var(--ease-soft),
+    stroke-width 220ms var(--ease-soft);
+}
+.ns-fan-band {
+  animation: ns-fan-in 520ms var(--ease-soft) both;
+}
+@keyframes ns-fan-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Positioned like a pin slot: centred with a negative margin, never a
+   transform — a transform here would become the containing block for the
+   hover card and throw it across the page. */
+.ns-fan-slot {
+  position: absolute;
+  margin-right: 7px;
+  margin-top: -12px;
+  pointer-events: auto;
+  z-index: 3;
+}
+/* The card lives INSIDE its slot, so it cannot paint above a sibling slot at
+   the same depth — the other chip would sit on top of it. Lifting the hovered
+   slot lifts its card with it. */
+.ns-fan-slot:hover {
+  z-index: 6;
+}
+.ns-fan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+  background: var(--surface);
+  box-shadow: var(--jelly-rise);
+  transition:
+    box-shadow 180ms var(--ease-soft),
+    transform var(--t-settle) var(--ease-jelly);
+}
+.ns-fan-chip:hover {
+  box-shadow: var(--jelly-rise-hi);
+}
+.ns-fan-chip-mark {
+  font-size: 8px;
+  opacity: 0.8;
+}
+.ns-fan-chip-high {
+  color: var(--green);
+  border: 1px solid color-mix(in srgb, var(--green) 34%, transparent);
+}
+.ns-fan-chip-low {
+  color: var(--amber-deep);
+  border: 1px solid var(--amber-line);
+}
+
+.ns-legend-swatch-fan {
+  background: linear-gradient(to bottom, var(--green-tint), var(--amber-tint));
+  border: 1px solid var(--border-strong);
+}
+
+.ns-fan-toggle {
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--pill-border);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-soft),
+    color 140ms var(--ease-soft),
+    border-color 140ms var(--ease-soft);
+}
+.ns-fan-toggle:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+.ns-fan-toggle.is-on {
+  background: var(--blue-tint);
+  border-color: var(--blue-line);
+  color: var(--blue-deep);
 }
 
 /* Cash flow row label + its gear. Mirrors .ns-type-cell on the balance sheet

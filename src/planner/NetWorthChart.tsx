@@ -35,6 +35,18 @@ export interface CompareSeries {
   result: PlanResult;
 }
 
+/**
+ * The same plan under a better and a worse market, drawn as a band fanning out
+ * from today. Today's net worth is a fact; everything after it is an estimate,
+ * and the fan is the chart admitting how much wider that estimate gets.
+ */
+export interface FanSeries {
+  /** Percentage points either side of the plan's own return assumption. */
+  shift: number;
+  low: PlanResult;
+  high: PlanResult;
+}
+
 interface Props {
   result: PlanResult;
   events: PlanEvent[];
@@ -42,6 +54,10 @@ interface Props {
   selected: ChartSelection | null;
   /** A second plan drawn alongside, clipped to this plan's horizon. */
   compare?: CompareSeries;
+  fan?: FanSeries;
+  /** False when nothing in the plan has a market return to flex. */
+  canFan: boolean;
+  onToggleFan(): void;
   onSelect(selection: ChartSelection | null): void;
 }
 
@@ -51,13 +67,17 @@ export function NetWorthChart({
   rateLabel,
   selected,
   compare,
+  fan,
+  canFan,
+  onToggleFan,
   onSelect,
 }: Props) {
   const [hoverYear, setHoverYear] = useState<number | null>(null);
+  const [hotEdge, setHotEdge] = useState<"low" | "high" | null>(null);
 
   const geometry = useMemo(
-    () => build(result, events, compare),
-    [result, events, compare],
+    () => build(result, events, compare, fan),
+    [result, events, compare, fan],
   );
   const hover =
     hoverYear === null ? null : (geometry.pointByYear.get(hoverYear) ?? null);
@@ -101,12 +121,28 @@ export function NetWorthChart({
               {compare.name}
             </span>
           )}
+          {fan && (
+            <span className="ns-legend-item">
+              <span className="ns-legend-swatch ns-legend-swatch-fan" />±{fan.shift}% return
+            </span>
+          )}
           <span
             className="ns-legend-item"
             style={{ color: "var(--muted-light)" }}
           >
             Return {rateLabel}
           </span>
+
+          {canFan && (
+            <button
+              type="button"
+              className={`ns-fan-toggle${fan ? " is-on" : ""}`}
+              aria-pressed={fan !== undefined}
+              onClick={onToggleFan}
+            >
+              Range
+            </button>
+          )}
         </div>
       </div>
 
@@ -151,7 +187,52 @@ export function NetWorthChart({
               />
             ))}
 
-            <path d={geometry.area} fill="url(#ns-nw-fill)" />
+            {/* With the fan on, the band is the fill that means something. The
+                area gradient stacks with it and makes the lower edge read as a
+                crossing, so it steps back to a faint grounding wash. */}
+            <path
+              className="ns-nw-area"
+              d={geometry.area}
+              fill="url(#ns-nw-fill)"
+              opacity={fan ? 0.3 : 1}
+            />
+
+            {/* The fan sits UNDER the base line. It is context for the number,
+                not a competing number — the eye should still land on the line
+                first and read the spread second. */}
+            {geometry.fanBand && (
+              <path
+                className="ns-fan-band"
+                d={geometry.fanBand}
+                fill="var(--fan-band)"
+                stroke="none"
+                style={{ opacity: hotEdge ? 0.35 : 1 }}
+              />
+            )}
+            {geometry.highEdge && (
+              <path
+                className="ns-fan-edge"
+                d={geometry.highEdge.d}
+                fill="none"
+                stroke="var(--green)"
+                strokeWidth={hotEdge === "high" ? 2.4 : 1.6}
+                strokeOpacity={hotEdge === "low" ? 0.28 : 0.85}
+                strokeDasharray="3 5"
+                strokeLinecap="round"
+              />
+            )}
+            {geometry.lowEdge && (
+              <path
+                className="ns-fan-edge"
+                d={geometry.lowEdge.d}
+                fill="none"
+                stroke="var(--amber-line-strong)"
+                strokeWidth={hotEdge === "low" ? 2.4 : 1.6}
+                strokeOpacity={hotEdge === "high" ? 0.28 : 0.85}
+                strokeDasharray="3 5"
+                strokeLinecap="round"
+              />
+            )}
 
             {/* The compared plan sits under the active one: muted and dashed, so
               it reads as reference rather than competing for attention. */}
@@ -243,6 +324,35 @@ export function NetWorthChart({
               />
             ))}
 
+            {/* Endpoint chips, rendered as HTML after the hit bands for the
+                same reason the pins are: bands swallow SVG hover otherwise.
+                Hovering one dims the opposite edge, so the band reads as a
+                range with a side rather than as two unrelated lines. */}
+            {fan && geometry.highEdge && geometry.lowEdge && (
+              <>
+                <FanChip
+                  side="high"
+                  x={geometry.highEdge.end.x}
+                  y={geometry.highEdge.end.y}
+                  value={geometry.highEdge.end.value}
+                  base={geometry.last?.value ?? 0}
+                  shift={fan.shift}
+                  endYear={result.endYear}
+                  onHover={setHotEdge}
+                />
+                <FanChip
+                  side="low"
+                  x={geometry.lowEdge.end.x}
+                  y={geometry.lowEdge.end.y}
+                  value={geometry.lowEdge.end.value}
+                  base={geometry.last?.value ?? 0}
+                  shift={fan.shift}
+                  endYear={result.endYear}
+                  onHover={setHotEdge}
+                />
+              </>
+            )}
+
             {geometry.pins.map((pin, i) => (
               <div
                 key={pin.eventId}
@@ -326,10 +436,80 @@ function compareAt(compare: CompareSeries, year: number): number {
   return compare.result.years.find((y) => y.year === year)?.netWorth ?? 0;
 }
 
+/**
+ * One end of the fan: a small chip parked on the edge's last point, carrying
+ * the outcome under that market. Hovering it gives the full comparison —
+ * because the number a reader actually wants is not "$6.1M" but "$1.8M more
+ * than the plan says, if returns run two points better".
+ */
+function FanChip({
+  side,
+  x,
+  y,
+  value,
+  base,
+  shift,
+  endYear,
+  onHover,
+}: {
+  side: "low" | "high";
+  x: number;
+  y: number;
+  value: number;
+  base: number;
+  shift: number;
+  endYear: number;
+  onHover(side: "low" | "high" | null): void;
+}) {
+  const high = side === "high";
+  const delta = value - base;
+  const ratio = base > 0 ? (value / base - 1) * 100 : 0;
+
+  const detail = {
+    title: high ? "If returns run better" : "If returns run worse",
+    sections: [
+      {
+        rows: [
+          { label: "Return assumption", value: `${high ? "+" : "−"}${shift}% a year` },
+          { label: `Net worth in ${endYear}`, value: money(value) },
+        ],
+      },
+      {
+        heading: "Against the plan",
+        rows: [
+          { label: "Difference", value: signedMoney(delta) },
+          { label: "Relative", value: `${ratio >= 0 ? "+" : ""}${ratio.toFixed(0)}%` },
+        ],
+      },
+    ],
+  };
+
+  return (
+    <div
+      className="ns-fan-slot"
+      // Anchored from the RIGHT so the chip grows leftward from its endpoint
+      // and stays inside the plot. Centring it would hang ~30px off the edge,
+      // and a translate to correct that would become the containing block for
+      // the hover card and throw it across the page.
+      style={{ right: pct(VB_W - x, VB_W), top: pct(y, VB_H) }}
+      onMouseEnter={() => onHover(side)}
+      onMouseLeave={() => onHover(null)}
+    >
+      <HoverCard detail={detail} side={high ? "bottom" : "top"}>
+        <span className={`ns-fan-chip ns-fan-chip-${side}`}>
+          <span className="ns-fan-chip-mark">{high ? "▲" : "▼"}</span>
+          {money(value)}
+        </span>
+      </HoverCard>
+    </div>
+  );
+}
+
 function build(
   result: PlanResult,
   events: PlanEvent[],
   compare?: CompareSeries,
+  fan?: FanSeries,
 ) {
   const years = result.years;
   const span = Math.max(1, result.endYear - result.startYear);
@@ -343,10 +523,16 @@ function build(
       (y) => y.year >= result.startYear && y.year <= result.endYear,
     ) ?? [];
 
+  // The optimistic path runs ABOVE the base line, so it has to be in the
+  // ceiling calculation or the fan clips off the top of the plot.
+  const fanYears = (r: PlanResult | undefined) =>
+    r?.years.filter((y) => y.year >= result.startYear && y.year <= result.endYear) ?? [];
+
   const maxNetWorth = Math.max(
     1,
     ...years.map((y) => y.netWorth),
     ...compareYears.map((y) => y.netWorth),
+    ...fanYears(fan?.high).map((y) => y.netWorth),
   );
   const top = niceCeiling(maxNetWorth);
   const yFor = (value: number) =>
@@ -356,6 +542,7 @@ function build(
     year: y.year,
     x: xFor(y.year),
     y: yFor(y.netWorth),
+    value: y.netWorth,
   }));
   const pointByYear = new Map(points.map((p) => [p.year, p]));
 
@@ -436,6 +623,33 @@ function build(
           .join(" ")
       : undefined;
 
+  // --- the sensitivity fan --------------------------------------------------
+  // Both edges are clipped to this plan's window and drawn from the same
+  // origin as the base line, so the three paths genuinely start together at
+  // today's known net worth and only diverge as the estimate compounds.
+  const edge = (r: PlanResult | undefined) => {
+    const rows = fanYears(r);
+    if (rows.length < 2) return undefined;
+    const pts = rows.map((y) => ({ x: xFor(y.year), y: yFor(y.netWorth), value: y.netWorth }));
+    return {
+      d: pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" "),
+      end: pts[pts.length - 1],
+    };
+  };
+
+  const lowEdge = edge(fan?.low);
+  const highEdge = edge(fan?.high);
+
+  // One closed shape: out along the top, back along the bottom.
+  const fanBand =
+    lowEdge && highEdge
+      ? `${highEdge.d} L${fanYears(fan?.low)
+          .slice()
+          .reverse()
+          .map((y) => `${xFor(y.year).toFixed(2)},${yFor(y.netWorth).toFixed(2)}`)
+          .join(" L")} Z`
+      : undefined;
+
   return {
     line,
     area,
@@ -446,6 +660,10 @@ function build(
     bands,
     pointByYear,
     first: points[0],
+    last: points[points.length - 1],
+    fanBand,
+    lowEdge,
+    highEdge,
   };
 }
 
