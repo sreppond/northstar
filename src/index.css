@@ -21,3 +21,40 @@ body {
 button {
   font-family: inherit;
 }
+
+.ns-crash {
+  max-width: 480px;
+  margin: 15vh auto;
+  padding: 24px;
+  text-align: center;
+}
+
+.ns-crash h1 {
+  font-size: 1.25rem;
+  margin-bottom: 8px;
+}
+
+.ns-crash p {
+  color: #5b6b7a;
+  margin-bottom: 16px;
+}
+
+.ns-crash pre {
+  background: #eef1f4;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 0.8rem;
+  text-align: left;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.ns-crash button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}

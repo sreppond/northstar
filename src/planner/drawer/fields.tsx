@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { AccountFieldSpec } from '@northstar/engine';
+import type { AccountFieldSpec, RateAnchor } from '@northstar/engine';
+import { RateSchedule } from './RateSchedule';
 import { stepFor, type FieldDescriptor } from './schemaForm';
 
 /**
@@ -196,7 +197,8 @@ export function ConfigField({
 }
 
 const GROWTH_OPTIONS = [
-  { value: 'fixed', label: 'Fixed rate' },
+  { value: 'fixed', label: 'Fixed' },
+  { value: 'schedule', label: 'Variable' },
   { value: 'noChange', label: 'No change' },
 ] as const;
 
@@ -210,12 +212,27 @@ const TIMING_OPTIONS = [
 export function AccountField({
   field,
   value,
+  planYears,
   onChange,
 }: {
   field: AccountFieldSpec;
   value: unknown;
+  /** The projection window, for fields that span it (the rate schedule). */
+  planYears: { startYear: number; endYear: number };
   onChange(value: unknown): void;
 }) {
+  if (field.kind === 'growthSchedule') {
+    return (
+      <RateSchedule
+        label={field.label}
+        value={value as RateAnchor[] | undefined}
+        startYear={planYears.startYear}
+        endYear={planYears.endYear}
+        onChange={onChange}
+      />
+    );
+  }
+
   if (field.kind === 'growthMethod' || field.kind === 'withdrawalTiming') {
     const options = field.kind === 'growthMethod' ? GROWTH_OPTIONS : TIMING_OPTIONS;
     return (

@@ -17,12 +17,22 @@ import { AccountField } from './fields';
 interface Props {
   draft: Account;
   synthetic: Account[];
+  planStartYear: number;
+  planEndYear: number;
   onChange(next: Account): void;
   onSave(): void;
   onCancel(): void;
 }
 
-export function AccountDrawer({ draft, synthetic, onChange, onSave, onCancel }: Props) {
+export function AccountDrawer({
+  draft,
+  synthetic,
+  planStartYear,
+  planEndYear,
+  onChange,
+  onSave,
+  onCancel,
+}: Props) {
   const spec = ACCOUNT_TYPES[draft.accountClass];
 
   useEffect(() => {
@@ -33,7 +43,18 @@ export function AccountDrawer({ draft, synthetic, onChange, onSave, onCancel }: 
     return () => window.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
-  const set = (key: keyof Account, value: unknown) => onChange({ ...draft, [key]: value });
+  const set = (key: keyof Account, value: unknown) => {
+    const next = { ...draft, [key]: value };
+
+    // Switching to a variable rate seeds one anchor at the rate the account
+    // already grows at, so the preview opens as a flat line the user then
+    // bends — rather than an empty editor at 0%.
+    if (key === 'growthRateMethod' && value === 'schedule' && !next.growthRateSchedule?.length) {
+      next.growthRateSchedule = [{ year: planStartYear, rate: draft.growthRate }];
+    }
+
+    onChange(next);
+  };
 
   return (
     <>
@@ -54,6 +75,7 @@ export function AccountDrawer({ draft, synthetic, onChange, onSave, onCancel }: 
               key={String(field.key)}
               field={field}
               value={draft[field.key]}
+              planYears={{ startYear: planStartYear, endYear: planEndYear }}
               onChange={(v) => set(field.key, v)}
             />
           ))}
