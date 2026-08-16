@@ -126,8 +126,9 @@ of return and draws the spread. Notes worth keeping:
 - **Endpoint chips are anchored from the RIGHT** (`right: pct(VB_W - x)`), not
   centred. Centred they hang ~30px off the plot, and the transform that would
   fix that is the same one that throws hover cards across the page.
-- **`.ns-fan-slot:hover` lifts to z-index 6.** The card lives inside its slot,
-  so at equal depth the other chip paints on top of it.
+- **`withReturnShift` handles `schedule` as well as `fixed`.** A variable rate
+  curve shifts every anchor together. Anything market-exposed that it skips
+  silently opts out of the fan, which is invisible in the UI.
 
 Note when testing: `.ns-hovercard` is `pointer-events: none`, so
 `elementFromPoint` reads straight through it. Assert paint order via computed

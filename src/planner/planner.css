@@ -968,12 +968,9 @@
   pointer-events: auto;
   z-index: 3;
 }
-/* The card lives INSIDE its slot, so it cannot paint above a sibling slot at
-   the same depth — the other chip would sit on top of it. Lifting the hovered
-   slot lifts its card with it. */
-.ns-fan-slot:hover {
-  z-index: 6;
-}
+/* No z-index juggling needed here: HoverCard portals to document.body, so a
+   chip's card escapes this slot's stacking context and the opposite chip
+   cannot paint over it. */
 .ns-fan-chip {
   display: inline-flex;
   align-items: center;

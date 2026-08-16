@@ -34,8 +34,25 @@ export function withReturnShift(plan: Plan, deltaPercentagePoints: number): Plan
     ...plan,
     accounts: plan.accounts.map((account): Account => {
       if (account.isLiability) return account;
-      if (account.growthRateMethod !== 'fixed') return account;
-      return { ...account, growthRate: account.growthRate + deltaPercentagePoints };
+
+      if (account.growthRateMethod === 'fixed') {
+        return { ...account, growthRate: account.growthRate + deltaPercentagePoints };
+      }
+
+      // A variable schedule is just as market-exposed as a flat rate, so every
+      // anchor moves together — shifting the whole curve rather than flattening
+      // it. Missing this would let one account quietly opt out of the fan.
+      if (account.growthRateMethod === 'schedule') {
+        return {
+          ...account,
+          growthRateSchedule: account.growthRateSchedule?.map((anchor) => ({
+            ...anchor,
+            rate: anchor.rate + deltaPercentagePoints,
+          })),
+        };
+      }
+
+      return account;
     }),
   };
 }
@@ -49,7 +66,15 @@ export function withReturnShift(plan: Plan, deltaPercentagePoints: number): Plan
  */
 export function headlineReturnRate(plan: Plan): number | undefined {
   const rates = plan.accounts
-    .filter((a) => !a.isLiability && a.isIncluded && a.growthRateMethod === 'fixed')
-    .map((a) => a.growthRate);
+    .filter((a) => !a.isLiability && a.isIncluded)
+    .flatMap((a) => {
+      if (a.growthRateMethod === 'fixed') return [a.growthRate];
+      // A scheduled account still has a market return; quote its peak so the
+      // label and the fan agree about which accounts are in play.
+      if (a.growthRateMethod === 'schedule') {
+        return (a.growthRateSchedule ?? []).map((anchor) => anchor.rate);
+      }
+      return [];
+    });
   return rates.length > 0 ? Math.max(...rates) : undefined;
 }

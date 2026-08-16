@@ -19,6 +19,27 @@ describe('withReturnShift', () => {
     expect(withReturnShift(base, 2).accounts[0].growthRate).toBe(0);
   });
 
+  it('shifts every anchor of a variable schedule together', () => {
+    const base = plan({
+      accounts: [
+        asset({
+          id: 'v',
+          name: 'Variable',
+          growthRateMethod: 'schedule',
+          growthRateSchedule: [
+            { year: 2026, rate: 7 },
+            { year: 2040, rate: 4 },
+          ],
+        }),
+      ],
+    });
+    // The curve moves; it must not flatten.
+    expect(withReturnShift(base, -2).accounts[0].growthRateSchedule).toEqual([
+      { year: 2026, rate: 5 },
+      { year: 2040, rate: 2 },
+    ]);
+  });
+
   it('leaves liabilities alone — a mortgage rate is contractual', () => {
     const base = plan({
       accounts: [liability({ id: 'm', name: 'Mortgage', interestRate: 6 })],
@@ -68,6 +89,23 @@ describe('headlineReturnRate', () => {
       ],
     });
     expect(headlineReturnRate(base)).toBe(7);
+  });
+
+  it('sees scheduled accounts too, so the label matches what the fan flexes', () => {
+    const base = plan({
+      accounts: [
+        asset({
+          id: 'v',
+          name: 'Variable',
+          growthRateMethod: 'schedule',
+          growthRateSchedule: [
+            { year: 2026, rate: 7.5 },
+            { year: 2040, rate: 4 },
+          ],
+        }),
+      ],
+    });
+    expect(headlineReturnRate(base)).toBe(7.5);
   });
 
   it('is undefined when nothing has a market return, so the control can hide', () => {
