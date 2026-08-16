@@ -59,6 +59,7 @@
   /* amber = cost */
   /* The fan. Green reads as the better market, amber as the worse — the same
      pairing the KPI deltas use, so the colours mean one thing app-wide. */
+  --danger: #c0392b;
   --green: #3f9d78;
   --green-tint: #e6f4ee;
   --amber-line-strong: #cf9a3f;
@@ -933,6 +934,70 @@
   padding: 10px 16px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---- Notable points on the line ------------------------------------------
+   Deliberately few. A dot on every year is decoration; a dot on three of them
+   is a finding. Centred with margins, never a transform. */
+.ns-mark-slot {
+  position: absolute;
+  margin-left: -7px;
+  margin-top: -7px;
+  pointer-events: auto;
+  z-index: 2;
+}
+.ns-mark {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: default;
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(18, 48, 76, 0.28);
+  transition: transform var(--t-settle) var(--ease-jelly);
+}
+.ns-mark-peak {
+  border: 3px solid var(--ink-deep);
+}
+.ns-mark-trough {
+  border: 3px solid var(--amber-line-strong);
+}
+.ns-mark-shortfall {
+  border: 3px solid var(--danger, #c0392b);
+  animation: ns-mark-pulse 2.4s var(--ease-soft) infinite;
+}
+@keyframes ns-mark-pulse {
+  0%,
+  100% {
+    box-shadow: 0 1px 4px rgba(18, 48, 76, 0.28);
+  }
+  50% {
+    box-shadow:
+      0 1px 4px rgba(18, 48, 76, 0.28),
+      0 0 0 5px rgba(192, 57, 43, 0.16);
+  }
+}
+
+/* The plan failing is not a detail to be discovered by hovering. */
+.ns-alarm {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 9px 13px;
+  border-radius: 11px;
+  border: 1px solid rgba(192, 57, 43, 0.28);
+  background: rgba(192, 57, 43, 0.06);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.ns-alarm-title {
+  font-weight: 700;
+  color: var(--danger, #c0392b);
+}
+.ns-alarm-note {
+  color: var(--muted);
 }
 
 /* ---- Return sensitivity fan ---------------------------------------------

@@ -3,6 +3,7 @@ import {
   DEFAULT_RETURN_SHIFT,
   deflate,
   headlineReturnRate,
+  pathMarkers,
   runPlan,
   withReturnShift,
 } from '@northstar/engine';
@@ -150,6 +151,10 @@ export default function App() {
       high: run(DEFAULT_RETURN_SHIFT),
     };
   }, [showFan, plan]);
+
+  // The moments worth pointing at on the line — chiefly the years the plan
+  // runs dry, which until now only appeared in a table if you scrolled to them.
+  const markers = useMemo(() => pathMarkers(result), [result]);
 
   // User accounts plus the synthetic ones events create, which the balance
   // sheet rolls into their class row.
@@ -303,6 +308,7 @@ export default function App() {
             selected={selected}
             compare={compare}
             fan={fan}
+            markers={markers}
             canFan={headlineReturnRate(plan) !== undefined}
             onToggleFan={() => setShowFan((on) => !on)}
             onSelect={setSelected}

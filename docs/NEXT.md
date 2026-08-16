@@ -109,6 +109,25 @@ sheet has one row per `AccountClass`, each with a gear. Synthetic accounts (a
 home and its mortgage from a `buyAHome` event) roll into their class row but are
 read-only there — they belong to their event.
 
+## Notable points on the line
+
+`pathMarkers` (`packages/engine/src/markers.ts`) finds the three things on a
+net worth line worth pointing at: the years the plan runs dry, the high-water
+year when the plan declines after it, and the largest peak-to-trough fall.
+
+- **A failing plan leads with a banner**, not a dot to be discovered. Before
+  this, `unfundedShortfall` existed in the engine and surfaced only as a Cash
+  Flow row you had to scroll to — a plan could fail in 2061 and look fine.
+- **Only the FIRST failing year gets a dot.** A badly broken plan fails every
+  year after it breaks; the first render put 61 pulsing dots on the chart.
+  The banner carries the count and total instead.
+- **The peak is reported only when the plan declines after it.** On a line
+  that rises to the end, the peak is just the last point and says nothing.
+- **A fall under 2% is not a story** — that threshold keeps ordinary wobble
+  from being dressed up as a drawdown.
+- **One dot per year, most urgent wins.** A year is often peak, trough and
+  failure at once; two dots stacked on one point read as a bug.
+
 ## The sensitivity fan
 
 `Range` in the chart header runs the plan twice more at ±2 percentage points

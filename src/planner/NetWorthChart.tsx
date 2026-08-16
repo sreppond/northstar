@@ -1,8 +1,9 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import type { PlanEvent, PlanResult } from "@northstar/engine";
+import type { PathMarkers, PlanEvent, PlanResult } from "@northstar/engine";
 import { codeFor, summarize, toneFor } from "./presentation";
 import { eventDetail } from "./detail";
 import { HoverCard } from "./HoverCard";
+import type { Detail } from "./detail";
 import { axisMoney, money, signedMoney } from "./format";
 
 /**
@@ -55,6 +56,8 @@ interface Props {
   /** A second plan drawn alongside, clipped to this plan's horizon. */
   compare?: CompareSeries;
   fan?: FanSeries;
+  /** The moments worth pointing at: failure, peak, worst fall. */
+  markers: PathMarkers;
   /** False when nothing in the plan has a market return to flex. */
   canFan: boolean;
   onToggleFan(): void;
@@ -68,6 +71,7 @@ export function NetWorthChart({
   selected,
   compare,
   fan,
+  markers,
   canFan,
   onToggleFan,
   onSelect,
@@ -146,6 +150,24 @@ export function NetWorthChart({
         </div>
       </div>
 
+      {/* A plan that runs out of money is the single most important thing this
+          screen can say, and it used to say it only as a table row you had to
+          scroll to. It leads now. */}
+      {markers.shortfallYears.length > 0 && (
+        <div className="ns-alarm" role="status">
+          <span className="ns-alarm-title">
+            This plan runs out of money in {markers.shortfallYears[0]}
+          </span>
+          <span className="ns-alarm-note">
+            {markers.shortfallYears.length === 1
+              ? `${money(markers.shortfallTotal)} of spending goes unfunded.`
+              : `${markers.shortfallYears.length} years fall short, ${money(
+                  markers.shortfallTotal,
+                )} unfunded in total.`}
+          </span>
+        </div>
+      )}
+
       {/* The chart scales with its viewBox, so squeezing it onto a phone makes
           the pins collide and the axis labels clip. Below ~700px it keeps its
           proportions and scrolls sideways instead, like the tables. */}
@@ -161,7 +183,41 @@ export function NetWorthChart({
                 <stop offset="0%" stopColor="#2E8BD0" stopOpacity="0.20" />
                 <stop offset="100%" stopColor="#2E8BD0" stopOpacity="0.02" />
               </linearGradient>
+
+              {/* A dot lattice gives the plot a surface to sit on. Faint enough
+                  to read as paper texture rather than as data. */}
+              <pattern
+                id="ns-dot-grid"
+                x="0"
+                y="0"
+                width="18"
+                height="18"
+                patternUnits="userSpaceOnUse"
+              >
+                <circle cx="9" cy="9" r="1" fill="#DCE4EC" fillOpacity="0.5" />
+              </pattern>
+
+              {/* Lifts the line off the fan band. Soft and neutral — a coloured
+                  glow would read as a value the chart does not have. */}
+              <filter id="ns-line-lift" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow
+                  dx="0"
+                  dy="1.5"
+                  stdDeviation="2.5"
+                  floodColor="#12304C"
+                  floodOpacity="0.18"
+                />
+              </filter>
             </defs>
+
+            <rect
+              x={PLOT_LEFT}
+              y={PLOT_TOP}
+              width={PLOT_RIGHT - PLOT_LEFT}
+              height={PLOT_BOTTOM - PLOT_TOP}
+              fill="url(#ns-dot-grid)"
+              pointerEvents="none"
+            />
 
             {geometry.gridlines.map((g) => (
               <line
@@ -256,6 +312,7 @@ export function NetWorthChart({
               strokeWidth={2.75}
               strokeLinecap="round"
               strokeLinejoin="round"
+              filter="url(#ns-line-lift)"
             />
 
             {hover && (
@@ -353,6 +410,24 @@ export function NetWorthChart({
               </>
             )}
 
+            {/* Notable points. Everything else on this line is gentle curve;
+                these are the years someone actually needs to see. */}
+            {markerPoints(markers, geometry.pointByYear).map((m) => (
+              <div
+                key={`${m.kind}-${m.year}`}
+                className="ns-mark-slot"
+                style={{ left: pct(m.x, VB_W), top: pct(m.y, VB_H) }}
+              >
+                <HoverCard detail={m.detail} side="top">
+                  <span
+                    className={`ns-mark ns-mark-${m.kind}`}
+                    role="img"
+                    aria-label={m.detail.title}
+                  />
+                </HoverCard>
+              </div>
+            ))}
+
             {geometry.pins.map((pin, i) => (
               <div
                 key={pin.eventId}
@@ -434,6 +509,94 @@ interface Pin {
 
 function compareAt(compare: CompareSeries, year: number): number {
   return compare.result.years.find((y) => y.year === year)?.netWorth ?? 0;
+}
+
+type MarkKind = "shortfall" | "peak" | "trough";
+
+/**
+ * Turns the engine's markers into positioned dots.
+ *
+ * A year can qualify for more than one — a plan often peaks, falls, and runs
+ * dry in quick succession — so the more urgent kind wins and the year is only
+ * marked once. Two dots stacked on one point would just look like a bug.
+ */
+function markerPoints(
+  markers: PathMarkers,
+  pointByYear: Map<number, { x: number; y: number; value: number }>,
+) {
+  const claimed = new Set<number>();
+  const out: { kind: MarkKind; year: number; x: number; y: number; detail: Detail }[] = [];
+
+  const add = (kind: MarkKind, year: number, detail: Detail) => {
+    if (claimed.has(year)) return;
+    const p = pointByYear.get(year);
+    if (!p) return;
+    claimed.add(year);
+    out.push({ kind, year, x: p.x, y: p.y, detail });
+  };
+
+  // Only the FIRST failing year gets a dot. A badly broken plan fails every
+  // year after it breaks, and sixty pulsing dots is decoration, not a finding
+  // — the banner above already carries the count and the total.
+  const firstShortfall = markers.shortfallYears[0];
+  if (firstShortfall !== undefined) {
+    add("shortfall", firstShortfall, {
+      title: `${firstShortfall} — plan runs dry`,
+      sections: [
+        {
+          rows: [
+            { label: "Unfunded", value: money(markers.shortfallTotal) },
+            { label: "Failing years", value: String(markers.shortfallYears.length) },
+          ],
+        },
+        {
+          heading: "What this means",
+          rows: [
+            { label: "Spending", value: "exceeds every account" },
+            { label: "Fix", value: "cut costs or reorder withdrawals" },
+          ],
+        },
+      ],
+    });
+  }
+
+  if (markers.peakYear !== undefined && markers.peakValue !== undefined) {
+    add("peak", markers.peakYear, {
+      title: `Peak — ${markers.peakYear}`,
+      sections: [
+        {
+          rows: [
+            { label: "Net worth", value: money(markers.peakValue) },
+            { label: "After this", value: "the plan declines" },
+          ],
+        },
+      ],
+    });
+  }
+
+  const d = markers.drawdown;
+  if (d) {
+    add("trough", d.toYear, {
+      title: `Deepest fall — ${d.toYear}`,
+      sections: [
+        {
+          rows: [
+            { label: "From", value: `${money(d.peak)} in ${d.fromYear}` },
+            { label: "To", value: money(d.trough) },
+          ],
+        },
+        {
+          heading: "Size",
+          rows: [
+            { label: "Fall", value: signedMoney(-d.amount) },
+            { label: "Of the peak", value: `${d.percent.toFixed(0)}%` },
+          ],
+        },
+      ],
+    });
+  }
+
+  return out;
 }
 
 /**
