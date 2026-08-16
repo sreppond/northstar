@@ -25,97 +25,148 @@
  * ---------------------------------------------------------------------------
  */
 
-.ns {
-  /* ground & surface */
-  --bg: #f4f6f8;
+/* ---------------------------------------------------------------------------
+ * COLOUR IS DATA. EVERYTHING ELSE IS INK.
+ *
+ * Two families, and the split is the rule that keeps the app from looking
+ * like every other dashboard:
+ *
+ *   CHROME  — ground, surface, ink, borders. No hue identity. Buttons, tabs,
+ *             badges, pills and the wordmark all live here, in neutrals.
+ *   DATA    — the ONLY saturated colour on screen. It appears when, and only
+ *             when, it encodes a value: net worth, money in, money out, a
+ *             compared plan.
+ *
+ * `--accent` is the single exception, and it is a system affordance rather
+ * than decoration: focus rings, selection, the caret. It is deliberately the
+ * same hue as the net-worth series, so "the thing you are pointing at" and
+ * "the thing being projected" read as one idea.
+ *
+ * The data hues are not taste. They were run through a colour-vision
+ * validator as a set, in both modes — adjacent-pair CVD ΔE 9.2, normal-vision
+ * ΔE 24.0, every check passing. The palette they replaced failed four of them
+ * (docs/DESIGN-DIRECTION.md carries the run). Do not adjust one of these four
+ * in isolation; re-validate the set.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  /* -- chrome: ground & surface -- */
+  --bg: #edf0f3;
   --surface: #ffffff;
-  --surface-sub: #fbfcfd;
-  --tint-row: #f4f9fd;
-  --track: #eaeff4;
+  --surface-sub: #fafbfc;
+  --tint-row: #f4f7fa;
+  --track: #e7ecf1;
+  --chip: #eef1f4;
 
-  /* ink */
-  --ink: #16202b;
-  --ink-deep: #12304c;
-  --muted: #6b7c8c;
-  --muted-light: #8a99a7;
-  --child-ink: #41525f;
+  /* -- chrome: ink -- */
+  --ink: #0f1922;
+  --ink-deep: #0b1d2e;
+  --muted: #62727f;
+  --muted-light: #8695a2;
+  --child-ink: #3d4d5a;
 
-  /* lines */
-  --border: #e3e9ef;
-  --border-strong: #dce4ec;
-  --rule: #edf1f5;
+  /* -- chrome: lines -- */
+  --border: #e1e7ed;
+  --border-strong: #d7dfe7;
+  --rule: #ecf0f4;
   --rule-light: #f2f5f8;
-  --pill-border: #c9d8e5;
+  --pill-border: #c8d5e1;
 
-  /* blue = income */
-  --blue: #2e8bd0;
-  --blue-press: #2379b8;
-  --blue-deep: #1d4e77;
-  --blue-tint: #e4f1fb;
-  --blue-tint-2: #e8f2fa;
-  --blue-line: #a9cfea;
-  --blue-hover: #d2e8f8;
+  /* -- the one system accent: focus, selection, caret -- */
+  --accent: #2a78d6;
+  --accent-press: #1f63b4;
+  --accent-line: #a9c8e8;
 
-  /* amber = cost */
-  /* The fan. Green reads as the better market, amber as the worse — the same
-     pairing the KPI deltas use, so the colours mean one thing app-wide. */
+  /* -- data: net worth (slot 1) -- */
+  --data-nw: #2a78d6;
+  --fan-band: rgba(42, 120, 214, 0.08);
+
+  /* -- data: money in (slot 2) -- */
+  --in: #1baf7a;
+  --in-tint: #e3f5ee;
+  --in-line: #a5dcc6;
+  --in-deep: #0e6d4c;
+  --in-hover: #d2eee2;
+
+  /* -- data: money out (slot 3) -- */
+  --out: #eb6834;
+  --out-tint: #fceae2;
+  --out-line: #f3bfa6;
+  --out-deep: #a03e15;
+  --out-hover: #f9dccf;
+  --out-strong: #eb6834;
+
+  /* -- data: compared plan (slot 4) -- */
+  --cmp: #4a3aa7;
+  --chart-lift: #0b1d2e;
+  --inverse: #0b1d2e;
+  --on-inverse: #ffffff;
+  --danger-btn: #c0392b;
+
+  /* -- status. Reserved: never reused as a series colour. -- */
   --danger: #c0392b;
-  --green: #3f9d78;
-  --green-tint: #e6f4ee;
-  --amber-line-strong: #cf9a3f;
-  --fan-band: rgba(46, 139, 208, 0.07);
+  --green: var(--in);
+  --green-tint: var(--in-tint);
 
-  --amber-tint: #fbf0e2;
-  --amber-line: #e8c68a;
-  --amber-deep: #8a5b12;
-  --amber-hover: #f7e6cc;
+  /* Light source. Every shadow is tinted with the ink hue rather than black —
+     a neutral shadow on a cool page looks like dirt. --sh-k scales the whole
+     set for a dark ground, where the same alphas would vanish; --lit-* scale
+     the highlights, which have to go nearly to nothing when the surface is
+     darker than the light hitting it. */
+  --sh: 18 48 76;
+  --sh-k: 1;
+  --lit-a: 0.92;
+  --lit-k: 1;
+  --gloss-a: 0.26;
+  --glow-1: #e9f2fb;
+  --glow-2: #f1f7fc;
 
-  --shadow-card: 0 1px 3px rgba(18, 48, 76, 0.05);
-  --shadow-control: 0 1px 2px rgba(18, 48, 76, 0.06);
-  --shadow-tooltip: 0 6px 18px rgba(18, 48, 76, 0.22);
+  --shadow-card: 0 1px 3px rgb(var(--sh) / calc(5% * var(--sh-k)));
+  --shadow-control: 0 1px 2px rgb(var(--sh) / calc(6% * var(--sh-k)));
+  --shadow-tooltip: 0 6px 18px rgb(var(--sh) / calc(22% * var(--sh-k)));
 
   /* --- jelly material -----------------------------------------------------
      Four layers make a soft body read as soft: a lit top edge (the light
      source), a shaded underside (the far wall of a dome), a tight contact
-     shadow (where it meets the page), and a wide ambient one (its mass).
-     Every shadow is tinted with the ink hue rather than black — a neutral
-     shadow on a cool page looks like dirt. */
+     shadow (where it meets the page), and a wide ambient one (its mass). */
 
-  --jelly-lit: rgba(255, 255, 255, 0.92);
+  --jelly-lit: rgb(255 255 255 / var(--lit-a));
 
   --jelly-rise:
     inset 0 1px 0 var(--jelly-lit),
-    inset 0 -2px 4px rgba(18, 48, 76, 0.055),
-    0 1px 2px rgba(18, 48, 76, 0.07),
-    0 4px 10px -4px rgba(18, 48, 76, 0.12);
+    inset 0 -2px 4px rgb(var(--sh) / calc(5.5% * var(--sh-k))),
+    0 1px 2px rgb(var(--sh) / calc(7% * var(--sh-k))),
+    0 4px 10px -4px rgb(var(--sh) / calc(12% * var(--sh-k)));
 
   /* Hover: it floats a little higher, so the ambient shadow spreads and the
      top edge catches more light. */
   --jelly-rise-hi:
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    inset 0 -3px 6px rgba(18, 48, 76, 0.065),
-    0 2px 4px rgba(18, 48, 76, 0.08),
-    0 10px 20px -8px rgba(18, 48, 76, 0.18);
+    inset 0 1px 0 rgb(255 255 255 / calc(1 * var(--lit-k))),
+    inset 0 -3px 6px rgb(var(--sh) / calc(6.5% * var(--sh-k))),
+    0 2px 4px rgb(var(--sh) / calc(8% * var(--sh-k))),
+    0 10px 20px -8px rgb(var(--sh) / calc(18% * var(--sh-k)));
 
   /* Press: the dome flattens, so the highlight moves to the *bottom* edge and
      the interior goes into shade. This is what sells the squish. */
   --jelly-press:
-    inset 0 2px 5px rgba(18, 48, 76, 0.14),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.6),
-    0 1px 1px rgba(18, 48, 76, 0.05);
+    inset 0 2px 5px rgb(var(--sh) / calc(14% * var(--sh-k))),
+    inset 0 -1px 0 rgb(255 255 255 / calc(0.6 * var(--lit-k))),
+    0 1px 1px rgb(var(--sh) / calc(5% * var(--sh-k)));
 
   /* Wells: inputs are pushed into the page, not sitting on it. */
   --jelly-well:
-    inset 0 2px 4px rgba(18, 48, 76, 0.06),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
-    0 1px 0 rgba(255, 255, 255, 0.9);
+    inset 0 2px 4px rgb(var(--sh) / calc(6% * var(--sh-k))),
+    inset 0 -1px 0 rgb(255 255 255 / calc(0.9 * var(--lit-k))),
+    0 1px 0 rgb(255 255 255 / calc(0.9 * var(--lit-k)));
 
   /* Gloss for saturated fills: light pooling on the top of wet candy. */
   --jelly-gloss: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.26) 0%,
-    rgba(255, 255, 255, 0.07) 45%,
-    rgba(255, 255, 255, 0) 62%
+    rgb(255 255 255 / var(--gloss-a)) 0%,
+    rgb(255 255 255 / calc(var(--gloss-a) * 0.27)) 45%,
+    rgb(255 255 255 / 0) 62%
   );
 
   /* Motion. Presses go in fast and linear-ish; releases overshoot and settle,
@@ -131,18 +182,150 @@
   --t-press: 90ms;
   --t-settle: 280ms;
 
+}
+
+.ns {
   min-height: 100vh;
   padding-bottom: 72px;
   /* Two very faint pools of light so cards float in an atmosphere rather than
      on flat grey. Fixed, so scrolling doesn't drag them along. */
   background:
-    radial-gradient(1200px 520px at 12% -10%, #e9f2fb 0%, rgba(233, 242, 251, 0) 62%),
-    radial-gradient(900px 460px at 92% 2%, #f1f7fc 0%, rgba(241, 247, 252, 0) 58%),
+    radial-gradient(1200px 520px at 12% -10%, var(--glow-1) 0%, transparent 62%),
+    radial-gradient(900px 460px at 92% 2%, var(--glow-2) 0%, transparent 58%),
     var(--bg);
   background-attachment: fixed;
   color: var(--ink);
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* --- night ----------------------------------------------------------------
+ * Only the tokens change. Nothing below this block references a mode, which
+ * is what the chrome/data split buys: with no hue in the chrome there is
+ * almost nothing to re-theme, and the four data hues are re-stepped for the
+ * dark ground rather than flipped — they were validated as their own set.
+ *
+ * Three states, not two. An explicit choice stamps data-theme on <html>; the
+ * default "system" setting stamps nothing, so the media query has to carry it
+ * — guarded, so an explicit light choice still beats a dark OS.
+ * ------------------------------------------------------------------------ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #0a0f15;
+    --surface: #131a22;
+    --surface-sub: #171f28;
+    --tint-row: #182029;
+    --track: #1d262f;
+    --chip: #1d262f;
+
+    --ink: #e8eef3;
+    --ink-deep: #f2f6f9;
+    --muted: #93a5b3;
+    --muted-light: #6f8090;
+    --child-ink: #bcc9d3;
+
+    --border: #242e39;
+    --border-strong: #2e3a47;
+    --rule: #1e2730;
+    --rule-light: #1a222a;
+    --pill-border: #35424f;
+
+    --accent: #3987e5;
+    --accent-press: #4e97ed;
+    --accent-line: #2c4a6b;
+
+    --data-nw: #3987e5;
+    --fan-band: rgba(57, 135, 229, 0.12);
+
+    --in: #199e70;
+    --in-tint: #10291f;
+    --in-line: #1d5240;
+    --in-deep: #4fd3a3;
+    --in-hover: #163326;
+
+    --out: #d95926;
+    --out-tint: #2c1710;
+    --out-line: #5a2e1a;
+    --out-deep: #f0885a;
+    --out-hover: #381d14;
+    --out-strong: #d95926;
+
+    --cmp: #9085e9;
+    --chart-lift: #000000;
+  --inverse: #e8eef3;
+  --on-inverse: #0a0f15;
+  --danger-btn: #a8332a;
+    --inverse: #e8eef3;
+    --on-inverse: #0a0f15;
+    --danger-btn: #a8332a;
+    --danger: #e66767;
+
+    --sh: 0 0 0;
+    --sh-k: 2.6;
+    --lit-a: 0.055;
+    --lit-k: 0.07;
+    --gloss-a: 0.13;
+    --glow-1: #0e1a26;
+    --glow-2: #0d161f;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0a0f15;
+  --surface: #131a22;
+  --surface-sub: #171f28;
+  --tint-row: #182029;
+  --track: #1d262f;
+  --chip: #1d262f;
+
+  --ink: #e8eef3;
+  --ink-deep: #f2f6f9;
+  --muted: #93a5b3;
+  --muted-light: #6f8090;
+  --child-ink: #bcc9d3;
+
+  --border: #242e39;
+  --border-strong: #2e3a47;
+  --rule: #1e2730;
+  --rule-light: #1a222a;
+  --pill-border: #35424f;
+
+  --accent: #3987e5;
+  --accent-press: #4e97ed;
+  --accent-line: #2c4a6b;
+
+  --data-nw: #3987e5;
+  --fan-band: rgba(57, 135, 229, 0.12);
+
+  --in: #199e70;
+  --in-tint: #10291f;
+  --in-line: #1d5240;
+  --in-deep: #4fd3a3;
+  --in-hover: #163326;
+
+  --out: #d95926;
+  --out-tint: #2c1710;
+  --out-line: #5a2e1a;
+  --out-deep: #f0885a;
+  --out-hover: #381d14;
+  --out-strong: #d95926;
+
+  --cmp: #9085e9;
+  --chart-lift: #000000;
+  --danger: #e66767;
+
+  --sh: 0 0 0;
+  --sh-k: 2.6;
+  --lit-a: 0.055;
+  --lit-k: 0.07;
+  --gloss-a: 0.13;
+  --glow-1: #0e1a26;
+  --glow-2: #0d161f;
 }
 
 .ns *,
@@ -158,7 +341,7 @@
 }
 
 .ns :focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -313,22 +496,49 @@
 }
 
 .ns-wordmark {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+  flex: none;
+}
+
+/* Pushed to the far end of the header rather than sat next to the scenarios,
+   because it is a preference, not part of the plan. */
+.ns-theme {
+  margin-left: auto;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-soft),
+    color 140ms var(--ease-soft),
+    border-color 140ms var(--ease-soft);
+}
+.ns-theme:hover {
+  color: var(--ink);
+  background: var(--chip);
+  border-color: var(--border);
 }
 
 .ns-badge {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: var(--blue);
-  background-color: var(--blue-tint-2);
-  background-image: var(--jelly-gloss);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background-color: var(--chip);
   border-radius: 999px;
-  padding: 4px 11px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 1px 1px rgba(18, 48, 76, 0.05);
+  padding: 4px 10px;
+  box-shadow: inset 0 1px 0 var(--jelly-lit);
 }
 
 .ns-main {
@@ -347,9 +557,9 @@
   border: 1px solid var(--border);
   border-radius: 22px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 1px 2px rgba(18, 48, 76, 0.05),
-    0 10px 28px -14px rgba(18, 48, 76, 0.16);
+    inset 0 1px 0 var(--jelly-lit),
+    0 1px 2px rgb(var(--sh) / calc(5% * var(--sh-k))),
+    0 10px 28px -14px rgb(var(--sh) / calc(16% * var(--sh-k)));
   overflow: hidden;
 }
 
@@ -385,7 +595,7 @@
   height: 8px;
   border-radius: 999px;
   background: var(--pill-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(0.5 * var(--lit-k)));
   transition: background-color 160ms var(--ease-soft);
 }
 .ns-scenario[aria-pressed='true'] {
@@ -396,7 +606,7 @@
   animation: ns-squish var(--t-settle) var(--ease-soft);
 }
 .ns-scenario[aria-pressed='true'] .ns-dot {
-  background: var(--blue);
+  background: var(--ink);
 }
 
 .ns-btn {
@@ -412,27 +622,29 @@
   box-shadow: var(--jelly-rise);
 }
 .ns-btn:hover:not(:disabled) {
-  background: #fdfefe;
+  background: var(--surface-sub);
   box-shadow: var(--jelly-rise-hi);
 }
 .ns-btn:active:not(:disabled) {
   box-shadow: var(--jelly-press);
 }
 
-/* The primary action is the one place a fill gets gloss — a lit dome of
-   colour, so "Add event" reads as the thing to press from across the page. */
+/* The primary action is a dome of INK, not of colour. It used to be a blue
+   gradient, which put the loudest hue on screen on a button rather than on
+   the projection — and made the app look like every other one. Ink outranks
+   every neutral around it without spending the colour budget. */
 .ns-btn-primary {
   position: relative;
-  color: #fff;
-  background-color: var(--blue);
-  border-color: var(--blue-press);
+  color: var(--surface);
+  background-color: var(--ink);
+  border-color: var(--ink);
   padding: 10px 18px;
   overflow: hidden;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.42),
-    inset 0 -2px 5px rgba(15, 62, 100, 0.28),
-    0 1px 2px rgba(18, 48, 76, 0.12),
-    0 5px 12px -4px rgba(46, 139, 208, 0.5);
+    inset 0 1px 0 rgb(255 255 255 / calc(0.22 * var(--lit-k) + 0.04)),
+    inset 0 -2px 5px rgb(0 0 0 / 0.22),
+    0 1px 2px rgb(var(--sh) / calc(14% * var(--sh-k))),
+    0 5px 12px -4px rgb(var(--sh) / calc(26% * var(--sh-k)));
 }
 .ns-btn-primary::after {
   content: '';
@@ -443,18 +655,18 @@
   pointer-events: none;
 }
 .ns-btn-primary:hover:not(:disabled) {
-  background-color: var(--blue-press);
+  background-color: var(--ink-deep);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -3px 7px rgba(15, 62, 100, 0.3),
-    0 2px 4px rgba(18, 48, 76, 0.12),
-    0 12px 22px -8px rgba(46, 139, 208, 0.6);
+    inset 0 1px 0 rgb(255 255 255 / calc(0.26 * var(--lit-k) + 0.05)),
+    inset 0 -3px 7px rgb(0 0 0 / 0.24),
+    0 2px 4px rgb(var(--sh) / calc(14% * var(--sh-k))),
+    0 12px 22px -8px rgb(var(--sh) / calc(32% * var(--sh-k)));
 }
 .ns-btn-primary:active:not(:disabled) {
   box-shadow:
-    inset 0 3px 7px rgba(11, 51, 84, 0.42),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.28),
-    0 1px 1px rgba(18, 48, 76, 0.1);
+    inset 0 3px 7px rgb(0 0 0 / 0.4),
+    inset 0 -1px 0 rgb(255 255 255 / 0.14),
+    0 1px 1px rgb(var(--sh) / calc(10% * var(--sh-k)));
 }
 
 .ns-btn-square {
@@ -479,7 +691,7 @@
   cursor: pointer;
 }
 .ns-btn-ghost:hover {
-  background: #eef2f6;
+  background: var(--chip);
   color: var(--ink);
 }
 
@@ -498,7 +710,7 @@
   box-shadow: none;
 }
 .ns-btn-primary:disabled:hover {
-  background-color: var(--blue);
+  background-color: var(--ink);
 }
 
 /* --- plan card ----------------------------------------------------------- */
@@ -514,17 +726,15 @@
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  background-color: var(--blue-tint-2);
-  background-image: var(--jelly-gloss);
+  background-color: var(--chip);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--blue);
+  color: var(--muted);
   flex: none;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -2px 4px rgba(18, 48, 76, 0.05),
-    0 1px 2px rgba(18, 48, 76, 0.06);
+    inset 0 1px 0 var(--jelly-lit),
+    inset 0 -2px 4px rgb(var(--sh) / calc(5% * var(--sh-k)));
 }
 
 .ns-title {
@@ -545,44 +755,84 @@
   align-items: center;
 }
 
-/* KPI strip: ONE bordered container with internal dividers, not four cards.
-   It is a recessed tray — pushed into the card so the figures sit *in* the
-   surface. They are the thing being read, so nothing here moves. */
-.ns-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  margin: 0 24px;
-  border: 1px solid #e9eef3;
-  border-radius: 16px;
-  overflow: hidden;
-  background: linear-gradient(180deg, #fafcfe 0%, #f5f9fc 100%);
-  box-shadow:
-    inset 0 2px 4px rgba(18, 48, 76, 0.045),
-    0 1px 0 rgba(255, 255, 255, 0.9);
+/* --- the hero reading -----------------------------------------------------
+ * This replaced a strip of four equally-weighted KPI tiles. The tiles were
+ * the most recognisable generated-dashboard component there is, they sat
+ * above the chart competing with it, and three of the four numbers were
+ * things nobody acts on.
+ *
+ * What a person came for is one figure and one sentence. So: the horizon net
+ * worth at display size, a plain-language reading of how it gets there, and
+ * the spread it depends on. Everything else demoted to a metadata line.
+ * ------------------------------------------------------------------------ */
+
+.ns-hero {
+  padding: 4px 24px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
-.ns-kpi {
-  padding: 16px 20px 18px;
-  border-left: 1px solid #e9eef3;
-}
-.ns-kpi:first-child {
-  border-left: 0;
-}
-.ns-kpi-label {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-.ns-kpi-value {
-  font-size: 30px;
+
+/* Deliberately NOT .ns-num. Tabular figures line up in a column; at display
+   size they only make the number look loose and gappy. Proportional here,
+   tabular in the grids — see .ns-num. */
+.ns-hero-figure {
+  font-size: clamp(2.6rem, 6.2vw, 4.1rem);
   font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.02em;
+  line-height: 1.02;
+  letter-spacing: -0.032em;
   color: var(--ink-deep);
 }
-.ns-kpi-note {
-  font-size: 12px;
+
+.ns-hero-read {
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--child-ink);
+  max-width: 54ch;
+  text-wrap: pretty;
+}
+
+/* The spread is the honest half of the reading: the headline figure is a
+   point estimate of something that genuinely is not a point. */
+.ns-hero-risk {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: 54ch;
+}
+.ns-hero-risk b {
+  font-weight: 500;
+  color: var(--child-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-hero-meta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
   color: var(--muted-light);
-  margin-top: 7px;
+}
+.ns-hero-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ns-hero-meta span::after {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--pill-border);
+}
+.ns-hero-meta span:last-child::after {
+  display: none;
 }
 
 /* --- chart --------------------------------------------------------------- */
@@ -616,7 +866,7 @@
   width: 16px;
   height: 3px;
   border-radius: 2px;
-  background: var(--ink-deep);
+  background: var(--data-nw);
 }
 .ns-legend-swatch {
   width: 9px;
@@ -696,33 +946,33 @@
   box-shadow: var(--jelly-press);
 }
 .ns-pin-income {
-  background-color: var(--blue-tint);
-  border: 1px solid var(--blue-line);
-  color: var(--blue-deep);
+  background-color: var(--in-tint);
+  border: 1px solid var(--in-line);
+  color: var(--in-deep);
 }
 .ns-pin-income:hover {
-  background-color: var(--blue-hover);
+  background-color: var(--in-hover);
 }
 .ns-pin-cost {
-  background-color: var(--amber-tint);
-  border: 1px solid var(--amber-line);
-  color: var(--amber-deep);
+  background-color: var(--out-tint);
+  border: 1px solid var(--out-line);
+  color: var(--out-deep);
 }
 .ns-pin-cost:hover {
-  background-color: var(--amber-hover);
+  background-color: var(--out-hover);
 }
 .ns-pin-end {
-  background-color: var(--ink-deep);
+  background-color: var(--inverse);
   background-image: var(--jelly-gloss);
-  border: 1px solid var(--ink-deep);
-  color: #fff;
+  border: 1px solid var(--inverse);
+  color: var(--on-inverse);
 }
 .ns-pin-end:hover {
-  background-color: var(--blue-deep);
+  background-color: var(--ink-deep);
 }
 /* Selection re-runs the squish, so clicking a pin feels answered. */
 .ns-pin[aria-pressed='true'] {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
   animation: ns-squish var(--t-settle) var(--ease-soft);
 }
@@ -742,9 +992,9 @@
   transform: translateX(-50%);
   transform-origin: top center;
   pointer-events: none;
-  background-color: var(--ink-deep);
+  background-color: var(--inverse);
   background-image: var(--jelly-gloss);
-  color: #fff;
+  color: var(--on-inverse);
   border-radius: 14px;
   padding: 9px 13px;
   min-width: 126px;
@@ -783,16 +1033,16 @@
 .ns-ref {
   font-size: 11px;
   font-weight: 700;
-  color: var(--blue);
-  background-color: var(--blue-tint-2);
+  color: var(--accent);
+  background-color: var(--chip);
   background-image: var(--jelly-gloss);
   border-radius: 999px;
   padding: 4px 10px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .ns-ref-cost {
-  color: var(--amber-deep);
-  background-color: var(--amber-tint);
+  color: var(--out-deep);
+  background-color: var(--out-tint);
 }
 .ns-selection-label {
   font-size: 15px;
@@ -960,7 +1210,7 @@
   border: 3px solid var(--ink-deep);
 }
 .ns-mark-trough {
-  border: 3px solid var(--amber-line-strong);
+  border: 3px solid var(--out-strong);
 }
 .ns-mark-shortfall {
   border: 3px solid var(--danger, #c0392b);
@@ -1066,12 +1316,12 @@
   border: 1px solid color-mix(in srgb, var(--green) 34%, transparent);
 }
 .ns-fan-chip-low {
-  color: var(--amber-deep);
-  border: 1px solid var(--amber-line);
+  color: var(--out-deep);
+  border: 1px solid var(--out-line);
 }
 
 .ns-legend-swatch-fan {
-  background: linear-gradient(to bottom, var(--green-tint), var(--amber-tint));
+  background: linear-gradient(to bottom, var(--green-tint), var(--out-tint));
   border: 1px solid var(--border-strong);
 }
 
@@ -1096,9 +1346,9 @@
   border-color: var(--border-strong);
 }
 .ns-fan-toggle.is-on {
-  background: var(--blue-tint);
-  border-color: var(--blue-line);
-  color: var(--blue-deep);
+  background: var(--in-tint);
+  border-color: var(--in-line);
+  color: var(--in-deep);
 }
 
 /* Cash flow row label + its gear. Mirrors .ns-type-cell on the balance sheet
@@ -1247,18 +1497,18 @@
     0 1px 1px rgba(18, 48, 76, 0.06);
 }
 .ns-code-income {
-  background-color: var(--blue-tint);
-  border: 1px solid var(--blue-line);
-  color: var(--blue-deep);
+  background-color: var(--in-tint);
+  border: 1px solid var(--in-line);
+  color: var(--in-deep);
 }
 .ns-code-cost {
-  background-color: var(--amber-tint);
-  border: 1px solid var(--amber-line);
-  color: var(--amber-deep);
+  background-color: var(--out-tint);
+  border: 1px solid var(--out-line);
+  color: var(--out-deep);
 }
 .ns-code-end {
-  background-color: var(--ink-deep);
-  color: #fff;
+  background-color: var(--inverse);
+  color: var(--on-inverse);
 }
 
 .ns-gantt-track {
@@ -1298,28 +1548,28 @@
   box-shadow: var(--jelly-press);
 }
 .ns-bar-income {
-  background-color: var(--blue-tint);
-  border: 1px solid var(--blue-line);
-  color: var(--blue-deep);
+  background-color: var(--in-tint);
+  border: 1px solid var(--in-line);
+  color: var(--in-deep);
 }
 .ns-bar-income:hover {
-  background-color: var(--blue-hover);
+  background-color: var(--in-hover);
 }
 .ns-bar-cost {
-  background-color: var(--amber-tint);
-  border: 1px solid var(--amber-line);
-  color: var(--amber-deep);
+  background-color: var(--out-tint);
+  border: 1px solid var(--out-line);
+  color: var(--out-deep);
 }
 .ns-bar-cost:hover {
-  background-color: var(--amber-hover);
+  background-color: var(--out-hover);
 }
 /* The horizon marker is a label, not a control: it keeps its right-anchored
    offset through --jx and never lifts or squishes. */
 .ns-bar-end {
   --jx: -100%;
-  background-color: var(--ink-deep);
-  color: #fff;
-  border: 1px solid var(--ink-deep);
+  background-color: var(--inverse);
+  color: var(--on-inverse);
+  border: 1px solid var(--inverse);
   cursor: default;
 }
 
@@ -1331,9 +1581,9 @@
   gap: 10px;
   padding: 12px 24px;
   font-size: 13px;
-  color: var(--amber-deep);
-  background: var(--amber-tint);
-  border-top: 1px solid var(--amber-line);
+  color: var(--out-deep);
+  background: var(--out-tint);
+  border-top: 1px solid var(--out-line);
 }
 
 /* --- event drawer -------------------------------------------------------- */
@@ -1428,9 +1678,9 @@
 
 .ns-drawer-errors {
   font-size: 12px;
-  color: var(--amber-deep);
-  background: var(--amber-tint);
-  border: 1px solid var(--amber-line);
+  color: var(--out-deep);
+  background: var(--out-tint);
+  border: 1px solid var(--out-line);
   border-radius: 12px;
   padding: 10px 12px;
   display: flex;
@@ -1477,8 +1727,8 @@
   animation-delay: calc(var(--i, 0) * 26ms);
 }
 .ns-kind:hover {
-  background: #fdfefe;
-  border-color: var(--blue-line);
+  background: var(--surface-sub);
+  border-color: var(--accent-line);
   box-shadow: var(--jelly-rise-hi);
 }
 .ns-kind:active {
@@ -1507,7 +1757,7 @@
   font: inherit;
   font-size: 14px;
   color: var(--ink);
-  background: #fbfcfe;
+  background: var(--surface-sub);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   padding: 9px 12px;
@@ -1519,14 +1769,14 @@
     background-color 170ms var(--ease-soft);
 }
 .ns-input:hover {
-  background: #fff;
+  background: var(--surface);
 }
 /* The glow ring replaces the global focus outline here rather than stacking
    with it; blue on white clears the 3:1 contrast a focus indicator needs. */
 .ns-input:focus,
 .ns-input:focus-visible {
-  background: #fff;
-  border-color: var(--blue);
+  background: var(--surface);
+  border-color: var(--accent);
   outline: none;
   box-shadow:
     inset 0 2px 4px rgba(18, 48, 76, 0.04),
@@ -1592,7 +1842,7 @@
     opacity 110ms var(--ease-soft);
 }
 .ns-toggle-row input[type='checkbox']:hover {
-  border-color: var(--blue-line);
+  border-color: var(--accent-line);
 }
 .ns-toggle-row input[type='checkbox']:active {
   --jsx: 1.12;
@@ -1600,9 +1850,9 @@
   transition-duration: var(--t-press);
 }
 .ns-toggle-row input[type='checkbox']:checked {
-  background-color: var(--blue);
+  background-color: var(--accent);
   background-image: var(--jelly-gloss);
-  border-color: var(--blue-press);
+  border-color: var(--accent-press);
   box-shadow: var(--jelly-rise);
   animation: ns-squish 300ms var(--ease-soft);
 }
@@ -1613,7 +1863,7 @@
 
 .ns-btn-danger {
   color: #fff;
-  background-color: #c0392b;
+  background-color: var(--danger-btn);
   border-color: #a93226;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
@@ -1674,11 +1924,11 @@
   z-index: 60;
   min-width: 250px;
   max-width: 340px;
-  background: #16202b;
-  color: #fff;
+  background: var(--inverse);
+  color: var(--on-inverse);
   border-radius: 14px;
   padding: 14px 16px;
-  box-shadow: 0 12px 32px rgba(18, 48, 76, 0.28);
+  box-shadow: 0 12px 32px rgb(var(--sh) / calc(28% * var(--sh-k)));
   pointer-events: none;
   font-size: 13px;
   line-height: 1.45;
@@ -1712,7 +1962,7 @@
 }
 
 .ns-hovercard-label {
-  color: rgba(255, 255, 255, 0.58);
+  color: color-mix(in srgb, var(--on-inverse) 58%, transparent);
   flex: 1;
   min-width: 0;
 }
@@ -1758,8 +2008,8 @@
   opacity: 1;
 }
 .ns-gear:hover {
-  background: var(--blue-tint-2);
-  color: var(--blue);
+  background: var(--chip);
+  color: var(--accent);
 }
 .ns-gear-locked {
   cursor: default;
@@ -1870,8 +2120,8 @@
   cursor: pointer;
 }
 .ns-sched-add:hover {
-  border-color: var(--blue-line);
-  color: var(--blue-deep);
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 
 .ns-sched-chart {
@@ -1961,9 +2211,9 @@
   cursor: pointer;
 }
 .ns-add-pill:hover {
-  color: var(--blue);
-  border-color: var(--blue-line);
-  background: var(--blue-tint-2);
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--chip);
   border-style: solid;
 }
 
@@ -2026,8 +2276,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: var(--blue-tint-2);
-  color: var(--blue-deep);
+  background: var(--chip);
+  color: var(--ink);
   font-size: 11px;
   font-weight: 700;
 }
@@ -2041,7 +2291,7 @@
 
 .ns-wf-warn {
   font-size: 11px;
-  color: var(--amber-deep);
+  color: var(--out-deep);
 }
 
 .ns-wf-btn {
@@ -2104,8 +2354,8 @@
 }
 .ns-scenario-new:hover {
   border-style: solid;
-  border-color: var(--blue-line);
-  color: var(--blue);
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 
 .ns-scenario-more {
@@ -2121,8 +2371,8 @@
   line-height: 1;
 }
 .ns-scenario-more:hover {
-  background: var(--blue-tint-2);
-  color: var(--blue);
+  background: var(--chip);
+  color: var(--accent);
 }
 
 .ns-scenario-rename {
@@ -2131,7 +2381,7 @@
   font-weight: 500;
   color: var(--ink-deep);
   background: var(--surface);
-  border: 1px solid var(--blue);
+  border: 1px solid var(--accent);
   border-radius: 999px;
   padding: 8px 16px;
   width: 190px;
@@ -2353,6 +2603,14 @@
   }
   .ns-wordmark {
     font-size: 19px;
+  }
+  /* The scenario bar wraps to full width here, which would strand the theme
+     control alone on a row of its own. It joins the wordmark instead. */
+  .ns-head {
+    flex-wrap: wrap;
+  }
+  .ns-theme {
+    order: -1;
   }
 
   .ns-card {

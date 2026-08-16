@@ -145,17 +145,17 @@ function SchedulePreview({
       aria-label="Rate over time">
       {scale.ticks.map((t) => (
         <g key={t}>
-          <line x1={LEFT} x2={RIGHT} y1={y(t)} y2={y(t)} stroke="#E3E9EF" strokeWidth="1" />
+          <line x1={LEFT} x2={RIGHT} y1={y(t)} y2={y(t)} stroke="var(--rule)" strokeWidth="1" />
           <text className="ns-sched-axis" x={LEFT - 6} y={y(t) + 3.5} textAnchor="end">
             {trim(t)}%
           </text>
         </g>
       ))}
 
-      <path d={d} fill="none" stroke="#2E8BD0" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="var(--data-nw)" strokeWidth="2.5" strokeLinejoin="round" />
 
       {anchors.map((a, i) => (
-        <circle key={i} cx={x(a.year)} cy={y(a.rate)} r="4" fill="#fff" stroke="#2E8BD0"
+        <circle key={i} cx={x(a.year)} cy={y(a.rate)} r="4" fill="var(--surface)" stroke="var(--data-nw)"
           strokeWidth="2.5" />
       ))}
 

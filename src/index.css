@@ -10,9 +10,12 @@
   box-sizing: border-box;
 }
 
+/* Tokens come from planner.css, which defines them on :root so they reach
+   here and the portalled hover cards alike. Hardcoding a light ground here
+   left a white band under the app on overscroll in dark mode. */
 body {
-  background: #f4f6f8;
-  color: #16202b;
+  background: var(--bg, #edf0f3);
+  color: var(--ink, #0f1922);
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -35,12 +38,12 @@ button {
 }
 
 .ns-crash p {
-  color: #5b6b7a;
+  color: var(--muted, #62727f);
   margin-bottom: 16px;
 }
 
 .ns-crash pre {
-  background: #eef1f4;
+  background: var(--chip, #eef1f4);
   border-radius: 8px;
   padding: 12px;
   font-size: 0.8rem;
@@ -50,8 +53,8 @@ button {
 }
 
 .ns-crash button {
-  background: #2563eb;
-  color: #fff;
+  background: var(--ink, #0f1922);
+  color: var(--surface, #fff);
   border: none;
   border-radius: 8px;
   padding: 10px 16px;

@@ -3,6 +3,31 @@
 Working state as of the last session. Everything below is committed and pushed
 to `main`. `npm install && npm run dev` → http://localhost:3000.
 
+## The redesign is underway
+
+[`docs/DESIGN-DIRECTION.md`](./DESIGN-DIRECTION.md) is the audit and the plan:
+four phases, seven moves, and the two rules that settle everything else —
+**colour is data, everything else is ink**, and **the timeline is the
+interface**. Read it before changing anything visual.
+
+**Phase 1 (foundation) is done.**
+
+- Tokens split into a chrome family (no hue) and a data family (the only
+  saturated colour in the app), all on `:root` rather than `.ns` — hover cards
+  portal to `document.body` and cannot see `.ns`-scoped custom properties.
+- The four data hues were validated as a set in both modes; the five they
+  replaced failed four checks. `--in-*` / `--out-*` / `--data-nw` / `--cmp`
+  replace the old `--blue-*` / `--amber-*` names.
+- **Dark mode**, stepped rather than flipped, with a toggle in the header
+  (`ThemeToggle.tsx`). Three states: unstamped follows the OS.
+- **The KPI strip is gone.** One hero figure, one plain-language sentence
+  (`reading.ts`), the spread it depends on, and a metadata line.
+- `--inverse` / `--on-inverse` exist because tooltips, the horizon pin and the
+  hover card are "opposite the ground" surfaces — they were painting white on
+  white in dark until they stopped using `--ink-deep` as a background.
+
+Phases 2–4 (chart as spine, scrub and drag, table density) are still open.
+
 ## Where we are
 
 **Phase 1 of [`docs/PLAN.md`](./PLAN.md) §9, steps 1–4 are done.**
@@ -229,12 +254,16 @@ packages/engine/          pure TS projection engine (no React, no I/O)
   src/run.ts              the year loop; order of operations is PLAN.md §4.3
   src/events/             one module per event kind + the registry
   examples/demo.ts        npx tsx examples/demo.ts → a worked 12-year projection
+docs/DESIGN-DIRECTION.md  the UI audit and the redesign plan
 src/App.tsx               planner shell
 src/planner/              chart, tabs, tokens, presentation rules
+  planner.css             tokens on :root (chrome vs data), then everything
   store/planStore.ts      plans, undo/redo, localStorage
   drawer/fields.tsx       form primitives shared by all three drawers
-  HoverCard.tsx           the dark detail popover
+  HoverCard.tsx           the inverse detail popover
   detail.ts               the three Detail builders
+  reading.ts              the hero's plain-language sentence
+  ThemeToggle.tsx         light/dark, stamped on <html>
   useBreakpoint.ts        phone/tablet/desktop + year-column count
 ```
 

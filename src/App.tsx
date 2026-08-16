@@ -31,7 +31,9 @@ import {
 import { AccountsTab } from './planner/tabs/AccountsTab';
 import { CashFlowTab } from './planner/tabs/CashFlowTab';
 import { EventsTab } from './planner/tabs/EventsTab';
-import { cagr, money, percent, roundMoney, signedMoney } from './planner/format';
+import { cagr, money, percent, signedMoney } from './planner/format';
+import { heroReading } from './planner/reading';
+import { ThemeToggle } from './planner/ThemeToggle';
 import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
 
 type TabId = 'accounts' | 'cashflow' | 'events';
@@ -135,8 +137,11 @@ export default function App() {
   // Return sensitivity: the same plan under a better and a worse market. Two
   // more runPlan calls, which cost microseconds — the honest way to show that
   // the single least reliable input drives most of the spread.
-  const fan: FanSeries | undefined = useMemo(() => {
-    if (!showFan) return undefined;
+  //
+  // Computed ALWAYS, not only when the chart's Range toggle is on, because the
+  // hero's risk line quotes it on every render. The toggle now controls
+  // whether the band is drawn, not whether the spread is known.
+  const spread: FanSeries | undefined = useMemo(() => {
     if (headlineReturnRate(plan) === undefined) return undefined;
 
     const run = (delta: number) => {
@@ -150,7 +155,9 @@ export default function App() {
       low: run(-DEFAULT_RETURN_SHIFT),
       high: run(DEFAULT_RETURN_SHIFT),
     };
-  }, [showFan, plan]);
+  }, [plan]);
+
+  const fan = showFan ? spread : undefined;
 
   // The moments worth pointing at on the line — chiefly the years the plan
   // runs dry, which until now only appeared in a table if you scrolled to them.
@@ -187,44 +194,25 @@ export default function App() {
     compare?.result.years[compare.result.years.length - 1]?.netWorth ??
     0;
 
-  const homeEvent = plan.events.find((e) => e.kind === 'buyAHome' && e.isIncluded);
-  const homeConfig = (homeEvent?.config ?? {}) as { price?: number; downPaymentPercent?: number };
+  const reading = useMemo(
+    () => heroReading(plan, result, markers, growth),
+    [plan, result, markers, growth],
+  );
 
-  const stats = [
-    {
-      label: 'Net worth (EOY)',
-      value: money(first?.netWorth ?? 0),
-      note: 'End of first plan year',
-    },
-    {
-      label: 'Net worth at end',
-      value: money(last?.netWorth ?? 0),
-      note: compare
-        ? `${signedMoney((last?.netWorth ?? 0) - endOfCompare)} vs ${compare.name}`
-        : `End of ${result.endYear}`,
-    },
-    {
-      label: 'Annual growth',
-      value: growth === undefined ? '—' : percent(growth),
-      note: 'Compound, net worth',
-    },
-    homeEvent
-      ? {
-          label: 'Home purchase',
-          value: String(homeEvent.startYear),
-          note:
-            homeConfig.price !== undefined
-              ? `${roundMoney(homeConfig.price)}, ${roundMoney(
-                  homeConfig.price * (1 - (homeConfig.downPaymentPercent ?? 20) / 100),
-                )} financed`
-              : '',
-        }
-      : {
-          label: 'Projection',
-          value: `${result.years.length} yrs`,
-          note: `${result.startYear}–${result.endYear}`,
-        },
-  ];
+  // The spread the headline figure depends on, at the horizon. Only worth
+  // saying when it is genuinely a range — on a plan with no market exposure
+  // the two runs land on the same number and the line would be noise.
+  const spreadAtEnd = useMemo(() => {
+    if (!spread) return undefined;
+    const at = (r: typeof spread.low) =>
+      r.years.find((y) => y.year === result.endYear)?.netWorth ??
+      r.years[r.years.length - 1]?.netWorth;
+    const low = at(spread.low);
+    const high = at(spread.high);
+    if (low === undefined || high === undefined) return undefined;
+    if (high - low < Math.max(1000, Math.abs(reading.figure) * 0.02)) return undefined;
+    return { low, high };
+  }, [spread, result.endYear, reading.figure]);
 
   const maxStart = Math.max(0, result.years.length - columns);
   const clampedStart = Math.min(winStart, maxStart);
@@ -253,6 +241,7 @@ export default function App() {
           onDuplicate={duplicatePlan}
           onDelete={deletePlan}
         />
+        <ThemeToggle />
       </header>
 
       <main className="ns-main">
@@ -262,9 +251,6 @@ export default function App() {
               <TargetIcon />
             </div>
             <div className="ns-title">{plan.name}</div>
-            <div className="ns-subtle ns-num">
-              {result.startYear}–{result.endYear} · {eventCount} event{eventCount === 1 ? '' : 's'}
-            </div>
             <div className="ns-title-actions">
               {canUndo && (
                 <button type="button" className="ns-btn-ghost" onClick={undo} title="Undo (⌘Z)">
@@ -291,14 +277,32 @@ export default function App() {
             </div>
           </div>
 
-          <div className="ns-kpis">
-            {stats.map((stat) => (
-              <div key={stat.label} className="ns-kpi">
-                <div className="ns-kpi-label">{stat.label}</div>
-                <div className="ns-kpi-value ns-num">{stat.value}</div>
-                <div className="ns-kpi-note ns-num">{stat.note}</div>
-              </div>
-            ))}
+          <div className="ns-hero">
+            <div className="ns-hero-figure">{money(reading.figure)}</div>
+            <p className="ns-hero-read">{reading.read}</p>
+
+            {/* Suppressed on a failing plan: a range around a number that
+                never arrives is not the thing to be reading. */}
+            {spreadAtEnd && !reading.isAlarm && (
+              <p className="ns-hero-risk">
+                Between <b>{money(spreadAtEnd.low)}</b> and <b>{money(spreadAtEnd.high)}</b>{' '}
+                depending on how markets run.
+              </p>
+            )}
+
+            <div className="ns-hero-meta ns-num">
+              <span>
+                {result.startYear}–{result.endYear}
+              </span>
+              <span>
+                {eventCount} event{eventCount === 1 ? '' : 's'}
+              </span>
+              {compare && (
+                <span>
+                  {signedMoney((last?.netWorth ?? 0) - endOfCompare)} vs {compare.name}
+                </span>
+              )}
+            </div>
           </div>
 
           <NetWorthChart

@@ -118,7 +118,7 @@ export function EventsTab({
                   style={{
                     left: `${left}%`,
                     width: `${width}%`,
-                    ...(isSelected ? { outline: '2px solid var(--blue)', outlineOffset: '1px' } : {}),
+                    ...(isSelected ? { outline: '2px solid var(--accent)', outlineOffset: '1px' } : {}),
                   }}
                   onClick={() =>
                     onSelect(

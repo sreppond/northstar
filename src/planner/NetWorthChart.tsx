@@ -103,8 +103,8 @@ export function NetWorthChart({
             <span
               className="ns-legend-swatch"
               style={{
-                background: "var(--blue-tint)",
-                border: "1px solid var(--blue-line)",
+                background: "var(--in-tint)",
+                border: "1px solid var(--in-line)",
               }}
             />
             Income event
@@ -113,8 +113,8 @@ export function NetWorthChart({
             <span
               className="ns-legend-swatch"
               style={{
-                background: "var(--amber-tint)",
-                border: "1px solid var(--amber-line)",
+                background: "var(--out-tint)",
+                border: "1px solid var(--out-line)",
               }}
             />
             Cost event
@@ -180,8 +180,8 @@ export function NetWorthChart({
           >
             <defs>
               <linearGradient id="ns-nw-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2E8BD0" stopOpacity="0.20" />
-                <stop offset="100%" stopColor="#2E8BD0" stopOpacity="0.02" />
+                <stop offset="0%" stopColor="var(--data-nw)" stopOpacity="0.20" />
+                <stop offset="100%" stopColor="var(--data-nw)" stopOpacity="0.02" />
               </linearGradient>
 
               {/* A dot lattice gives the plot a surface to sit on. Faint enough
@@ -194,7 +194,7 @@ export function NetWorthChart({
                 height="18"
                 patternUnits="userSpaceOnUse"
               >
-                <circle cx="9" cy="9" r="1" fill="#DCE4EC" fillOpacity="0.5" />
+                <circle cx="9" cy="9" r="1" fill="var(--border-strong)" fillOpacity="0.5" />
               </pattern>
 
               {/* Lifts the line off the fan band. Soft and neutral — a coloured
@@ -204,7 +204,7 @@ export function NetWorthChart({
                   dx="0"
                   dy="1.5"
                   stdDeviation="2.5"
-                  floodColor="#12304C"
+                  floodColor="var(--chart-lift)"
                   floodOpacity="0.18"
                 />
               </filter>
@@ -226,7 +226,7 @@ export function NetWorthChart({
                 x2={PLOT_RIGHT}
                 y1={g.y}
                 y2={g.y}
-                stroke="#E3E9EF"
+                stroke="var(--rule)"
                 strokeWidth={1}
               />
             ))}
@@ -238,7 +238,7 @@ export function NetWorthChart({
                 x2={pin.x}
                 y1={PLOT_TOP}
                 y2={PLOT_BOTTOM}
-                stroke="#DCE4EC"
+                stroke="var(--border-strong)"
                 strokeWidth={1}
               />
             ))}
@@ -282,7 +282,7 @@ export function NetWorthChart({
                 className="ns-fan-edge"
                 d={geometry.lowEdge.d}
                 fill="none"
-                stroke="var(--amber-line-strong)"
+                stroke="var(--out-strong)"
                 strokeWidth={hotEdge === "low" ? 2.4 : 1.6}
                 strokeOpacity={hotEdge === "high" ? 0.28 : 0.85}
                 strokeDasharray="3 5"
@@ -296,7 +296,7 @@ export function NetWorthChart({
               <path
                 d={geometry.compareLine}
                 fill="none"
-                stroke="#8A99A7"
+                stroke="var(--cmp)"
                 strokeWidth={2}
                 strokeDasharray="6 5"
                 strokeLinecap="round"
@@ -308,7 +308,7 @@ export function NetWorthChart({
               className="ns-nw-line"
               d={geometry.line}
               fill="none"
-              stroke="#12304C"
+              stroke="var(--data-nw)"
               strokeWidth={2.75}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -322,15 +322,15 @@ export function NetWorthChart({
                   x2={hover.x}
                   y1={PLOT_TOP}
                   y2={PLOT_BOTTOM}
-                  stroke="#2E8BD0"
+                  stroke="var(--accent)"
                   strokeWidth={1}
                 />
                 <circle
                   cx={hover.x}
                   cy={hover.y}
                   r={5.5}
-                  fill="#fff"
-                  stroke="#2E8BD0"
+                  fill="var(--surface)"
+                  stroke="var(--accent)"
                   strokeWidth={2.5}
                 />
               </>
@@ -341,7 +341,7 @@ export function NetWorthChart({
                 cx={geometry.first.x}
                 cy={geometry.first.y}
                 r={4.5}
-                fill="#2E8BD0"
+                fill="var(--data-nw)"
               />
             )}
           </svg>
