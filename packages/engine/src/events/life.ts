@@ -65,6 +65,7 @@ export const haveAKid: EventModule<HaveAKidConfig> = {
         label: event.name,
         sourceEventId: event.id,
         category: 'children',
+        recurring: true,
       });
     }
 
@@ -78,6 +79,7 @@ export const haveAKid: EventModule<HaveAKidConfig> = {
           label: `${event.name} — college`,
           sourceEventId: event.id,
           category: 'education',
+          recurring: true,
         });
       }
     }

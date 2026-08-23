@@ -138,6 +138,7 @@ export const buyAHome: EventModule<BuyAHomeConfig> = {
         label: `${event.name} — tax, insurance & upkeep`,
         sourceEventId: event.id,
         category: 'housing',
+        recurring: true,
       });
     }
 

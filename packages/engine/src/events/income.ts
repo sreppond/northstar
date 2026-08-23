@@ -34,6 +34,7 @@ export const income: EventModule<IncomeConfig> = {
         sourceEventId: event.id,
         taxable: config.isTaxable,
         isEarned: config.isEarned,
+        recurring: true,
       });
     }
     return out;

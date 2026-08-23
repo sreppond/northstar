@@ -46,6 +46,20 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
 
         <div className="ns-drawer-body">
           <Section title="Plan">
+            <Field
+              label="As of"
+              hint={`Balances are current as of this date. ${draft.settings.startYear} is prorated in the forecast to whatever is left of it from here.`}
+            >
+              <input
+                type="date"
+                className="ns-input"
+                min={`${draft.settings.startYear}-01-01`}
+                max={`${draft.settings.startYear}-12-31`}
+                value={draft.settings.asOfDate ?? `${draft.settings.startYear}-01-01`}
+                onChange={(e) => setSetting('asOfDate', e.target.value || undefined)}
+              />
+            </Field>
+
             <Field label="Yearly living expenses">
               <NumberInput
                 value={draft.settings.baselineExpenses}

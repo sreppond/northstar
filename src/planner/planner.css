@@ -2833,3 +2833,261 @@
   border-radius: 50%;
   background: var(--out);
 }
+
+/* ---------------------------------------------------------------------------
+ * HAMBURGER NAV — the view switcher (net worth / retirement / house / SEPP)
+ * ------------------------------------------------------------------------- */
+
+.ns-hamburger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  flex: none;
+  transition: background 140ms var(--ease-soft), transform 140ms var(--ease-soft);
+}
+.ns-hamburger:hover {
+  background: var(--tint-row);
+}
+.ns-hamburger:active {
+  transform: scale(0.94);
+}
+
+.ns-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 320px;
+  max-width: 84vw;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  border-radius: 0 24px 24px 0;
+  box-shadow: 8px 0 32px rgba(18, 48, 76, 0.16);
+  display: flex;
+  flex-direction: column;
+  z-index: 41;
+  animation: ns-sidebar-in 320ms var(--spring) both;
+}
+@keyframes ns-sidebar-in {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.ns-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ns-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.ns-sidebar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: background 140ms var(--ease-soft);
+}
+.ns-sidebar-item:hover {
+  background: var(--tint-row);
+}
+.ns-sidebar-item[aria-current='true'] {
+  background: var(--in-tint);
+  border-color: var(--accent-line);
+}
+.ns-sidebar-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ns-sidebar-item-blurb {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------------------
+ * FOCUSED FORECAST VIEWS — Retirement, House, SEPP
+ * ------------------------------------------------------------------------- */
+
+.ns-view-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.ns-view-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.ns-view-sub {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+.ns-view-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.ns-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+.ns-stat {
+  flex: 1 1 160px;
+  background: var(--surface-sub);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.ns-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-light);
+}
+.ns-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.ns-stat-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.ns-mini-chart {
+  display: block;
+  overflow: visible;
+}
+.ns-mini-grid {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+.ns-mini-zero {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.ns-mini-axis {
+  font-size: 11px;
+  fill: var(--muted-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-mini-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+}
+.ns-mini-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ns-mini-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.ns-sepp-disclaimer {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--out-tint);
+  border: 1px solid var(--out-line);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--out-deep);
+}
+
+.ns-sweep-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.ns-sweep-table th,
+.ns-sweep-table td {
+  padding: 8px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--rule);
+}
+.ns-sweep-table th:first-child,
+.ns-sweep-table td:first-child {
+  text-align: left;
+}
+.ns-sweep-table thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-light);
+  font-weight: 500;
+}
+.ns-sweep-table tbody tr[aria-current='true'] {
+  background: var(--in-tint);
+}
+.ns-sweep-table tbody tr {
+  cursor: pointer;
+}
+
+.ns-view-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin: 14px 0;
+}
+.ns-view-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ns-view-control label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-light);
+}

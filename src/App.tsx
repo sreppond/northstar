@@ -36,6 +36,10 @@ import { cagr, money, percent, signedMoney } from './planner/format';
 import { heroReading } from './planner/reading';
 import { ThemeToggle } from './planner/ThemeToggle';
 import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
+import { HamburgerButton, Sidebar, type ViewId } from './planner/Sidebar';
+import { RetirementForecastView } from './planner/views/RetirementForecastView';
+import { HouseForecastView } from './planner/views/HouseForecastView';
+import { SeppForecastView } from './planner/views/SeppForecastView';
 
 type TabId = 'accounts' | 'cashflow' | 'events';
 
@@ -47,6 +51,8 @@ const TABS: { id: TabId; name: string }[] = [
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('accounts');
+  const [view, setView] = useState<ViewId>('netWorth');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // The window pages rather than the type shrinking, and how many years fit
   // depends on the viewport.
   const columns = yearColumnsFor(useBreakpoint());
@@ -227,6 +233,7 @@ export default function App() {
   return (
     <div className="ns">
       <header className="ns-head">
+        <HamburgerButton onClick={() => setSidebarOpen(true)} />
         <div className="ns-wordmark">Forecasting</div>
         <div className="ns-badge">Plan</div>
         <ScenarioBar
@@ -247,6 +254,12 @@ export default function App() {
       </header>
 
       <main className="ns-main">
+        {view === 'retirement' && <RetirementForecastView plan={plan} result={result} />}
+        {view === 'house' && <HouseForecastView plan={plan} result={result} />}
+        {view === 'sepp' && <SeppForecastView plan={plan} result={result} />}
+
+        {view === 'netWorth' && (
+          <>
         <section className="ns-card">
           <div className="ns-title-row">
             <div className="ns-title-icon" aria-hidden>
@@ -464,7 +477,13 @@ export default function App() {
             />
           )}
         </section>
+          </>
+        )}
       </main>
+
+      {sidebarOpen && (
+        <Sidebar view={view} onSelect={setView} onClose={() => setSidebarOpen(false)} />
+      )}
 
       {importing && (
         <ImportDrawer

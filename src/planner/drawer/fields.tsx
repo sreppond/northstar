@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { AccountFieldSpec, RateAnchor } from '@northstar/engine';
 import { RateSchedule } from './RateSchedule';
 import { stepFor, type FieldDescriptor } from './schemaForm';
@@ -47,11 +47,30 @@ export function NumberInput({
   max?: number;
   placeholder?: string;
 }) {
+  // A dollar figure is the one place a bare number is genuinely hard to read
+  // at a glance — $250000 vs $250,000. Native <input type="number"> cannot
+  // display a thousands separator at all, so currency gets its own masked
+  // text input; every other unit (percent, year, age) stays small enough
+  // that a separator would add noise rather than remove it.
+  if (unit === 'currency') {
+    return (
+      <div className="ns-input-wrap">
+        <span className="ns-affix">$</span>
+        <CurrencyInput
+          value={typeof value === 'number' ? value : undefined}
+          onChange={onChange}
+          min={min}
+          max={max}
+          placeholder={placeholder}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="ns-input-wrap">
-      {unit === 'currency' && <span className="ns-affix">$</span>}
       <input
-        className={`ns-input ns-num${unit === 'currency' ? ' ns-input-prefixed' : ''}`}
+        className="ns-input ns-num"
         type="number"
         inputMode="decimal"
         step={step}
@@ -63,6 +82,72 @@ export function NumberInput({
       />
       {unit === 'percent' && <span className="ns-affix ns-affix-right">%</span>}
     </div>
+  );
+}
+
+/** Formats digits typed so far with thousands commas, preserving a trailing decimal point as the user types it. */
+export function formatWithCommas(raw: string): string {
+  const negative = raw.startsWith('-');
+  const body = negative ? raw.slice(1) : raw;
+  const [intPart, ...decimalParts] = body.split('.');
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const decimal = decimalParts.length > 0 ? `.${decimalParts.join('')}` : '';
+  return `${negative ? '-' : ''}${withCommas}${decimal}`;
+}
+
+/** Strips everything but digits, a single leading minus, and a single decimal point. */
+export function sanitizeDigits(raw: string): string {
+  const negative = raw.trim().startsWith('-');
+  const digitsAndDot = raw.replace(/[^0-9.]/g, '');
+  const firstDot = digitsAndDot.indexOf('.');
+  const cleaned =
+    firstDot === -1
+      ? digitsAndDot
+      : digitsAndDot.slice(0, firstDot + 1) + digitsAndDot.slice(firstDot + 1).replace(/\./g, '');
+  return negative ? `-${cleaned}` : cleaned;
+}
+
+function CurrencyInput({
+  value,
+  onChange,
+  min,
+  max,
+  placeholder,
+}: {
+  value: number | undefined;
+  onChange(value: number | undefined): void;
+  min?: number;
+  max?: number;
+  placeholder?: string;
+}) {
+  const [text, setText] = useState(() => (value === undefined ? '' : formatWithCommas(String(value))));
+
+  // Resync from the outside — switching to a different account or event
+  // reuses this component — but never while what's on screen already
+  // parses back to the same number, or a mid-type "80,000." would get its
+  // trailing dot stripped on every keystroke.
+  useEffect(() => {
+    const current = sanitizeDigits(text) === '' ? undefined : Number(sanitizeDigits(text));
+    if (current === value) return;
+    setText(value === undefined ? '' : formatWithCommas(String(value)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  return (
+    <input
+      className="ns-input ns-num ns-input-prefixed"
+      type="text"
+      inputMode="decimal"
+      min={min}
+      max={max}
+      value={text}
+      placeholder={placeholder}
+      onChange={(e) => {
+        const cleaned = sanitizeDigits(e.target.value);
+        setText(formatWithCommas(cleaned));
+        onChange(cleaned === '' || cleaned === '-' ? undefined : Number(cleaned));
+      }}
+    />
   );
 }
 

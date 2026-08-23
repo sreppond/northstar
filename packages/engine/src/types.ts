@@ -93,8 +93,22 @@ export interface Account {
   withdrawalStartingYear?: number;
   /** Effective tax rate applied to the taxable portion of a withdrawal. */
   withdrawalTaxRate: number;
-  /** Percent of a withdrawal that is taxable at all. */
+  /**
+   * Percent of a withdrawal that is taxable at all. Ignored once
+   * `nonTaxableBase` is set — the cost-basis model below computes the
+   * taxable share itself instead of taking it as a fixed input.
+   */
   taxableWithdrawalPercent: number;
+  /**
+   * Remaining after-tax principal, in nominal dollars — the "base" of a
+   * nonqualified annuity or any account funded partly with money that was
+   * already taxed. When set, withdrawals draw down GAIN first (fully taxed,
+   * plus penalty before `penaltyFreeAge`) and only reach this base, tax-free,
+   * once the account's balance has been drawn down to it (docs/PLAN.md
+   * §4.5a). It only ever falls — spent basis does not come back — and growth
+   * never adds to it, since growth is exactly what "gain" means here.
+   */
+  nonTaxableBase?: number;
   /** Early-withdrawal penalty, percent. */
   penaltyRate: number;
   /** Age at which `penaltyRate` stops applying. */
@@ -151,6 +165,17 @@ export interface Participant {
 
 export interface PlanSettings {
   startYear: number;
+  /**
+   * ISO date (`YYYY-MM-DD`) the projection actually starts counting from.
+   * Balances are as of this date, not January 1st of `startYear` — so when it
+   * falls partway through `startYear`, that first year is a PARTIAL year:
+   * growth, debt interest, and every recurring income/expense/contribution
+   * only run for the fraction of the year still remaining (docs/PLAN.md
+   * §4.3). Omitted, or any date outside `startYear`, means "treat `startYear`
+   * as a full year" — the historical behaviour, and what every year after the
+   * first always gets regardless.
+   */
+  asOfDate?: string;
   projectionYears: number;
   /** Percent per year. Applied to baseline flows and any event marked inflating. */
   inflationRate: number;
@@ -218,6 +243,8 @@ export interface AccountYear {
   /** Liabilities only. */
   principal: number;
   close: number;
+  /** Set only for accounts using the cost-basis model (`nonTaxableBase`). */
+  nonTaxableBaseRemaining?: number;
 }
 
 export interface YearSnapshot {

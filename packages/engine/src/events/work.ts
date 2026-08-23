@@ -92,6 +92,7 @@ export const newJob: EventModule<NewJobConfig> = {
         sourceEventId: event.id,
         taxable: true,
         isEarned: true,
+        recurring: true,
       });
 
       if (!config.contributionAccountId) continue;
@@ -105,6 +106,7 @@ export const newJob: EventModule<NewJobConfig> = {
           sourceEventId: event.id,
           fromPaycheck: true,
           pretax: config.contributionIsPretax,
+          recurring: true,
         });
       }
 
@@ -117,6 +119,7 @@ export const newJob: EventModule<NewJobConfig> = {
           sourceEventId: event.id,
           fromPaycheck: false,
           pretax: true,
+          recurring: true,
         });
       }
     }
@@ -295,6 +298,7 @@ export const socialSecurity: EventModule<SocialSecurityConfig> = {
         sourceEventId: event.id,
         taxable: true,
         isEarned: false,
+        recurring: true,
       });
 
       if (benefit - taxable > 0) {
@@ -306,6 +310,7 @@ export const socialSecurity: EventModule<SocialSecurityConfig> = {
           sourceEventId: event.id,
           taxable: false,
           isEarned: false,
+          recurring: true,
         });
       }
     }

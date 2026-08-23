@@ -261,6 +261,47 @@ Handle the mortgage exception by computing its amortization **monthly inside
 the year step** and rolling up to an annual `{interestPaid, principalPaid,
 endingBalance}`. Best of both.
 
+### 4.1a The plan's first year is usually partial
+
+`startYear` is a calendar year, but the plan does not start on its January
+1st — it starts on `settings.asOfDate`, whatever day the user opened the tool
+and typed in their balances. Treating `startYear` as a full year overstates
+everything that year: growth compounds a year that has not fully happened
+yet, and it is the single easiest way to make a forecast wrong by design
+rather than by bug. ($80k at 10% is $88k after a full year, but if it is
+already August, only ~36% of the year is left to earn a return — closer to
+$83k.)
+
+`yearFractionRemaining(year, startYear, asOfDate)` (`partialYear.ts`) returns
+1 for every year except `startYear`, and for `startYear` returns the share of
+its days from `asOfDate` (inclusive) through December 31st. Every year after
+the first is unaffected — by the time `startYear + 1` begins, it always
+starts on its own January 1st.
+
+That fraction scales, in the year loop, exactly the things that are a rate or
+a pace rather than a lump sum:
+- **growth** (§4.4) — `growth = beforeGrowth * rate * yearFraction`
+- **debt interest** (§4.1) — amortized over `round(12 * yearFraction)`
+  months instead of 12
+- **baseline income and expenses**, and any account's standing
+  `yearlyPaycheckContribution`
+- **recurring event cash flows and contributions** — anything an event pushes
+  inside a `yearRange(...)` loop (a salary, rent, a recurring cost) is tagged
+  `recurring: true` in `CashFlowItem`/`ContributionItem` precisely so this
+  scaling can find it
+
+A **one-time** cash flow — a windfall, a down payment, a signing bonus, a
+one-off expense — is never scaled. It either lands this year or it does not;
+the engine has no month-level event timing to say a lump sum should be
+partially received, so guessing would just relocate the imprecision rather
+than remove it. New event code that pushes a cash flow or contribution inside
+a multi-year loop must set `recurring: true`, or that flow will silently keep
+running at full pace through a partial first year.
+
+`asOfDate` is optional. Missing, or set outside `startYear`, means "treat
+`startYear` as a full year" — the historical behaviour, and what every golden
+test that predates this feature still assumes.
+
 ### 4.2 Two-phase execution
 
 Some effects are knowable up front; some depend on simulated state. Split them.
@@ -366,6 +407,71 @@ withdrawal raises your bracket which raises the withdrawal.
 If we later want progressive brackets, the withdrawal step becomes a fixed
 point — iterate `gross → tax → shortfall → gross` to convergence (3 passes is
 plenty) rather than solving analytically.
+
+### 4.5a Cost basis: gain-first withdrawals
+
+`taxableWithdrawalPercent` above is right for a traditional 401(k) (100%,
+forever — there is no basis) but wrong for anything funded partly with money
+that was already taxed: a nonqualified variable annuity, or any account with
+an embedded gain. A FIXED share of every withdrawal is not how those are
+taxed, and it cannot become 0% once the basis is all that is left, or reflect
+that 100% of an early withdrawal is gain while any gain remains.
+
+Real tax law here is LIFO — Last In, First Out. Growth is deemed to come out
+first (the "last in"), fully as ordinary income, plus the penalty before
+`penaltyFreeAge`. Only once the account has been drawn back down to its
+original after-tax principal — the "basis" — does a withdrawal start
+returning that principal tax-free.
+
+Setting `Account.nonTaxableBase` (nominal dollars) turns this on for an
+account and makes `taxableWithdrawalPercent` moot for it. Each year:
+
+```
+gain            = max(0, balance − remainingBasis)
+netFromAllGain  = gain × (1 − gainRate)      // gainRate = tax + penalty, no taxable-share factor
+
+if netNeeded ≤ netFromAllGain:
+  gross = netNeeded / (1 − gainRate)          // same shape as the flat gross-up — still all gain
+else:
+  gross = gain + (netNeeded − netFromAllGain) // drain the gain, then basis dollar-for-dollar, untaxed
+
+remainingBasis -= (gross − amount actually taxed) / 1   // whatever of `gross` was NOT gain
+```
+
+`remainingBasis` only ever falls — it is tracked as running state across
+years (`run.ts`'s `remainingBasis` map, parallel to `balances`), the same way
+an account's balance is. Growth never adds to it: growth is exactly what
+"gain" means here, so crediting it to the base would be double-counting the
+same dollars as both gain and principal. See `tax.ts`'s `costBasisGrossUp` /
+`costBasisTax` and `priority.ts`'s `planWithdrawals`.
+
+### 4.5b SEPP — a schedule the ordinary waterfall cannot express
+
+The withdrawal waterfall (§4.6) pulls whatever a shortfall year happens to
+need, capped per-rule by `maxAnnual`. A SEPP election (IRC §72(t)(2)(A)(iv))
+is the opposite shape: a FIXED amount, decided once, that must be taken every
+single year regardless of that year's actual need — skip a year or take a
+different amount and the IRS retroactively penalizes every prior payment.
+That is not a withdrawal rule's `maxAnnual`, it is a multi-year commitment,
+so it lives in its own module (`sepp.ts`) and its own tab rather than as a
+waterfall knob.
+
+`sepp.ts` models the Fixed Amortization Method only (of the three the IRS
+allows): `payment = balance × r / (1 − (1+r)^−n)`, where `n` is the IRS
+Single Life Expectancy factor for the participant's age and `r` is an
+assumed rate the IRS caps at 120% of the federal mid-term rate (published
+monthly at irs.gov/apr — this module cannot know that number and says so).
+The simulation grows the balance for the year and THEN subtracts the
+payment, matching the ordinary-annuity convention that closed-form formula
+assumes; paying first would need the annuity-DUE variant (divide by `1+r`)
+or the fixed payment would not actually amortize the account to zero over
+`n` years the way it is supposed to. `mandatoryEndYear` is the later of five
+years of payments or the year the participant turns the age this module
+treats as 59½ (`MANDATORY_AGE = 60`, since the plan only tracks birth year,
+not a birthday). `seppStartAgeSweep` runs the same projection across a range
+of candidate start years to show the actual tradeoff: waiting grows the
+balance (and, up to a point, the payment), but shortens the runway before
+ordinary unrestricted access arrives anyway.
 
 ### 4.6 The priority waterfalls
 

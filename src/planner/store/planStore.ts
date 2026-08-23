@@ -182,7 +182,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   },
 
   reset() {
-    const fresh = structuredClone(SAMPLE_PLANS);
+    const fresh = structuredClone(SAMPLE_PLANS).map(withAsOfDate);
     persist(fresh);
     set({ plans: fresh, activeId: fresh[0].id, past: [], future: [] });
   },
@@ -206,6 +206,10 @@ function newId(): string {
   return `plan-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /**
  * A genuinely empty plan: no accounts, no events but the required horizon.
  * It borrows the household and start year from an existing plan, since those
@@ -221,6 +225,9 @@ function blankPlan(id: string, name: string, like: Plan | undefined): Plan {
     name,
     settings: {
       startYear,
+      // A brand-new scenario's balances are current as of right now — the
+      // first year of its own projection is whatever is left of this one.
+      asOfDate: todayISO(),
       projectionYears: horizon - startYear + 1,
       inflationRate: like?.settings.inflationRate ?? 2.5,
       dollarMode: like?.settings.dollarMode ?? 'futureDollars',
@@ -248,16 +255,24 @@ function blankPlan(id: string, name: string, like: Plan | undefined): Plan {
 function loadPlans(): Plan[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(SAMPLE_PLANS);
+    if (!raw) return structuredClone(SAMPLE_PLANS).map(withAsOfDate);
     const parsed = JSON.parse(raw) as Plan[];
     if (!Array.isArray(parsed) || parsed.length === 0 || !parsed.every(isPlanShape)) {
-      return structuredClone(SAMPLE_PLANS);
+      return structuredClone(SAMPLE_PLANS).map(withAsOfDate);
     }
-    return parsed;
+    return parsed.map(withAsOfDate);
   } catch {
     // Corrupt or unavailable storage should never blank the app.
-    return structuredClone(SAMPLE_PLANS);
+    return structuredClone(SAMPLE_PLANS).map(withAsOfDate);
   }
+}
+
+// A plan saved before `asOfDate` existed has no opinion about how far into
+// its first year the projection should start — default it to today rather
+// than silently reverting every such plan to the old full-year-one behaviour.
+function withAsOfDate(plan: Plan): Plan {
+  if (plan.settings.asOfDate) return plan;
+  return { ...plan, settings: { ...plan.settings, asOfDate: todayISO() } };
 }
 
 // A plan saved by an older build can be missing a field the engine now

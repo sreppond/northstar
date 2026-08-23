@@ -62,11 +62,16 @@ export interface YearAmortization {
  * Annual stepping would materially misstate interest on an amortizing loan --
  * this is the one place the extra precision earns its cost (docs/PLAN.md §4.1).
  * The final payment is trimmed so the balance lands exactly on zero.
+ *
+ * `monthsInYear` defaults to a full 12. The plan's current year can be
+ * partial (docs/PLAN.md §4.3) — as of some date partway through it, only that
+ * many months of interest and payments are still ahead of us.
  */
 export function amortizeYear(
   openingBalance: number,
   annualRatePercent: number,
   annualPayment: number,
+  monthsInYear = 12,
 ): YearAmortization {
   let balance = openingBalance;
   if (balance <= 0) return { interest: 0, principal: 0, payment: 0, closing: 0 };
@@ -78,7 +83,7 @@ export function amortizeYear(
   let principalPaid = 0;
   let paid = 0;
 
-  for (let m = 0; m < 12 && balance > 0; m++) {
+  for (let m = 0; m < monthsInYear && balance > 0; m++) {
     const interest = balance * monthlyRate;
     let principal = scheduled - interest;
 

@@ -207,12 +207,13 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
         help: 'Withdrawals are taxed as income, not at capital-gains rates.',
       },
       {
-        key: 'taxableWithdrawalPercent',
-        label: 'Taxable share',
-        unit: 'percent',
+        key: 'nonTaxableBase',
+        label: 'Non-taxable base',
+        unit: 'currency',
         min: 0,
-        max: 100,
-        help: 'Usually 100% for a traditional account funded entirely pre-tax.',
+        step: 1000,
+        help:
+          'After-tax principal already in the account — the basis of a nonqualified annuity, in today’s dollars. Leave at $0 for a traditional account funded entirely pre-tax. Withdrawals draw down growth first, fully taxed; only once the balance is drawn back down to this base does the rest come out tax-free.',
       },
       {
         key: 'penaltyRate',
@@ -238,6 +239,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
       growthRate: 6.5,
       withdrawalTaxRate: 24,
       taxableWithdrawalPercent: 100,
+      nonTaxableBase: 0,
       penaltyRate: 10,
       penaltyFreeAge: 59.5,
       withdrawalTiming: 'never',

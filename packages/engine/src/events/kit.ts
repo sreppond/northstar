@@ -23,6 +23,15 @@ export interface CashFlowItem {
   /** Income only: wages, which retirement and career breaks suppress. */
   isEarned?: boolean;
   category?: string;
+  /**
+   * True for an annual-rate flow that runs across a range of years (a salary,
+   * rent, a recurring expense) — as opposed to a lump sum that lands once (a
+   * windfall, a down payment, a one-off cost). Only recurring flows are
+   * prorated when they fall in the plan's current, partial first year
+   * (docs/PLAN.md §4.3): a lump sum either happens or it does not, but an
+   * annual rate genuinely has less of the year left to run.
+   */
+  recurring?: boolean;
 }
 
 export interface ContributionItem {
@@ -35,6 +44,8 @@ export interface ContributionItem {
   fromPaycheck: boolean;
   /** Reduces taxable income (traditional 401k and similar). */
   pretax: boolean;
+  /** See `CashFlowItem.recurring`. */
+  recurring?: boolean;
 }
 
 /**

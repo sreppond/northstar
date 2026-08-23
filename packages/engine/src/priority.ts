@@ -8,7 +8,7 @@
  * Roth portion before the traditional portion of the same 401(k)".
  */
 import type { Account, PriorityRule, TaxComponentKind } from './types.js';
-import { effectiveWithdrawalRate, grossUp } from './tax.js';
+import { costBasisGrossUp, costBasisTax, effectiveGainRate, effectiveWithdrawalRate, grossUp } from './tax.js';
 
 const EPSILON = 0.005;
 
@@ -48,6 +48,8 @@ export interface WaterfallContext {
   year: number;
   accounts: Map<string, Account>;
   balances: Map<string, number>;
+  /** Remaining after-tax basis per account using the cost-basis model. */
+  remainingBasis: Map<string, number>;
   /** Owner age per account, for early-withdrawal penalties. */
   ageForAccount(accountId: string): number | undefined;
 }
@@ -90,14 +92,30 @@ export function planWithdrawals(
     const available = ctx.balances.get(rule.accountId) ?? 0;
     if (available <= EPSILON) continue;
 
-    const rate = effectiveWithdrawalRate(account, ctx.ageForAccount(rule.accountId));
+    const age = ctx.ageForAccount(rule.accountId);
+    let gross: number;
+    let tax: number;
 
-    let gross = grossUp(remaining, rate);
-    if (rule.config?.maxAnnual !== undefined) gross = Math.min(gross, rule.config.maxAnnual);
-    gross = Math.min(gross, available);
-    if (gross <= EPSILON) continue;
+    if (account.nonTaxableBase !== undefined) {
+      const gainRate = effectiveGainRate(account, age);
+      const basis = ctx.remainingBasis.get(rule.accountId) ?? account.nonTaxableBase;
+      gross = costBasisGrossUp(remaining, available, basis, gainRate);
+      if (rule.config?.maxAnnual !== undefined) gross = Math.min(gross, rule.config.maxAnnual);
+      gross = Math.min(gross, available);
+      if (gross <= EPSILON) continue;
 
-    const tax = gross * rate;
+      const applied = costBasisTax(gross, available, basis, gainRate);
+      tax = applied.tax;
+      ctx.remainingBasis.set(rule.accountId, Math.max(0, basis - applied.basisUsed));
+    } else {
+      const rate = effectiveWithdrawalRate(account, age);
+      gross = grossUp(remaining, rate);
+      if (rule.config?.maxAnnual !== undefined) gross = Math.min(gross, rule.config.maxAnnual);
+      gross = Math.min(gross, available);
+      if (gross <= EPSILON) continue;
+      tax = gross * rate;
+    }
+
     const net = gross - tax;
 
     draws.push({ accountId: rule.accountId, componentKind: rule.componentKind, gross, tax, net });

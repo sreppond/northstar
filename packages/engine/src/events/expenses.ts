@@ -39,6 +39,7 @@ export const annualExpense: EventModule<AnnualExpenseConfig> = {
         amount: config.amount * factor,
         label: event.name,
         sourceEventId: event.id,
+        recurring: true,
       });
     }
     return out;

@@ -54,6 +54,7 @@ export function planDetail(plan: Plan, endYear: number): Detail {
   sections.push({
     heading: 'Assumptions',
     rows: [
+      { label: 'As of', value: s.asOfDate ?? `${s.startYear}-01-01` },
       { label: 'Yearly take-home income', value: detailMoney(takeHomeIncome(plan)) },
       { label: 'Yearly living expenses', value: detailMoney(s.baselineExpenses) },
       { label: 'Yearly inflation rate', value: `${s.inflationRate}%` },
@@ -122,12 +123,19 @@ export function eventDetail(event: PlanEvent): Detail {
 
 // --- account ----------------------------------------------------------------
 
-export function accountDetail(account: Account, closingBalance?: number): Detail {
+export function accountDetail(
+  account: Account,
+  closingBalance?: number,
+  nonTaxableBaseRemaining?: number,
+): Detail {
   const spec = ACCOUNT_TYPES[account.accountClass];
   const rows: DetailRow[] = [];
 
   if (closingBalance !== undefined) {
     rows.push({ label: 'Balance this year', value: detailMoney(closingBalance) });
+  }
+  if (nonTaxableBaseRemaining !== undefined) {
+    rows.push({ label: 'Non-taxable base remaining', value: detailMoney(nonTaxableBaseRemaining) });
   }
 
   for (const field of visibleFields(spec, account)) {

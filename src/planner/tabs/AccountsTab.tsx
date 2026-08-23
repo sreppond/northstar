@@ -79,6 +79,9 @@ export function AccountsTab({
         );
         const spec = ACCOUNT_TYPES[accountClass];
         const closing = cells[cells.length - 1];
+        const lastYearRow = years[years.length - 1];
+        const baseRemaining = (id: string) =>
+          lastYearRow?.accounts.find((a) => a.accountId === id)?.nonTaxableBaseRemaining;
 
         return (
           <div key={accountClass} className="ns-grid ns-row-child" style={style}>
@@ -87,7 +90,7 @@ export function AccountsTab({
                 {spec.label}
               </span>
               {owned ? (
-                <HoverCard detail={accountDetail(owned, closing)}>
+                <HoverCard detail={accountDetail(owned, closing, baseRemaining(owned.id))}>
                   <button
                     type="button"
                     className="ns-gear"
@@ -98,7 +101,9 @@ export function AccountsTab({
                   </button>
                 </HoverCard>
               ) : synthetic.length > 0 ? (
-                <HoverCard detail={accountDetail(synthetic[0], closing)}>
+                <HoverCard
+                  detail={accountDetail(synthetic[0], closing, baseRemaining(synthetic[0].id))}
+                >
                   <span className="ns-gear ns-gear-locked" aria-label="Managed by a life event">
                     <GearIcon />
                   </span>

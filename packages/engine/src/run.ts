@@ -19,6 +19,7 @@ import type {
   YearSnapshot,
 } from './types.js';
 import { accountExistsIn, amortizeYear, growthRateFor, scheduledAnnualPayment } from './accounts.js';
+import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
 import {
   type CashFlowItem,
@@ -116,10 +117,19 @@ export function runPlan(plan: Plan): PlanResult {
   // --- running state ---------------------------------------------------------
   const balances = new Map<string, number>();
   const closed = new Set<string>();
+  // Cost-basis accounts only (docs/PLAN.md §4.5a): remaining after-tax
+  // principal, which only ever falls as withdrawals draw it down.
+  const remainingBasis = new Map<string, number>();
   const years: YearSnapshot[] = [];
 
   // --- phase B: simulate -----------------------------------------------------
   for (let year = startYear; year <= endYear; year++) {
+    // 0. YEAR FRACTION -- 1 for every year except a `startYear` that begins
+    //    partway through (settings.asOfDate falls inside it). Growth, debt
+    //    service, and every RECURRING flow below only run for what is left of
+    //    it; one-time lump sums are unaffected (docs/PLAN.md §4.3).
+    const yearFraction = yearFractionRemaining(year, startYear, settings.asOfDate);
+
     // 1. AGE ­-- and bring any account that starts this year into existence.
     const ages: Record<string, number> = {};
     for (const p of included) ages[p.id] = year - p.birthYear;
@@ -128,6 +138,9 @@ export function runPlan(plan: Plan): PlanResult {
       const begins = account.startYear ?? startYear;
       if (year === begins && !closed.has(account.id)) {
         balances.set(account.id, account.initialBalance);
+        if (account.nonTaxableBase !== undefined) {
+          remainingBasis.set(account.id, account.nonTaxableBase);
+        }
       }
     }
 
@@ -176,6 +189,7 @@ export function runPlan(plan: Plan): PlanResult {
     const baselineIncome =
       settings.baselineIncome *
       inflationAt(year) *
+      yearFraction *
       replacementFactorFor(suppressions, year, { isEarned: true, isBaseline: true }, eventStartYear);
     if (baselineIncome > EPSILON) {
       income.push({ label: 'Baseline income', amount: baselineIncome, category: 'income' });
@@ -185,6 +199,7 @@ export function runPlan(plan: Plan): PlanResult {
     for (const cf of yearFlows.filter((f) => f.kind === 'income')) {
       const amount =
         cf.amount *
+        (cf.recurring ? yearFraction : 1) *
         replacementFactorFor(
           suppressions,
           year,
@@ -207,19 +222,23 @@ export function runPlan(plan: Plan): PlanResult {
 
     // 4. EXPENSES -- baseline living costs plus event expenses.
     const baselineExpenses =
-      settings.baselineExpenses * inflationAt(year) * expenseFactor(expenseMultipliers, year);
+      settings.baselineExpenses *
+      inflationAt(year) *
+      yearFraction *
+      expenseFactor(expenseMultipliers, year);
     if (baselineExpenses > EPSILON) {
       expenses.push({ label: 'Living expenses', amount: baselineExpenses, category: 'living' });
     }
 
     for (const cf of yearFlows.filter((f) => f.kind === 'expense')) {
-      if (cf.amount <= EPSILON) continue;
+      const amount = cf.amount * (cf.recurring ? yearFraction : 1);
+      if (amount <= EPSILON) continue;
       if (cf.category === 'tax') {
-        taxes.push({ label: cf.label, amount: cf.amount, sourceEventId: cf.sourceEventId });
+        taxes.push({ label: cf.label, amount, sourceEventId: cf.sourceEventId });
       } else {
         expenses.push({
           label: cf.label,
-          amount: cf.amount,
+          amount,
           sourceEventId: cf.sourceEventId,
           category: cf.category,
         });
@@ -237,7 +256,7 @@ export function runPlan(plan: Plan): PlanResult {
       if (balance <= EPSILON) continue;
 
       const payment = scheduledAnnualPayment(account, balance);
-      const result = amortizeYear(balance, account.interestRate ?? 0, payment);
+      const result = amortizeYear(balance, account.interestRate ?? 0, payment, monthsRemaining(yearFraction));
       amortization.set(account.id, result);
 
       if (result.payment > EPSILON) {
@@ -261,7 +280,7 @@ export function runPlan(plan: Plan): PlanResult {
       for (const account of accounts) {
         if (account.isLiability || closed.has(account.id)) continue;
         if (!accountExistsIn(account, year)) continue;
-        const standing = account.yearlyPaycheckContribution ?? 0;
+        const standing = (account.yearlyPaycheckContribution ?? 0) * yearFraction;
         if (standing <= EPSILON) continue;
         contributionsThisYear.push({
           year,
@@ -275,7 +294,9 @@ export function runPlan(plan: Plan): PlanResult {
       }
       for (const c of contributionsByYear.get(year) ?? []) {
         if (closed.has(c.accountId)) continue;
-        contributionsThisYear.push(c);
+        contributionsThisYear.push(
+          c.recurring ? { ...c, amount: c.amount * yearFraction } : c,
+        );
       }
     }
 
@@ -315,6 +336,7 @@ export function runPlan(plan: Plan): PlanResult {
       year,
       accounts: accountById,
       balances,
+      remainingBasis,
       ageForAccount: (id) => ageForAccount(id, year),
     };
 
@@ -436,7 +458,9 @@ export function runPlan(plan: Plan): PlanResult {
       // The waterfall already debited withdrawals from the live balance.
       const beforeGrowth = (balances.get(account.id) ?? 0) + contributions;
       const rate = closed.has(account.id) ? 0 : growthRateFor(account, year) / 100;
-      const growth = beforeGrowth * rate;
+      // A partial `startYear` only has `yearFraction` of the year left to
+      // compound (docs/PLAN.md §4.3) — full years elsewhere leave this at 1.
+      const growth = beforeGrowth * rate * yearFraction;
       const close = beforeGrowth + growth;
 
       balances.set(account.id, close);
@@ -453,6 +477,9 @@ export function runPlan(plan: Plan): PlanResult {
         interest: 0,
         principal: 0,
         close,
+        ...(account.nonTaxableBase !== undefined
+          ? { nonTaxableBaseRemaining: remainingBasis.get(account.id) ?? account.nonTaxableBase }
+          : {}),
       });
     }
 
