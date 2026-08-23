@@ -66,6 +66,35 @@ Verify with `npm run lint && npm test && npm run build` — all three are green.
   the drawer, which carries the same numbers — the fast read is what's missing.
   A long-press or tap-to-peek would close the gap.
 
+## Monarch import (new)
+
+Balances can now be imported from Monarch — **Import** in the title row.
+[`docs/MONARCH-IMPORT.md`](./MONARCH-IMPORT.md) carries the full rationale;
+the parts worth not relearning:
+
+- **It cannot be live, and the reason is structural.** Static bundle, no
+  backend; the MCP server is stdio-only; Monarch's API is not CORS-open and its
+  token is keyring-held on purpose. Capture-and-paste is not a shortcut taken
+  for speed. When Phase 2 lands, the server runs this same mapper on a
+  schedule — `packages/engine/src/monarch.ts` does not change, only its caller.
+- **An import writes `initialBalance` and nothing else.** Monarch knows what
+  you have, not what you expect. Resetting `growthRate` from a trailing return
+  would overwrite the modelling judgement that is the point of the tool. This
+  is the rule the whole module turns on — do not "improve" it.
+- **`get_accounts` returns no subtype**, so a 401(k), a Roth and a taxable
+  brokerage all arrive as `brokerage` — indistinguishable in the one dimension
+  the tax model turns on. The import refuses to guess: ambiguous accounts are
+  held out of the diff and asked about, and answers persist to
+  `settings.monarchOverrides` keyed by Monarch account id.
+- **The question queue is computed from the capture alone**, never from the
+  unresolved set. Deriving it from what is still unanswered makes each row
+  vanish as it is answered and the rest jump up under the pointer — the next
+  click then lands on a different account, and a misfiled 401(k) is invisible
+  from that moment on. A test pins this.
+- **Synthetic accounts are never overwritten** (a home from `buyAHome` owns its
+  own balance), and **cash flow is off by default** — a salary modelled as an
+  income event plus a baseline counts the same money twice.
+
 ## Next: Phase 2 — the backend
 
 Phase 1 is done, so the next milestone is docs/PLAN.md §9 Phase 2: Postgres,
@@ -253,8 +282,11 @@ docs/NEXT.md              this file
 packages/engine/          pure TS projection engine (no React, no I/O)
   src/run.ts              the year loop; order of operations is PLAN.md §4.3
   src/events/             one module per event kind + the registry
+  src/monarch.ts          Monarch snapshot -> plan balances (pure)
   examples/demo.ts        npx tsx examples/demo.ts → a worked 12-year projection
 docs/DESIGN-DIRECTION.md  the UI audit and the redesign plan
+docs/MONARCH-IMPORT.md    the Monarch capture/paste loop and why it is not live
+scripts/monarch-capture.mjs  raw MCP tool output -> a Northstar snapshot
 src/App.tsx               planner shell
 src/planner/              chart, tabs, tokens, presentation rules
   planner.css             tokens on :root (chrome vs data), then everything

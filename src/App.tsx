@@ -20,6 +20,7 @@ import { planDetail } from './planner/detail';
 import { ScenarioBar } from './planner/ScenarioBar';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
+import { ImportDrawer } from './planner/drawer/ImportDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { useEventEditor, withDraft } from './planner/drawer/useEventEditor';
 import {
@@ -73,6 +74,7 @@ export default function App() {
   const editor = useEventEditor();
   const [accountDraft, setAccountDraft] = useState<Account | null>(null);
   const [assumptionsDraft, setAssumptionsDraft] = useState<Plan | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
 
@@ -262,6 +264,14 @@ export default function App() {
                   Redo
                 </button>
               )}
+              <button
+                type="button"
+                className="ns-btn"
+                onClick={() => setImporting(true)}
+                title="Update balances from a Monarch snapshot"
+              >
+                Import
+              </button>
               <HoverCard detail={planDetail(plan, result.endYear)} side="bottom">
                 <button
                   type="button"
@@ -455,6 +465,17 @@ export default function App() {
           )}
         </section>
       </main>
+
+      {importing && (
+        <ImportDrawer
+          plan={stored}
+          onImport={(next, overrides) => {
+            replacePlan({ ...next, settings: { ...next.settings, monarchOverrides: overrides } });
+            setImporting(false);
+          }}
+          onCancel={() => setImporting(false)}
+        />
+      )}
 
       {assumptionsDraft && (
         <AssumptionsDrawer

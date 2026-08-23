@@ -26,6 +26,23 @@ Then open http://localhost:3000.
 - `npm run preview` — preview the production build locally
 - `npm run lint` — TypeScript type-check (`tsc --noEmit`)
 
+## Monarch import
+
+Real balances can be read out of [Monarch Money][monarch] via
+[`robcerda/monarch-mcp-server`][mcp] — capture, paste, review the diff, save:
+
+```bash
+node scripts/monarch-capture.mjs accounts.json [cashflow.json] > snap.json
+```
+
+An import writes balances and **nothing else**: every rate, tax assumption and
+withdrawal rule stays as you set it. It is a capture-and-paste rather than a
+live feed, for reasons that are structural rather than incidental — see
+[`docs/MONARCH-IMPORT.md`](docs/MONARCH-IMPORT.md).
+
+[monarch]: https://www.monarchmoney.com
+[mcp]: https://github.com/robcerda/monarch-mcp-server
+
 ## Persistence
 
 All inputs auto-save to the browser's `localStorage` and restore on your next

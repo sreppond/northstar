@@ -166,6 +166,15 @@ export interface PlanSettings {
    * `runPlan` ignores it; the UI runs the other plan separately.
    */
   compareToPlanId?: string;
+  /**
+   * How a linked Monarch account maps onto an `AccountClass`, keyed by Monarch
+   * account id. Import metadata only — `runPlan` ignores it.
+   *
+   * It lives here because Monarch's `get_accounts` cannot say whether a
+   * brokerage is taxable, tax-deferred or Roth, so the answer has to come from
+   * the user once and then survive every later refresh. See `monarch.ts`.
+   */
+  monarchOverrides?: Record<string, AccountClass>;
 }
 
 export interface Plan {
