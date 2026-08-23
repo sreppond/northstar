@@ -21,6 +21,9 @@ import { ScenarioBar } from './planner/ScenarioBar';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { ImportDrawer } from './planner/drawer/ImportDrawer';
+import { ConnectDrawer } from './planner/drawer/ConnectDrawer';
+import { DataBanner } from './planner/DataBanner';
+import { useMonarch } from './planner/useMonarch';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { useEventEditor, withDraft } from './planner/drawer/useEventEditor';
 import {
@@ -75,6 +78,7 @@ export default function App() {
   const [accountDraft, setAccountDraft] = useState<Account | null>(null);
   const [assumptionsDraft, setAssumptionsDraft] = useState<Plan | null>(null);
   const [importing, setImporting] = useState(false);
+  const monarch = useMonarch();
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
 
@@ -268,9 +272,17 @@ export default function App() {
                 type="button"
                 className="ns-btn"
                 onClick={() => setImporting(true)}
-                title="Update balances from a Monarch snapshot"
+                title="Import balances from a Monarch snapshot"
               >
                 Import
+              </button>
+              <button
+                type="button"
+                className="ns-btn-ghost"
+                onClick={() => void monarch.signOut()}
+                title="Sign out"
+              >
+                Sign out
               </button>
               <HoverCard detail={planDetail(plan, result.endYear)} side="bottom">
                 <button
@@ -286,6 +298,13 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          <DataBanner
+            status={monarch.status}
+            busy={monarch.busy}
+            onConnect={monarch.openConnect}
+            onRefresh={() => void monarch.refresh()}
+          />
 
           <div className="ns-hero">
             <div className="ns-hero-figure">{money(reading.figure)}</div>
@@ -466,14 +485,27 @@ export default function App() {
         </section>
       </main>
 
-      {importing && (
+      {monarch.connecting && (
+        <ConnectDrawer
+          status={monarch.status}
+          onConnected={monarch.afterConnect}
+          onCancel={monarch.closeConnect}
+        />
+      )}
+
+      {(importing || monarch.fetched) && (
         <ImportDrawer
           plan={stored}
+          fetched={monarch.fetched}
           onImport={(next, overrides) => {
             replacePlan({ ...next, settings: { ...next.settings, monarchOverrides: overrides } });
             setImporting(false);
+            monarch.clearFetched();
           }}
-          onCancel={() => setImporting(false)}
+          onCancel={() => {
+            setImporting(false);
+            monarch.clearFetched();
+          }}
         />
       )}
 

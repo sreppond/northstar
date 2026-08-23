@@ -4,3 +4,8 @@ dist/
 coverage/
 .DS_Store
 *.log
+
+# local server data
+data/
+.env
+packages/server/dist/

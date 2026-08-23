@@ -14,6 +14,27 @@ import { SAMPLE_PLANS } from '../samplePlan';
 export const STORAGE_KEY = 'northstar:plans:v1';
 const UNDO_LIMIT = 50;
 
+/**
+ * Server sync.
+ *
+ * localStorage stays the primary write on every change: it is synchronous, it
+ * cannot fail, and it is what makes the app work with no backend at all (the
+ * GitHub Pages build). The server is a durable copy written just behind it.
+ *
+ * Ordering matters here. Writing localStorage first and the server second means
+ * a dropped network request costs nothing — the next change retries the whole
+ * set, because the sync is a whole-set replace rather than a diff. There is no
+ * queue to drain and no conflict to resolve.
+ */
+type Sync = (plans: Plan[]) => void;
+
+let syncToServer: Sync | null = null;
+
+/** Called once, after the app knows it is talking to a backend. */
+export function enableServerSync(sync: Sync): void {
+  syncToServer = sync;
+}
+
 interface PlanState {
   plans: Plan[];
   activeId: string;
@@ -283,4 +304,16 @@ function persist(plans: Plan[]) {
     // Private browsing or a full quota. Losing persistence is survivable;
     // throwing here would take the whole edit down with it.
   }
+
+  // Local write first, server second, and never awaited: a slow or failed
+  // request must not make typing in a drawer feel slow, and the next edit
+  // resends the whole set anyway.
+  syncToServer?.(plans);
+}
+
+/** Replace everything from the server, without disturbing undo history. */
+export function hydrateFromServer(plans: Plan[]): void {
+  if (plans.length === 0) return;
+  persist(plans);
+  usePlanStore.setState({ plans, activeId: plans[0].id, past: [], future: [] });
 }

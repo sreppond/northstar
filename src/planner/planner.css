@@ -2833,3 +2833,163 @@
   border-radius: 50%;
   background: var(--out);
 }
+
+/* ---------------------------------------------------------------------------
+ * AUTH + CONNECTION
+ *
+ * The login screen is the one place with no data on it, so it gets none of the
+ * data palette — chrome only, one card, centred. The freshness banner is the
+ * opposite: it exists to be noticed, so it borrows the data hues, but only the
+ * two that mean something here (out = attention, in = fine).
+ * ------------------------------------------------------------------------- */
+
+.ns-auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.ns-auth-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(15, 25, 34, 0.04), 0 8px 24px rgba(15, 25, 34, 0.06);
+}
+
+.ns-auth-title {
+  margin-bottom: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.ns-auth-blurb {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.ns-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ns-auth-submit {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.ns-auth-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--out-deep);
+}
+
+/* --- the freshness banner ------------------------------------------------- */
+
+.ns-data-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-sub);
+  font-size: 13px;
+}
+
+.ns-data-message {
+  flex: 1;
+  color: var(--muted);
+}
+
+.ns-data-action {
+  flex: none;
+  font-size: 13px;
+}
+
+/* Stale or disconnected: worth acting on, so it carries the "out" hue. */
+.ns-data-alarm {
+  border-color: var(--out-line);
+  background: var(--out-tint);
+}
+
+.ns-data-alarm .ns-data-message {
+  color: var(--out-deep);
+  font-weight: 500;
+}
+
+.ns-data-prompt {
+  border-color: var(--border-strong);
+}
+
+/* Current. Present, but not asking for anything. */
+.ns-data-quiet .ns-data-message {
+  color: var(--muted-light);
+}
+
+/* --- the connect walkthrough --------------------------------------------- */
+
+.ns-connect-warn {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--out-line);
+  border-radius: 8px;
+  background: var(--out-tint);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--out-deep);
+}
+
+.ns-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.ns-steps li {
+  padding-left: 2px;
+}
+
+.ns-steps code,
+.ns-field-hint code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--chip);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.ns-steps kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .ns-data-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+}
