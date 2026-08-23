@@ -5,22 +5,29 @@ import { startServerSync } from '../planner/store/serverSync';
 /**
  * The gate in front of the planner.
  *
- * Three states, decided by the server rather than guessed at: no password set
- * yet (first run), password set but not signed in, and signed in. Asking the
- * server on mount is what makes a shared link or a bookmarked deep URL land on
- * the right screen instead of flashing the planner and then bouncing.
+ * Four states, decided by the server rather than guessed at: no backend
+ * reachable at all, no password set yet (first run), password set but not
+ * signed in, and signed in. Asking the server on mount is what makes a shared
+ * link or a bookmarked deep URL land on the right screen instead of flashing
+ * the planner and then bouncing.
+ *
+ * "No backend reachable" is not an error state — it is the static, no-data
+ * build (GitHub Pages has no `/api/*` routes at all) or a self-hosted server
+ * that happens to be down, and in both cases the right move is the one
+ * `useMonarch` and `serverSync` already make: keep the app usable rather than
+ * block it behind a login screen it cannot reach. There is nothing to
+ * authenticate against, and the plan still works out of `localStorage` exactly
+ * as it did before a server existed.
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<AuthStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<AuthStatus | 'no-backend' | null>(null);
   const [synced, setSynced] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       setStatus(await api.authStatus());
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not reach the server.');
+    } catch {
+      setStatus('no-backend');
     }
   }, []);
 
@@ -37,25 +44,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
    * happens and that whole session silently never reaches the server.
    */
   useEffect(() => {
-    if (!status?.authenticated || synced) return;
+    if (status === 'no-backend' || !status?.authenticated || synced) return;
     setSynced(true);
     void startServerSync();
-  }, [status?.authenticated, synced]);
-
-  if (error) {
-    return (
-      <Shell title="Northstar">
-        <p className="ns-auth-error">{error}</p>
-        <button type="button" className="ns-btn" onClick={() => void refresh()}>
-          Try again
-        </button>
-      </Shell>
-    );
-  }
+  }, [status, synced]);
 
   // Nothing at all until the server answers. A flash of the login form for a
   // user who is already signed in reads as having been logged out.
   if (!status) return null;
+
+  if (status === 'no-backend') return <>{children}</>;
 
   if (!status.authenticated) {
     return <PasswordScreen mode={status.configured ? 'login' : 'setup'} onDone={refresh} />;
