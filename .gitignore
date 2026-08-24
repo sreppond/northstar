@@ -9,3 +9,6 @@ coverage/
 data/
 .env
 packages/server/dist/
+
+# local tooling
+.claude/

@@ -48,10 +48,12 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   if (response.status === 204) return undefined as T;
 
   let payload: unknown = null;
+  let parseFailed = false;
   try {
     payload = await response.json();
   } catch {
     // An empty or non-JSON body on an error is still an error worth reporting.
+    parseFailed = true;
   }
 
   if (!response.ok) {
@@ -61,6 +63,14 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       response.status,
       Boolean(data?.needsReconnect),
     );
+  }
+
+  // A 200 with a non-JSON body means there is no real API here to answer —
+  // e.g. Vite's dev server falling back to index.html for an unmatched
+  // /api/* route when the backend isn't running. Same situation as the
+  // fetch itself failing: no server to talk to.
+  if (parseFailed) {
+    throw new ApiError('Could not reach the Northstar server. Is it running?', 0);
   }
 
   return payload as T;
