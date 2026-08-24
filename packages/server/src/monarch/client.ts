@@ -253,6 +253,11 @@ export function monthsBetween(startDate: string, endDate: string): number {
   const a = new Date(startDate);
   const b = new Date(endDate);
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 1;
-  const months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+  // These are date-only strings, which Date always parses as UTC midnight.
+  // Reading them back with local getters shifts the calendar date (and
+  // sometimes the month) in any timezone west of UTC, so use the UTC
+  // getters to match how they were parsed.
+  const months =
+    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth()) + 1;
   return months > 0 ? months : 1;
 }
