@@ -30,11 +30,10 @@ This file predates several merges and stayed stale through them. Corrections:
   exercised.
 - **[`docs/BORROW.md`](./BORROW.md) is new**: a read of a competitor's
   product (FIREMaster) against what Northstar already is, and what's worth
-  building as a result. Mostly ideation — but its own sequencing (§10) put
-  RMD forcing first ("it's a hole, it changes numbers"), and that one is now
-  built: see the next bullet. The rest of the document (Monte Carlo,
-  accessible-vs-locked, the bracket ribbon, scenario diff, the spending
-  sensitivity strip, Excel export) is still just ideas.
+  building as a result. Its own sequencing (§10) put RMD forcing and the
+  spending strip first — both are now built, see the next two bullets. Monte
+  Carlo, accessible-vs-locked, the bracket ribbon, scenario diff, the general
+  tornado (the rest of §5), and Excel export are still just ideas.
 - **RMDs are now forced.** `packages/engine/src/rmd.ts` + a new step 4.5 in
   `run.ts`: every `taxDeferredInvestment` account whose owner has reached
   `RMD_START_AGE` (73) is drained by `balance / uniformLifetimeDivisor(age)`
@@ -44,6 +43,16 @@ This file predates several merges and stayed stale through them. Corrections:
   a paycheck would. No new UI — it reads existing account/participant fields,
   so it shows up automatically in the Cash Flow tab's Income section as
   "Required minimum distribution — «account»" once anyone's old enough.
+- **A spending sensitivity strip sits under the hero figure.** Five read-only
+  tiles (`SpendingStrip.tsx`) — ±$1K/mo, ±$500/mo, current — each reporting
+  *years of runway gained or lost*, not a terminal dollar figure a person
+  cannot feel (`docs/BORROW.md` §8: "reported in time bought"). Built on two
+  new pure functions in `sensitivity.ts`: `withExpenseShift` (moves only
+  `baselineExpenses`, same narrowness as `withReturnShift`) and
+  `yearsOfRunway` (years survived before the first shortfall, or the whole
+  horizon if the plan never fails). This is the cheap version BORROW.md §10
+  said to ship first — not clickable, not the general tornado (flex every
+  assumption, rank by impact) that's still just an idea in §5.
 - **The pill row of scenarios is gone from the header.** Switching plans
   moved into the hamburger menu, alongside the analysis views it already
   had — one menu instead of two competing navigation rows. The header itself
@@ -402,6 +411,7 @@ src/planner/              chart, tabs, tokens, presentation rules
   ThemeToggle.tsx         light/dark, stamped on <html>
   useBreakpoint.ts        phone/tablet/desktop + year-column count
   AnimatedFigure.tsx      per-character roll-in for headline numbers on change
+  SpendingStrip.tsx       five runway tiles: a spending delta as years, not $
   Sidebar.tsx             the hamburger menu — views AND plan switching
   views/                  Retirement / House / SEPP forecast tabs
 ```

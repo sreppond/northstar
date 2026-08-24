@@ -232,6 +232,11 @@ This is worth doing **before** anything cosmetic. It changes numbers.
 
 ## 5. Sensitivity, done properly — the tornado
 
+**The spending strip (partial) is built.** `withExpenseShift` +
+`yearsOfRunway` in `sensitivity.ts`, five read-only tiles in
+`src/planner/SpendingStrip.tsx`. Not clickable-override, not the general
+tornado below — see `docs/NEXT.md`. The rest of this section is still ideas.
+
 **What they have.** Five clickable monthly-spend tiles → terminal wealth at 82,
 with a "cash crisis" flag. Click one and it becomes an override that re-runs
 the projection. Good idea, one variable.
@@ -373,7 +378,7 @@ a model.
 | # | Item | Effort | Why here |
 |---|---|---|---|
 | 1 | ~~RMD forcing (§4)~~ | S | **Done.** It's a hole. It changes numbers. Fixed before decorating. |
-| 2 | Spending sensitivity strip (§5, partial) | S | Best insight per line in the document. |
+| 2 | ~~Spending sensitivity strip (§5, partial)~~ | S | **Done.** Best insight per line in the document. |
 | 3 | Scenario diff (§6) | S–M | Finishes a feature that's already 80% built. |
 | 4 | Accessible vs. locked (§2) | M | New concept, all inputs already modelled. |
 | 5 | Monte Carlo (§1) | M–L | Biggest truth gain; needs a worker and seeded RNG. |
