@@ -1,4 +1,4 @@
-import { axisMoney } from '../format';
+import { axisMoney, percent } from '../format';
 
 /**
  * A small, static multi-series line chart for the focused forecast views
@@ -121,5 +121,59 @@ export function ChartLegend({ series }: { series: { label: string; color: string
         </span>
       ))}
     </div>
+  );
+}
+
+/**
+ * A funding-progress ring — this file's other hand-rolled SVG chart idiom,
+ * sized to sit beside a couple of lines of text rather than stand alone.
+ * Shared by the House and Retirement lenses' goal-progress stages (both read
+ * a `Goal` via `goalFundingProgress`). Colour follows the goal-progress rule
+ * (REDESIGN.md §5.1): net-worth blue when the current trajectory reaches the
+ * target by the date, out-orange when it does not — no new hue. The adjacent
+ * text carries the same reading in words, so the ring itself is decorative
+ * for a11y purposes.
+ */
+export function GoalRing({
+  fraction,
+  funded,
+  size = 84,
+  strokeWidth = 9,
+}: {
+  fraction: number;
+  funded: boolean;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(1, fraction));
+  const color = funded ? 'var(--data-nw)' : 'var(--out)';
+
+  return (
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+      height={size}
+      className="ns-goal-ring"
+      aria-hidden="true"
+    >
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--track)" strokeWidth={strokeWidth} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - clamped)}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+      <text x="50%" y="50%" textAnchor="middle" dy="0.34em" className="ns-goal-ring-pct">
+        {percent(clamped * 100, 0)}
+      </text>
+    </svg>
   );
 }

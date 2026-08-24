@@ -3562,53 +3562,318 @@
   color: var(--out-deep);
 }
 
-.ns-sweep-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  font-size: 13px;
-}
-.ns-sweep-table th,
-.ns-sweep-table td {
-  padding: 8px 10px;
-  text-align: right;
-  border-bottom: 1px solid var(--rule);
-}
-.ns-sweep-table th:first-child,
-.ns-sweep-table td:first-child {
-  text-align: left;
-}
-.ns-sweep-table thead th {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted-light);
-  font-weight: 500;
-}
-.ns-sweep-table tbody tr[aria-current='true'] {
-  background: var(--in-tint);
-}
-.ns-sweep-table tbody tr {
-  cursor: pointer;
-}
+/* --- SEPP tool: form + start-age strip (docs/REDESIGN.md §4.4) ----------- */
 
-.ns-view-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-end;
-  margin: 14px 0;
-}
-.ns-view-control {
+.ns-sepp-form {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 14px;
+  margin: 14px 0;
 }
-.ns-view-control label {
+.ns-sepp-form-group {
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 12px 14px 14px;
+  background: var(--surface-sub);
+}
+.ns-sepp-form-group-label {
   font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-light);
+  margin-bottom: 10px;
+}
+.ns-sepp-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.ns-sepp-form-row .ns-field {
+  flex: 1 1 140px;
+}
+/* The data voice (REDESIGN.md §5.3): every number this tool reads, not just
+   axis labels, is in the mono face -- what makes it read as an instrument
+   rather than an ordinary settings form. */
+.ns-sepp-form input,
+.ns-sepp-form select {
+  font-family: var(--font-mono);
+}
+
+/* A horizontal set of tappable option-cards, each showing its own tradeoff,
+   in place of a table row to scan. */
+.ns-sepp-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-top: 10px;
+  padding: 2px 2px 10px;
+}
+.ns-sepp-option {
+  flex: 0 0 auto;
+  width: 136px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface-sub);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 10px 12px 12px;
+  cursor: pointer;
+}
+.ns-sepp-option:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+.ns-sepp-option[aria-current='true'] {
+  border-color: var(--accent-line);
+  background: var(--in-tint);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+.ns-sepp-option-age {
+  font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted-light);
+}
+.ns-sepp-option-payment {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.ns-sepp-option-unit {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 1px;
+}
+.ns-sepp-option-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+.ns-sepp-option-balance {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-light);
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+}
+
+/* A small magnitude bar (docs/REDESIGN.md §4.1's ledger-row recipe, scaled
+   down for a standalone card rather than a table-row wash), scaled per option
+   against the sweep's largest balance so the cards compare at a glance. */
+.ns-mag-bar {
+  display: block;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 4px;
+  background: var(--track);
+  overflow: hidden;
+}
+.ns-mag-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--data-nw);
+}
+
+/* --- Retirement lens: never-blank prompt, freedom read, durability ------- */
+
+.ns-freedom-prompt {
+  padding: 30px 20px 26px;
+  text-align: center;
+}
+.ns-freedom-prompt-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ns-freedom-prompt .ns-view-sub {
+  max-width: 46ch;
+  margin: 8px auto 0;
+}
+.ns-freedom-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: 420px;
+  margin: 20px auto 0;
+}
+.ns-freedom-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--track);
+  outline: none;
+  cursor: pointer;
+}
+.ns-freedom-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--track);
+}
+.ns-freedom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(18, 48, 76, 0.35);
+  cursor: grab;
+}
+.ns-freedom-slider::-webkit-slider-thumb:active {
+  background: var(--accent);
+  cursor: grabbing;
+}
+.ns-freedom-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--track);
+}
+.ns-freedom-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(18, 48, 76, 0.35);
+  cursor: grab;
+}
+.ns-freedom-slider::-moz-range-thumb:active {
+  background: var(--accent);
+  cursor: grabbing;
+}
+.ns-freedom-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.ns-freedom-slider-value {
+  flex: none;
+  min-width: 96px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ns-freedom-slider-year {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* The freedom read's headline figure — same weight of attention as the
+   Overview hero (docs/REDESIGN.md §4.1), scaled down for a card rather than
+   the full-bleed spine. Calm ink normally; the alarm modifier is the one
+   place this lens raises its voice, reusing out-orange rather than a new
+   hue (§5.1). */
+.ns-freedom {
+  margin: 10px 0 18px;
+}
+.ns-freedom-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-light);
+}
+.ns-freedom-figure {
+  display: block;
+  margin-top: 4px;
+  font-size: clamp(1.9rem, 4.4vw, 2.7rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink-deep);
+}
+.ns-freedom-note {
+  margin-top: 6px;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.ns-freedom-alarm .ns-freedom-figure,
+.ns-freedom-alarm .ns-freedom-note {
+  color: var(--out-deep);
+}
+
+/* Durability at the year actually set — a fuller alarm treatment than
+   ns-house-cost's neutral-background convention, because REDESIGN.md names
+   this "the one alarm" the lens raises; it earns the tint. */
+.ns-durability {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-sub);
+  border: 1px solid var(--rule);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+.ns-durability-calm {
+  color: var(--ink);
+}
+.ns-durability-alarm {
+  color: var(--out-deep);
+  background: var(--out-tint);
+  border-color: var(--out-line);
+}
+
+/* --- the SEPP disclosure (docs/REDESIGN.md §3.1: a tool, not a peer lens) - */
+
+.ns-disclosure {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+.ns-disclosure-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: left;
+}
+.ns-disclosure-trigger:hover {
+  color: var(--accent);
+}
+.ns-disclosure-chevron {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--chip);
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+}
+.ns-disclosure-body {
+  margin-top: 16px;
 }
 
 /* ---------------------------------------------------------------------------

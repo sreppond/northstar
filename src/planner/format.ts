@@ -94,3 +94,13 @@ export function cagr(start: number, end: number, years: number): number | undefi
   if (years <= 0 || start <= 0 || end <= 0) return undefined;
   return (Math.pow(end / start, 1 / years) - 1) * 100;
 }
+
+/**
+ * Oxford-free "and" join, the way someone would say a short list out loud —
+ * "brokerage and cash" rather than "brokerage, and cash". Shared by the House
+ * and Retirement lenses' goal-progress notes ("earmarked from X and Y").
+ */
+export function joinNames(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}

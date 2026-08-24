@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import type { Goal, Plan, PlanEvent, PlanResult } from '@northstar/engine';
 import { goalFundingProgress, mergeGoalRules, pathMarkers, runPlan } from '@northstar/engine';
-import { detailMoney, percent } from '../format';
+import { detailMoney, joinNames, percent } from '../format';
 import { AnimatedFigure } from '../AnimatedFigure';
-import { ChartLegend, MiniChart } from './MiniChart';
+import { ChartLegend, GoalRing, MiniChart } from './MiniChart';
 
 /**
  * The House lens (docs/REDESIGN.md §4.3): the actual decision, in three
@@ -215,58 +215,6 @@ function DownPaymentStage({
   );
 }
 
-/**
- * A funding-progress ring — this codebase's hand-rolled SVG chart idiom (see
- * MiniChart.tsx), sized to sit beside a couple of lines of text rather than
- * stand alone. Colour follows the goal-progress rule (REDESIGN.md §5.1):
- * net-worth blue when the current trajectory reaches the target by the date,
- * out-orange when it does not — no new hue. The adjacent text carries the
- * same reading in words, so the ring itself is decorative for a11y purposes.
- */
-function GoalRing({
-  fraction,
-  funded,
-  size = 84,
-  strokeWidth = 9,
-}: {
-  fraction: number;
-  funded: boolean;
-  size?: number;
-  strokeWidth?: number;
-}) {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(1, fraction));
-  const color = funded ? 'var(--data-nw)' : 'var(--out)';
-
-  return (
-    <svg
-      viewBox={`0 0 ${size} ${size}`}
-      width={size}
-      height={size}
-      className="ns-goal-ring"
-      aria-hidden="true"
-    >
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--track)" strokeWidth={strokeWidth} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - clamped)}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-      <text x="50%" y="50%" textAnchor="middle" dy="0.34em" className="ns-goal-ring-pct">
-        {percent(clamped * 100, 0)}
-      </text>
-    </svg>
-  );
-}
-
 /** A cost delta smaller than this is float noise, not a story — mirrors diff.ts's `diffOutcomes`. */
 const NET_WORTH_NOISE_FLOOR = 500;
 
@@ -375,12 +323,6 @@ function describeCostOfBuying(plan: Plan, withHouse: PlanResult, withoutHouse: P
   }
 
   return { text: 'Leaves the plan sound either way — no material difference at the horizon.', tone: 'neutral' };
-}
-
-/** Oxford-free "and" join, the way someone would say a short list out loud. */
-function joinNames(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {

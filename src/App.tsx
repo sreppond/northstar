@@ -14,7 +14,7 @@ import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './planner/planner.css';
 
-import type { AccountClass, Account, Plan, PlanEvent } from '@northstar/engine';
+import type { AccountClass, Account, Plan, PlanEvent, RetirementConfig } from '@northstar/engine';
 import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './planner/store/planStore';
 import { HoverCard } from './planner/HoverCard';
@@ -195,6 +195,25 @@ export default function App() {
   // where the risk phrase is suppressed.
   const toggleFan = () => setShowFan((on) => !on);
 
+  // The Retirement lens's never-blank prompt (docs/REDESIGN.md §4.2) writes
+  // straight to the store rather than staging a draft — there is no drawer,
+  // no separate save step, just "the instant a value is set". Reuses any
+  // existing retirement event's config (and id) so re-setting the year from
+  // the prompt after toggling one off never leaves a duplicate behind.
+  const onSetRetirementYear = (year: number) => {
+    const participantId = stored.participants.find((p) => p.isIncluded)?.id;
+    const existing = stored.events.find((e) => e.kind === 'retirement');
+    const existingConfig = existing?.config as Partial<RetirementConfig> | undefined;
+    upsertEvent(stored.id, {
+      id: existing?.id ?? `e${Math.random().toString(36).slice(2, 10)}`,
+      kind: 'retirement',
+      name: existing?.name ?? 'Retire',
+      startYear: year,
+      isIncluded: true,
+      config: { spendingChangePercent: -20, ...existingConfig, participantId },
+    });
+  };
+
   // The moments worth pointing at on the line — chiefly the years the plan
   // runs dry, which until now only appeared in a table if you scrolled to them.
   const markers = useMemo(() => pathMarkers(result), [result]);
@@ -295,7 +314,9 @@ export default function App() {
       </header>
 
       <main className="ns-main">
-        {view === 'retirement' && <RetirementForecastView plan={plan} result={result} />}
+        {view === 'retirement' && (
+          <RetirementForecastView plan={plan} result={result} onSetRetirementYear={onSetRetirementYear} />
+        )}
         {view === 'house' && <HouseForecastView plan={plan} result={result} />}
         {view === 'sepp' && <SeppForecastView plan={plan} result={result} />}
 
