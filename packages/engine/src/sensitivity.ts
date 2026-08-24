@@ -9,7 +9,8 @@
  *
  * Pure, like the rest of the engine: takes a plan, returns a new plan.
  */
-import type { Account, Plan } from './types.js';
+import type { Plan, PlanResult, Account } from './types.js';
+import { pathMarkers } from './markers.js';
 
 /** The default spread. Two points either side of the plan's own assumption. */
 export const DEFAULT_RETURN_SHIFT = 2;
@@ -77,4 +78,43 @@ export function headlineReturnRate(plan: Plan): number | undefined {
       return [];
     });
   return rates.length > 0 ? Math.max(...rates) : undefined;
+}
+
+/**
+ * Spending sensitivity — the same plan with baseline living expenses shifted
+ * by a fixed dollar amount per month.
+ *
+ * Deliberately narrow, the same way `withReturnShift` is: only
+ * `baselineExpenses` moves. Event-driven expenses (a kid, a home, a windfall)
+ * stay as authored — those are specific, dated commitments, not the ongoing
+ * discretionary spend this control is asking "what if" about.
+ *
+ * A dollar delta rather than a percentage (unlike `withReturnShift`, which
+ * shifts a rate) because the thing a person actually adjusts is "$500/mo less
+ * takeout", not "12% less spending" — and a percentage of a zero baseline is
+ * undefined where a dollar amount is not.
+ */
+export function withExpenseShift(plan: Plan, monthlyDollarDelta: number): Plan {
+  if (monthlyDollarDelta === 0) return plan;
+
+  return {
+    ...plan,
+    settings: {
+      ...plan.settings,
+      baselineExpenses: Math.max(0, plan.settings.baselineExpenses + monthlyDollarDelta * 12),
+    },
+  };
+}
+
+/**
+ * Years survived before the plan first runs dry — `pathMarkers` already finds
+ * that year, this just measures the distance to it. A plan that never runs
+ * dry within the modelled horizon reports the whole horizon rather than
+ * `Infinity`, so two never-fails runs still compare as a real (zero) delta
+ * instead of two incomparable infinities.
+ */
+export function yearsOfRunway(result: PlanResult): number {
+  const firstShortfallYear = pathMarkers(result).shortfallYears[0];
+  const lastSurvivedYear = firstShortfallYear !== undefined ? firstShortfallYear - 1 : result.endYear;
+  return lastSurvivedYear - result.startYear + 1;
 }

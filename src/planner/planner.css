@@ -825,6 +825,61 @@
   display: none;
 }
 
+/* --- spending strip -------------------------------------------------------
+ * "Spending less isn't reported in dollars, it's reported in time bought"
+ * (docs/BORROW.md §8) — five fixed deltas against the runway, read at a
+ * glance rather than operated like a control. */
+
+.ns-spending-strip {
+  margin: 18px 24px 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.ns-spending-strip-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+  margin-bottom: 10px;
+}
+
+.ns-spending-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ns-spending-tile {
+  flex: 1 1 120px;
+  background: var(--surface-sub);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.ns-spending-tile-current {
+  background: var(--chip);
+}
+
+.ns-spending-tile-delta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ns-spending-tile-runway {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.ns-spending-tile-up .ns-spending-tile-runway {
+  color: var(--in);
+}
+.ns-spending-tile-down .ns-spending-tile-runway {
+  color: var(--out);
+}
+
 /* --- chart --------------------------------------------------------------- */
 
 .ns-chart-head {

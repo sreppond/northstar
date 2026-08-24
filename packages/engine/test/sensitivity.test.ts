@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { headlineReturnRate, withReturnShift } from '../src/sensitivity.js';
+import { headlineReturnRate, withExpenseShift, withReturnShift, yearsOfRunway } from '../src/sensitivity.js';
 import { runPlan } from '../src/run.js';
-import { asset, liability, plan } from './fixtures.js';
+import { asset, liability, plan, rule } from './fixtures.js';
 
 describe('withReturnShift', () => {
   it('moves fixed-growth assets by the delta', () => {
@@ -120,5 +120,79 @@ describe('headlineReturnRate', () => {
       accounts: [asset({ id: 'a', name: 'Old', growthRate: 20, isIncluded: false })],
     });
     expect(headlineReturnRate(base)).toBeUndefined();
+  });
+});
+
+describe('withExpenseShift', () => {
+  it('annualizes the monthly delta onto baseline expenses', () => {
+    const base = plan({ settings: { baselineExpenses: 60_000 } as never });
+    expect(withExpenseShift(base, 500).settings.baselineExpenses).toBe(66_000);
+    expect(withExpenseShift(base, -500).settings.baselineExpenses).toBe(54_000);
+  });
+
+  it('never drives baseline expenses negative', () => {
+    const base = plan({ settings: { baselineExpenses: 1_000 } as never });
+    expect(withExpenseShift(base, -10_000).settings.baselineExpenses).toBe(0);
+  });
+
+  it('does not mutate the plan it was given', () => {
+    const base = plan({ settings: { baselineExpenses: 60_000 } as never });
+    withExpenseShift(base, 500);
+    expect(base.settings.baselineExpenses).toBe(60_000);
+  });
+
+  it('returns the same object for a zero shift, so the base run is not duplicated', () => {
+    const base = plan();
+    expect(withExpenseShift(base, 0)).toBe(base);
+  });
+});
+
+describe('yearsOfRunway', () => {
+  it('counts the whole horizon when the plan never runs dry', () => {
+    const base = plan({
+      settings: { projectionYears: 10, baselineIncome: 100_000, baselineExpenses: 40_000 } as never,
+      accounts: [asset({ id: 'c', name: 'Cash', accountClass: 'cash', growthRateMethod: 'noChange' })],
+    });
+    expect(yearsOfRunway(runPlan(base))).toBe(10);
+  });
+
+  it('counts exactly the years fully funded before the first shortfall', () => {
+    // $30,000 against $10,000/yr of pure withdrawal drains to exactly 0 after
+    // year 3 (2026–2028); year 4 (2029) is the first year with nothing left.
+    const base = plan({
+      settings: { projectionYears: 5, baselineIncome: 0, baselineExpenses: 10_000 } as never,
+      accounts: [
+        asset({
+          id: 'c',
+          name: 'Cash',
+          accountClass: 'cash',
+          initialBalance: 30_000,
+          growthRateMethod: 'noChange',
+        }),
+      ],
+      rules: [rule('c', 'withdrawal', 1)],
+    });
+    expect(yearsOfRunway(runPlan(base))).toBe(3);
+  });
+
+  it('grows when spending is cut and shrinks when spending rises', () => {
+    const base = plan({
+      settings: { projectionYears: 15, baselineIncome: 0, baselineExpenses: 10_000 } as never,
+      accounts: [
+        asset({
+          id: 'c',
+          name: 'Cash',
+          accountClass: 'cash',
+          initialBalance: 30_000,
+          growthRateMethod: 'noChange',
+        }),
+      ],
+      rules: [rule('c', 'withdrawal', 1)],
+    });
+    const baseline = yearsOfRunway(runPlan(base));
+    const spendLess = yearsOfRunway(runPlan(withExpenseShift(base, -300)));
+    const spendMore = yearsOfRunway(runPlan(withExpenseShift(base, 300)));
+    expect(spendLess).toBeGreaterThan(baseline);
+    expect(spendMore).toBeLessThan(baseline);
   });
 });

@@ -18,6 +18,7 @@ import { usePlanStore } from './planner/store/planStore';
 import { HoverCard } from './planner/HoverCard';
 import { planDetail } from './planner/detail';
 import { AnimatedFigure } from './planner/AnimatedFigure';
+import { SpendingStrip } from './planner/SpendingStrip';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { ImportDrawer } from './planner/drawer/ImportDrawer';
@@ -332,6 +333,8 @@ export default function App() {
               )}
             </div>
           </div>
+
+          <SpendingStrip plan={plan} result={result} />
 
           <NetWorthChart
             result={result}
