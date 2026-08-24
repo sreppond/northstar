@@ -19,6 +19,7 @@ import { HoverCard } from './planner/HoverCard';
 import { planDetail } from './planner/detail';
 import { AnimatedFigure } from './planner/AnimatedFigure';
 import { SpendingStrip } from './planner/SpendingStrip';
+import { CompareDiff } from './planner/CompareDiff';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { ImportDrawer } from './planner/drawer/ImportDrawer';
@@ -40,7 +41,8 @@ import { cagr, money, percent, signedMoney } from './planner/format';
 import { heroReading } from './planner/reading';
 import { ThemeToggle } from './planner/ThemeToggle';
 import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
-import { HamburgerButton, Sidebar, type ViewId } from './planner/Sidebar';
+import { Sidebar } from './planner/Sidebar';
+import { ViewTabs, type ViewId } from './planner/ViewTabs';
 import { RetirementForecastView } from './planner/views/RetirementForecastView';
 import { HouseForecastView } from './planner/views/HouseForecastView';
 import { SeppForecastView } from './planner/views/SeppForecastView';
@@ -238,9 +240,16 @@ export default function App() {
   return (
     <div className="ns">
       <header className="ns-head">
-        <HamburgerButton onClick={() => setSidebarOpen(true)} />
         <div className="ns-wordmark">Forecasting</div>
-        <div className="ns-badge">{stored.name}</div>
+        <ViewTabs view={view} onSelect={setView} />
+        <button
+          type="button"
+          className="ns-badge"
+          onClick={() => setSidebarOpen(true)}
+          title="Switch or manage plans"
+        >
+          {stored.name}
+        </button>
         <ThemeToggle />
       </header>
 
@@ -455,6 +464,10 @@ export default function App() {
             )}
           </div>
 
+          {comparePlan && compare && (
+            <CompareDiff plan={plan} comparePlan={comparePlan} result={result} compareResult={compare.result} />
+          )}
+
           {tab === 'accounts' && (
             <AccountsTab
               window={windowYears}
@@ -491,8 +504,6 @@ export default function App() {
 
       {sidebarOpen && (
         <Sidebar
-          view={view}
-          onSelect={setView}
           onClose={() => setSidebarOpen(false)}
           plans={plans}
           activePlanId={planId}

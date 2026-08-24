@@ -17,15 +17,27 @@ import { ConfigField, Field } from './fields';
  * free (docs/PLAN.md §6.1).
  */
 
-const INCOME_KINDS: EventKind[] = ['income', 'newJob', 'windfall', 'socialSecurity'];
-const COST_KINDS: EventKind[] = [
-  'buyAHome',
-  'haveAKid',
-  'annualExpense',
-  'otherExpense',
-  'careerBreak',
-  'retirement',
-];
+const INCOME_KINDS: EventKind[] = ['income', 'windfall', 'socialSecurity'];
+const COST_KINDS: EventKind[] = ['buyAHome', 'haveAKid'];
+
+type GroupId = 'work' | 'expense';
+
+// Kinds that share a real mechanic underneath (see kit.ts's IncomeSuppression,
+// and the two expense modules) but read as separate ideas when the picker
+// lists all eleven kinds flat. Folded behind one tile each so the first
+// decision is "what kind of thing", not "which of eleven cards".
+const COMPOUND_GROUPS: Record<GroupId, { title: string; blurb: string; kinds: EventKind[] }> = {
+  work: {
+    title: 'Work status change',
+    blurb: 'Starting a job, stepping back, or retiring — pick which.',
+    kinds: ['newJob', 'careerBreak', 'retirement'],
+  },
+  expense: {
+    title: 'Expense',
+    blurb: 'A cost that repeats every year, or one that happens once.',
+    kinds: ['annualExpense', 'otherExpense'],
+  },
+};
 
 interface Props {
   /** The event being edited, or null when picking a kind for a new one. */
@@ -60,6 +72,7 @@ export function EventDrawer({
   onDelete,
 }: Props) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [group, setGroup] = useState<GroupId | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -121,11 +134,31 @@ export function EventDrawer({
         </header>
 
         <div className="ns-drawer-body">
-          {!draft && (
+          {!draft && !group && (
             <>
               <p className="ns-drawer-hint">What would you like to add to the plan?</p>
               <KindGroup title="Income" kinds={INCOME_KINDS} onPick={onPickKind} />
-              <KindGroup title="Costs & transitions" kinds={COST_KINDS} onPick={onPickKind} />
+              <CompoundKindGroup id="work" onOpen={() => setGroup('work')} />
+              <KindGroup title="Costs & milestones" kinds={COST_KINDS} onPick={onPickKind} />
+              <CompoundKindGroup id="expense" onOpen={() => setGroup('expense')} />
+            </>
+          )}
+
+          {!draft && group && (
+            <>
+              <button
+                type="button"
+                className="ns-btn-ghost ns-kind-back"
+                onClick={() => setGroup(null)}
+              >
+                ← Back
+              </button>
+              <p className="ns-drawer-hint">{COMPOUND_GROUPS[group].blurb}</p>
+              <KindGroup
+                title={COMPOUND_GROUPS[group].title}
+                kinds={COMPOUND_GROUPS[group].kinds}
+                onPick={onPickKind}
+              />
             </>
           )}
 
@@ -320,6 +353,32 @@ function IncomeRetention({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** A tile that opens onto a sub-picker instead of adding an event directly —
+    the entry point for a `COMPOUND_GROUPS` bucket. */
+function CompoundKindGroup({ id, onOpen }: { id: GroupId; onOpen(): void }) {
+  const def = COMPOUND_GROUPS[id];
+  return (
+    <div className="ns-kind-group">
+      <div className="ns-kind-title">{def.title}</div>
+      <div className="ns-kind-grid">
+        <button type="button" className="ns-kind ns-kind-compound" onClick={onOpen}>
+          <span className="ns-kind-compound-codes">
+            {def.kinds.map((kind) => (
+              <span key={kind} className={`ns-code ns-code-${toneFor(kind)}`}>
+                {codeFor(kind)}
+              </span>
+            ))}
+          </span>
+          <span className="ns-kind-compound-label">
+            {def.kinds.length} kinds
+            <span className="ns-kind-compound-arrow">→</span>
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

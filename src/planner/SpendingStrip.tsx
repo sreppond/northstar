@@ -28,32 +28,52 @@ export function SpendingStrip({ plan, result }: { plan: Plan; result: PlanResult
     [plan, baseline],
   );
 
+  const less = tiles.filter((t) => t.delta < 0);
+  const current = tiles.find((t) => t.delta === 0)!;
+  const more = tiles.filter((t) => t.delta > 0);
+
   return (
     <div className="ns-spending-strip">
       <div className="ns-spending-strip-label">If monthly spending changed</div>
+      {/* Two zones either side of "Current" rather than one flat row of
+          five — five same-weight tiles reads as a list to scan, two pairs
+          either side of an anchor reads as "less ← here → more". */}
       <div className="ns-spending-tiles">
-        {tiles.map(({ delta, yearsDelta }) => (
-          <div
-            key={delta}
-            className={
-              'ns-spending-tile' +
-              (delta === 0 ? ' ns-spending-tile-current' : '') +
-              (yearsDelta > 0 ? ' ns-spending-tile-up' : yearsDelta < 0 ? ' ns-spending-tile-down' : '')
-            }
-          >
-            <div className="ns-spending-tile-delta">
-              {delta === 0 ? 'Current' : `${delta > 0 ? '+' : '-'}${roundMoney(Math.abs(delta))}/mo`}
-            </div>
-            {delta !== 0 && (
-              <div className="ns-spending-tile-runway">
-                {yearsDelta === 0
-                  ? 'no change in horizon'
-                  : `${yearsDelta > 0 ? '+' : ''}${yearsDelta} yr${Math.abs(yearsDelta) === 1 ? '' : 's'}`}
-              </div>
-            )}
-          </div>
-        ))}
+        <div className="ns-spending-zone">
+          {less.map((t) => (
+            <SpendingTile key={t.delta} {...t} />
+          ))}
+        </div>
+        <SpendingTile {...current} />
+        <div className="ns-spending-zone">
+          {more.map((t) => (
+            <SpendingTile key={t.delta} {...t} />
+          ))}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function SpendingTile({ delta, yearsDelta }: { delta: number; yearsDelta: number }) {
+  return (
+    <div
+      className={
+        'ns-spending-tile' +
+        (delta === 0 ? ' ns-spending-tile-current' : '') +
+        (yearsDelta > 0 ? ' ns-spending-tile-up' : yearsDelta < 0 ? ' ns-spending-tile-down' : '')
+      }
+    >
+      <div className="ns-spending-tile-delta">
+        {delta === 0 ? 'Current' : `${delta > 0 ? '+' : '-'}${roundMoney(Math.abs(delta))}/mo`}
+      </div>
+      {delta !== 0 && (
+        <div className="ns-spending-tile-runway">
+          {yearsDelta === 0
+            ? 'no change in horizon'
+            : `${yearsDelta > 0 ? '+' : ''}${yearsDelta} yr${Math.abs(yearsDelta) === 1 ? '' : 's'}`}
+        </div>
+      )}
     </div>
   );
 }

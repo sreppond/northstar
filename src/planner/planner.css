@@ -103,10 +103,13 @@
   --chart-lift: #0b1d2e;
   --inverse: #0b1d2e;
   --on-inverse: #ffffff;
-  --danger-btn: #c0392b;
+  --danger-btn: #b8283f;
 
-  /* -- status. Reserved: never reused as a series colour. -- */
-  --danger: #c0392b;
+  /* -- status. A crimson, not the --out orange rotated darker — destructive
+     actions and "this is an expense" need to read as two different signals,
+     not the same hue at two lightnesses. Reserved: never reused as a series
+     colour. -- */
+  --danger: #b8283f;
   --green: var(--in);
   --green-tint: var(--in-tint);
 
@@ -257,11 +260,11 @@
     --chart-lift: #000000;
   --inverse: #e8eef3;
   --on-inverse: #0a0f15;
-  --danger-btn: #a8332a;
+  --danger-btn: #c23f5f;
     --inverse: #e8eef3;
     --on-inverse: #0a0f15;
-    --danger-btn: #a8332a;
-    --danger: #e66767;
+    --danger-btn: #c23f5f;
+    --danger: #e0496c;
 
     --sh: 0 0 0;
     --sh-k: 2.6;
@@ -317,7 +320,7 @@
 
   --cmp: #9085e9;
   --chart-lift: #000000;
-  --danger: #e66767;
+  --danger: #e0496c;
 
   --sh: 0 0 0;
   --sh-k: 2.6;
@@ -542,16 +545,41 @@
   border-color: var(--border);
 }
 
+/* Doubles as the plan switcher: naming the active plan is also the
+   affordance for changing it, so there's one control for "which plan" and
+   nothing to hunt for in the drawer. */
 .ns-badge {
+  font: inherit;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
   background-color: var(--chip);
+  border: 0;
   border-radius: 999px;
   padding: 4px 10px;
   box-shadow: inset 0 1px 0 var(--jelly-lit);
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 140ms var(--ease-soft), background-color 140ms var(--ease-soft);
+}
+.ns-badge:hover {
+  color: var(--ink);
+  background-color: var(--tint-row);
+}
+
+/* Compact rider on `.ns-segmented`/`.ns-tab` so the four-view switcher fits
+   the header pill instead of the full card tab bar. */
+.ns-view-switch {
+  padding: 3px;
+}
+.ns-view-switch .ns-tab {
+  font-size: 13px;
+  padding: 6px 14px;
 }
 
 .ns-main {
@@ -845,9 +873,19 @@
   margin-bottom: 10px;
 }
 
+/* Three zones — less / current / more — not five equal-weight tiles in a
+   row: the wider gaps either side of "Current" are what let it read as an
+   anchor with two directions, rather than a list of five numbers. */
 .ns-spending-tiles {
   display: flex;
   flex-wrap: wrap;
+  align-items: stretch;
+  gap: 18px;
+}
+
+.ns-spending-zone {
+  display: flex;
+  flex: 1 1 260px;
   gap: 8px;
 }
 
@@ -859,6 +897,7 @@
   padding: 10px 14px;
 }
 .ns-spending-tile-current {
+  flex: 0 1 110px;
   background: var(--chip);
 }
 
@@ -1780,6 +1819,32 @@
   box-shadow: var(--jelly-press);
 }
 
+/* A compound tile stands in for a whole `COMPOUND_GROUPS` bucket, so it
+   spans the grid instead of sitting one-of-two beside a lonely gap. */
+.ns-kind-compound {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+}
+.ns-kind-compound-codes {
+  display: flex;
+  gap: 4px;
+}
+.ns-kind-compound-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--muted);
+  font-weight: 500;
+}
+.ns-kind-compound-arrow {
+  color: var(--muted);
+}
+
+.ns-kind-back {
+  margin-bottom: 4px;
+}
+
 /* fields */
 .ns-field {
   display: flex;
@@ -2483,6 +2548,46 @@
   margin-left: 0;
 }
 
+/* --- compare diff — "two lines on a chart" turned into an answer ---------- */
+
+.ns-compare-diff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 14px 24px;
+  background: var(--surface-sub);
+  border-bottom: 1px solid var(--rule);
+}
+
+.ns-compare-diff-col {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.ns-compare-diff-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+  margin-bottom: 6px;
+}
+
+.ns-compare-diff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.ns-compare-diff-outcome-label {
+  color: var(--muted);
+}
+
 .ns-person + .ns-person {
   padding-top: 12px;
   border-top: 1px solid var(--rule-light);
@@ -2633,6 +2738,21 @@
   }
   .ns-wordmark {
     font-size: 19px;
+  }
+
+  /* The switcher gets its own full-width row rather than squeezing onto the
+     wordmark/badge/theme row and wrapping mid-label — `.ns-head` is already
+     `flex-wrap: wrap` above 640px, so a flex-basis: 100% item is enough to
+     push it down without touching the header's markup order. */
+  .ns-view-switch {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: stretch;
+  }
+  .ns-view-switch .ns-tab {
+    flex: 1;
+    padding: 7px 4px;
+    font-size: 12.5px;
   }
 
   .ns-card {
@@ -2857,29 +2977,8 @@
 }
 
 /* ---------------------------------------------------------------------------
- * HAMBURGER NAV — the view switcher (net worth / retirement / house / SEPP)
+ * PLANS DRAWER — scenario management (view switching lives in the header)
  * ------------------------------------------------------------------------- */
-
-.ns-hamburger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--ink);
-  cursor: pointer;
-  flex: none;
-  transition: background 140ms var(--ease-soft), transform 140ms var(--ease-soft);
-}
-.ns-hamburger:hover {
-  background: var(--tint-row);
-}
-.ns-hamburger:active {
-  transform: scale(0.94);
-}
 
 .ns-sidebar {
   position: fixed;

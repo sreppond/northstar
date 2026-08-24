@@ -54,7 +54,7 @@ export type OtherExpenseConfig = z.infer<typeof otherExpenseConfig>;
 export const otherExpense: EventModule<OtherExpenseConfig> = {
   kind: 'otherExpense',
   label: 'One-time expense',
-  code: 'EXP',
+  code: 'ONE',
   schema: otherExpenseConfig,
   defaults: () => ({ amount: 10_000 }),
 
