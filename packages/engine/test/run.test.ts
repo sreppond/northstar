@@ -35,6 +35,23 @@ describe('runPlan — growth', () => {
     expect(closes[2]).toBeCloseTo(133_100, 6);
   });
 
+  it('does not grow a contribution in the year it is made', () => {
+    // A contribution made during year Y earns growth only from Y+1
+    // (docs/PLAN.md §4.3) — growth applies to the balance the account
+    // opened the year with, not the balance after this year's surplus lands.
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1, baselineIncome: 144_000, baselineExpenses: 100_000 } as never,
+        accounts: [asset({ id: 'b', name: 'Brokerage', initialBalance: 100_000, growthRate: 5 })],
+        rules: [rule('b', 'allocation', 1)],
+      }),
+    );
+    const [brokerage] = result.years[0].accounts;
+    expect(brokerage.contributions).toBeCloseTo(44_000, 6);
+    expect(brokerage.growth).toBeCloseTo(5_000, 6); // 5% of the $100k opening balance only
+    expect(brokerage.close).toBeCloseTo(149_000, 6); // 100k opening + 44k contribution + 5k growth
+  });
+
   it('holds a noChange account flat', () => {
     const result = runPlan(
       plan({

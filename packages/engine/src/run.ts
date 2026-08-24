@@ -452,13 +452,16 @@ export function runPlan(plan: Plan): PlanResult {
 
       const contributions = contributionsByAccount.get(account.id) ?? 0;
       const withdrawals = withdrawalsByAccount.get(account.id) ?? 0;
-      // The waterfall already debited withdrawals from the live balance.
-      const beforeGrowth = (balances.get(account.id) ?? 0) + contributions;
+      // The waterfall already debited withdrawals from the live balance, so
+      // this is the opening balance net of anything drawn out. Contributions
+      // are deliberately excluded from the growth base: a contribution made
+      // during year Y earns growth only from year Y+1 (docs/PLAN.md §4.3).
+      const growthBase = balances.get(account.id) ?? 0;
       const rate = closed.has(account.id) ? 0 : growthRateFor(account, year) / 100;
       // A partial `startYear` only has `yearFraction` of the year left to
       // compound (docs/PLAN.md §4.3) — full years elsewhere leave this at 1.
-      const growth = beforeGrowth * rate * yearFraction;
-      const close = beforeGrowth + growth;
+      const growth = growthBase * rate * yearFraction;
+      const close = growthBase + contributions + growth;
 
       balances.set(account.id, close);
 

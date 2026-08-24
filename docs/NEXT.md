@@ -3,6 +3,37 @@
 Working state as of the last session. Everything below is committed and pushed
 to `main`. `npm install && npm run dev` → http://localhost:3000.
 
+## Since this was last written
+
+This file predates several merges and stayed stale through them. Corrections:
+
+- **Phase 2 (backend) is done**, not "next up" — see the "Phase 2 is done —
+  there is a server" section below. It landed in `dea35cb` / `169d0ea`.
+- **A math audit landed on top of it**: partial-year proration
+  (`packages/engine/src/partialYear.ts`) now scales income, expenses *and*
+  rate-based accrual by the fraction of the first year still ahead — a
+  superset of the "STUB year" idea below, which only scaled accrual. Also new:
+  cost-basis annuity taxation (`nonTaxableBase`), SEPP (72(t)) forecasting,
+  and view navigation — a hamburger menu switching between Net Worth /
+  Retirement / House / SEPP forecasts (`src/planner/views/`).
+- **A real, separate bug just got fixed**: growth was computed on the
+  balance *including* this year's contributions, so a contribution earned a
+  full year of return the moment it landed — contradicting the engine's own
+  documented rule ("Decisions taken" below, and `PLAN.md` §4.3) that a
+  contribution made in year Y earns growth only from Y+1. `run.ts` now
+  computes growth on the opening balance net of withdrawals and adds
+  contributions after; `PLAN.md` §4.3's bullet, which self-contradicted
+  ("closing balance" vs. "earns growth only from Y+1"), now says "opening
+  balance" and explains why. Pinned by a new test in `run.test.ts` that
+  mixes a live growth rate with an in-year contribution — every prior growth
+  test but one ran at `noChange`, so this exact interaction was never
+  exercised.
+- **[`docs/BORROW.md`](./BORROW.md) is new**: a read of a competitor's
+  product (FIREMaster) against what Northstar already is, and what's worth
+  building as a result. Ideation, nothing built yet. Its own sequencing (§10)
+  puts RMD forcing first — "it's a hole, it changes numbers" — the same
+  category of bug as the growth-timing fix above.
+
 ## The redesign is underway
 
 [`docs/DESIGN-DIRECTION.md`](./DESIGN-DIRECTION.md) is the audit and the plan:
