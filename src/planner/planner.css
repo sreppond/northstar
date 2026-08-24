@@ -3295,6 +3295,91 @@
   display: inline-block;
 }
 
+/* --- House lens: one card per home, three stages (docs/REDESIGN.md §4.3) - */
+
+.ns-house-card {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+.ns-house-card:first-child {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: 0;
+}
+.ns-house-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.ns-goal-ring-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 14px 0;
+}
+.ns-goal-ring {
+  flex-shrink: 0;
+}
+.ns-goal-ring-pct {
+  font-size: 15px;
+  font-weight: 700;
+  fill: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.ns-goal-ring-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ns-goal-ring-headline {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ns-goal-ring-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* A stage with nothing to show yet (no goal set, purchase past the horizon)
+   — dashed border matches the sidebar's own "not set up yet" affordance. */
+.ns-goal-empty {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-sub);
+  border: 1px dashed var(--border-strong);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* The honest-cost sentence: chrome stays neutral (§5.2), only the reading
+   itself carries colour (§5.1) — net-worth blue's "in" / "out" pair reused
+   for "buying leaves you ahead" / "buying costs you", never a new hue. */
+.ns-house-cost {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-sub);
+  border: 1px solid var(--rule);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+.ns-house-cost-down {
+  color: var(--out-deep);
+}
+.ns-house-cost-up {
+  color: var(--in-deep);
+}
+.ns-house-cost-neutral {
+  color: var(--ink);
+}
+
 .ns-sepp-disclaimer {
   margin-top: 14px;
   padding: 12px 14px;
