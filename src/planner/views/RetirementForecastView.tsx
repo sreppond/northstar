@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Plan, PlanResult } from '@northstar/engine';
 import { detailMoney, percent } from '../format';
+import { AnimatedFigure } from '../AnimatedFigure';
 import { ChartLegend, MiniChart } from './MiniChart';
 
 const PORTFOLIO_CLASSES = new Set([
@@ -111,7 +112,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   return (
     <div className="ns-stat">
       <div className="ns-stat-label">{label}</div>
-      <div className="ns-stat-value">{value}</div>
+      <AnimatedFigure className="ns-stat-value" value={value} />
       {note && <div className="ns-stat-note">{note}</div>}
     </div>
   );

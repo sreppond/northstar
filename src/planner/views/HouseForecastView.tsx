@@ -1,5 +1,6 @@
 import type { Plan, PlanResult } from '@northstar/engine';
 import { detailMoney } from '../format';
+import { AnimatedFigure } from '../AnimatedFigure';
 import { ChartLegend, MiniChart } from './MiniChart';
 
 export function HouseForecastView({ plan, result }: { plan: Plan; result: PlanResult }) {
@@ -76,7 +77,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   return (
     <div className="ns-stat">
       <div className="ns-stat-label">{label}</div>
-      <div className="ns-stat-value">{value}</div>
+      <AnimatedFigure className="ns-stat-value" value={value} />
       {note && <div className="ns-stat-note">{note}</div>}
     </div>
   );

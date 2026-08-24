@@ -357,7 +357,7 @@
 
 .ns-btn,
 .ns-btn-ghost,
-.ns-scenario,
+.ns-plan-row-select,
 .ns-tab,
 .ns-kind,
 .ns-pin,
@@ -375,7 +375,7 @@
 
 /* Buoyant on hover. */
 .ns-btn:hover:not(:disabled),
-.ns-scenario:hover,
+.ns-plan-row-select:hover,
 .ns-kind:hover,
 .ns-pin:hover,
 .ns-bar:hover {
@@ -386,7 +386,7 @@
    hover rules at equal specificity so a press beats a hover. */
 .ns-btn:active:not(:disabled),
 .ns-btn-ghost:active,
-.ns-scenario:active,
+.ns-plan-row-select:active,
 .ns-tab:active,
 .ns-kind:active,
 .ns-pin:active {
@@ -486,13 +486,26 @@
 
 /* --- page frame ---------------------------------------------------------- */
 
+/* Floats over the page rather than sitting in flow, pinned to the top-left
+   corner — a compact pill, not a full-width bar, so it reads as a control
+   cluster rather than a masthead. `.ns-main` carries matching top padding
+   so page content clears it. */
 .ns-head {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 34px 16px;
-  max-width: 1320px;
-  margin: 0 auto;
+  width: max-content;
+  max-width: calc(100vw - 40px);
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--jelly-rise-hi), 0 12px 32px -16px rgb(var(--sh) / calc(24% * var(--sh-k)));
+  backdrop-filter: blur(16px) saturate(1.1);
 }
 
 .ns-wordmark {
@@ -544,7 +557,7 @@
 .ns-main {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 0 34px;
+  padding: 88px 34px 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -564,50 +577,6 @@
 }
 
 /* --- controls ------------------------------------------------------------ */
-
-.ns-scenarios {
-  display: flex;
-  gap: 8px;
-  margin-left: 10px;
-}
-
-.ns-scenario {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 16px;
-  cursor: pointer;
-}
-.ns-scenario:hover {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--jelly-rise);
-}
-.ns-scenario .ns-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--pill-border);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(0.5 * var(--lit-k)));
-  transition: background-color 160ms var(--ease-soft);
-}
-.ns-scenario[aria-pressed='true'] {
-  color: var(--ink-deep);
-  background: var(--surface);
-  border-color: var(--pill-border);
-  box-shadow: var(--jelly-rise);
-  animation: ns-squish var(--t-settle) var(--ease-soft);
-}
-.ns-scenario[aria-pressed='true'] .ns-dot {
-  background: var(--ink);
-}
 
 .ns-btn {
   font: inherit;
@@ -783,6 +752,27 @@
   line-height: 1.02;
   letter-spacing: -0.032em;
   color: var(--ink-deep);
+}
+
+/* Each character replays this on mount — remounted by AnimatedFigure via a
+   changing `key` whenever the formatted string actually changes, not on
+   every re-render. A per-character delay (set inline) turns it into a roll
+   rather than a single flat fade. */
+.ns-figure-char {
+  display: inline-block;
+  animation: ns-figure-in 420ms var(--ease-soft) both;
+}
+@keyframes ns-figure-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.14em);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
 
 .ns-hero-read {
@@ -1900,7 +1890,7 @@
   }
   .ns-btn,
   .ns-btn-ghost,
-  .ns-scenario,
+  .ns-plan-row-select,
   .ns-tab,
   .ns-kind,
   .ns-pin,
@@ -2341,26 +2331,10 @@
   opacity: 0.78;
 }
 
-/* --- scenario bar -------------------------------------------------------- */
-
-.ns-scenario-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
-.ns-scenario-new {
-  border-style: dashed;
-  color: var(--muted);
-}
-.ns-scenario-new:hover {
-  border-style: solid;
-  border-color: var(--accent-line);
-  color: var(--accent);
-}
+/* --- sidebar plan row ----------------------------------------------------- */
 
 .ns-scenario-more {
-  margin-left: 2px;
-  margin-right: -6px;
+  flex: none;
   width: 20px;
   height: 20px;
   display: inline-flex;
@@ -2535,10 +2509,6 @@
     flex-wrap: wrap;
     gap: 10px;
   }
-  .ns-scenarios {
-    margin-left: 0;
-    flex-wrap: wrap;
-  }
 
   .ns-title-row {
     flex-wrap: wrap;
@@ -2596,21 +2566,18 @@
 }
 
 @media (max-width: 640px) {
-  .ns-head,
+  .ns-head {
+    top: 12px;
+    left: 12px;
+    max-width: calc(100vw - 24px);
+    padding: 8px 12px;
+  }
   .ns-main {
     padding-left: 12px;
     padding-right: 12px;
   }
   .ns-wordmark {
     font-size: 19px;
-  }
-  /* The scenario bar wraps to full width here, which would strand the theme
-     control alone on a row of its own. It joins the wordmark instead. */
-  .ns-head {
-    flex-wrap: wrap;
-  }
-  .ns-theme {
-    order: -1;
   }
 
   .ns-card {
@@ -2933,6 +2900,73 @@
   line-height: 1.4;
 }
 
+.ns-sidebar-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 14px 20px 4px;
+}
+.ns-sidebar-section-label:first-of-type {
+  padding-top: 10px;
+}
+
+/* A plan row packs a select-button and a "…" menu trigger side by side,
+   overriding the name-over-blurb column layout every other sidebar item
+   uses. */
+.ns-plan-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  position: relative;
+}
+.ns-plan-row-select {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.ns-plan-row-select .ns-sidebar-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-plan-row-select[aria-current='true'] .ns-sidebar-item-name {
+  color: var(--ink-deep);
+}
+
+.ns-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--pill-border);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(0.5 * var(--lit-k)));
+  transition: background-color 160ms var(--ease-soft);
+}
+.ns-plan-row-select[aria-current='true'] .ns-dot {
+  background: var(--ink);
+}
+
+.ns-sidebar-item-new {
+  color: var(--muted);
+  border-style: dashed;
+}
+.ns-sidebar-item-new:hover {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
 /* ---------------------------------------------------------------------------
  * FOCUSED FORECAST VIEWS — Retirement, House, SEPP
  * ------------------------------------------------------------------------- */
@@ -2983,6 +3017,7 @@
   color: var(--muted-light);
 }
 .ns-stat-value {
+  display: block;
   font-size: 20px;
   font-weight: 700;
   color: var(--ink);

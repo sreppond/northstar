@@ -17,7 +17,7 @@ import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './planner/store/planStore';
 import { HoverCard } from './planner/HoverCard';
 import { planDetail } from './planner/detail';
-import { ScenarioBar } from './planner/ScenarioBar';
+import { AnimatedFigure } from './planner/AnimatedFigure';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { ImportDrawer } from './planner/drawer/ImportDrawer';
@@ -239,21 +239,7 @@ export default function App() {
       <header className="ns-head">
         <HamburgerButton onClick={() => setSidebarOpen(true)} />
         <div className="ns-wordmark">Forecasting</div>
-        <div className="ns-badge">Plan</div>
-        <ScenarioBar
-          plans={plans}
-          activeId={planId}
-          onSelect={(id) => {
-            setActive(id);
-            setSelected(null);
-            setWinStart(0);
-            editor.close();
-          }}
-          onCreate={() => createPlan(`Scenario ${plans.length + 1}`)}
-          onRename={renamePlan}
-          onDuplicate={duplicatePlan}
-          onDelete={deletePlan}
-        />
+        <div className="ns-badge">{stored.name}</div>
         <ThemeToggle />
       </header>
 
@@ -320,7 +306,7 @@ export default function App() {
           />
 
           <div className="ns-hero">
-            <div className="ns-hero-figure">{money(reading.figure)}</div>
+            <AnimatedFigure className="ns-hero-figure" value={money(reading.figure)} />
             <p className="ns-hero-read">{reading.read}</p>
 
             {/* Suppressed on a failing plan: a range around a number that
@@ -501,7 +487,23 @@ export default function App() {
       </main>
 
       {sidebarOpen && (
-        <Sidebar view={view} onSelect={setView} onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          view={view}
+          onSelect={setView}
+          onClose={() => setSidebarOpen(false)}
+          plans={plans}
+          activePlanId={planId}
+          onSelectPlan={(id) => {
+            setActive(id);
+            setSelected(null);
+            setWinStart(0);
+            editor.close();
+          }}
+          onCreatePlan={() => createPlan(`Scenario ${plans.length + 1}`)}
+          onRenamePlan={renamePlan}
+          onDuplicatePlan={duplicatePlan}
+          onDeletePlan={deletePlan}
+        />
       )}
 
       {monarch.connecting && (
