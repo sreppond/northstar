@@ -95,12 +95,48 @@ the parts worth not relearning:
   own balance), and **cash flow is off by default** — a salary modelled as an
   income event plus a baseline counts the same money twice.
 
-## Next: Phase 2 — the backend
+## Phase 2 is done — there is a server
 
-Phase 1 is done, so the next milestone is docs/PLAN.md §9 Phase 2: Postgres,
-tRPC and auth, with the plan stored as a JSONB document plus a version integer.
-The engine already runs identically on a server, so a shareable read-only link
-and PDF export come almost free once there is somewhere to put plans.
+`packages/server`: Fastify + SQLite, single user, holding plans and Monarch
+snapshots. [`docs/BACKEND.md`](./BACKEND.md) is the full account. What matters
+most:
+
+- **It runs on loopback by default and that is load-bearing.** The first-run
+  setup route is claimable by whoever reaches it first, so binding `0.0.0.0`
+  on an untrusted network hands over the account. Reach it remotely via
+  Tailscale or an SSH tunnel; do not widen the bind.
+- **`NORTHSTAR_ENCRYPTION_KEY` is required, never generated.** A key invented
+  at boot would change on restart and silently orphan the stored Monarch
+  session — presenting as an endless "reconnect" loop with nothing in the logs.
+- **Going direct to Monarch's GraphQL beats the MCP tool.** The real
+  `GetAccounts` returns `subtype`, `interestRate`, `apr`, `minimumPayment` and
+  `plannedPayment`; the MCP tool drops them all. `subtype` is what separates a
+  401(k) from a Roth from a taxable brokerage, so the live path classifies
+  automatically where the paste path must ask. This is also what finally gives
+  the `linked*` fields a real source — §9 Phase 3 expected to need Plaid for it.
+- **`queries.ts` is the file that will rot.** Monarch's API is private and
+  unversioned. A schema error means recapture the query from DevTools; nothing
+  else moves. Keep the paste path for exactly this reason.
+- **The server deviates from §9 deliberately** — SQLite not Postgres, typed REST
+  not tRPC, hand-rolled auth not Auth.js. One user on one machine. Rationale is
+  in BACKEND.md; do not "fix" these back.
+- **Refresh never writes to a plan.** It fetches, stores a snapshot, and opens
+  the same diff the paste flow shows. The user still confirms.
+- **Plans: localStorage first, server just behind, debounced 500ms.** The sync
+  is a whole-set replace, so a dropped request costs nothing. `PUT /api/plans`
+  refuses an empty array — the client sends its full list every time, so empty
+  means the client lost state, not that you deleted everything.
+- **Node cannot run this TypeScript directly.** The engine imports with `.js`
+  specifiers resolving to `.ts`, and strip-types rejects constructor parameter
+  properties. `packages/server/build.mjs` bundles with esbuild; that is why
+  there are no parameter properties in server code.
+
+Still open from Phase 2: a shareable read-only link and PDF export, both of
+which the engine can already do server-side.
+
+**Real vs forecast is the obvious next thing.** Every snapshot is kept and
+`GET /api/monarch/history` already returns captured date + net worth. Drawing
+that as a second line against the projection is mostly chart work.
 
 Still open, in rough priority order:
 
@@ -285,7 +321,14 @@ packages/engine/          pure TS projection engine (no React, no I/O)
   src/monarch.ts          Monarch snapshot -> plan balances (pure)
   examples/demo.ts        npx tsx examples/demo.ts → a worked 12-year projection
 docs/DESIGN-DIRECTION.md  the UI audit and the redesign plan
-docs/MONARCH-IMPORT.md    the Monarch capture/paste loop and why it is not live
+docs/MONARCH-IMPORT.md    the Monarch capture/paste loop
+docs/BACKEND.md           the server: security model, API, deviations from §9
+packages/server/          Fastify + SQLite, single user
+  src/monarch/queries.ts  the GraphQL documents — the bit most likely to rot
+  src/auth/crypto.ts      scrypt passwords, AES-256-GCM credential envelope
+  build.mjs               esbuild bundle (Node cannot run the TS directly)
+src/auth/AuthGate.tsx     setup / login / planner
+src/planner/DataBanner.tsx  the freshness line
 scripts/monarch-capture.mjs  raw MCP tool output -> a Northstar snapshot
 src/App.tsx               planner shell
 src/planner/              chart, tabs, tokens, presentation rules

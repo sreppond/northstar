@@ -300,9 +300,6 @@ export function runPlan(plan: Plan): PlanResult {
       }
     }
 
-    const paycheckContributions = sum(
-      contributionsThisYear.filter((c) => c.fromPaycheck).map((c) => c.amount),
-    );
     const pretaxContributions = sum(
       contributionsThisYear.filter((c) => c.fromPaycheck && c.pretax).map((c) => c.amount),
     );

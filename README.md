@@ -26,6 +26,22 @@ Then open http://localhost:3000.
 - `npm run preview` — preview the production build locally
 - `npm run lint` — TypeScript type-check (`tsc --noEmit`)
 
+## Running the full app (with the server)
+
+Northstar can run as a static bundle (localStorage, no backend) or with its
+own single-user server, which holds your plans and Monarch balances and can
+pull fresh ones on demand:
+
+```bash
+cp .env.example .env
+npm run generate-key          # paste the output into .env
+docker compose up -d          # → http://127.0.0.1:4000
+```
+
+The first page load asks you to set a password. See
+[`docs/BACKEND.md`](docs/BACKEND.md) for configuration, the security model, and
+the API.
+
 ## Monarch import
 
 Real balances can be read out of [Monarch Money][monarch] via
@@ -36,9 +52,13 @@ node scripts/monarch-capture.mjs accounts.json [cashflow.json] > snap.json
 ```
 
 An import writes balances and **nothing else**: every rate, tax assumption and
-withdrawal rule stays as you set it. It is a capture-and-paste rather than a
-live feed, for reasons that are structural rather than incidental — see
+withdrawal rule stays as you set it. See
 [`docs/MONARCH-IMPORT.md`](docs/MONARCH-IMPORT.md).
+
+With the server running you do not need the capture step at all — connect once
+and press Refresh. The server talks to Monarch's GraphQL API directly, which
+returns account subtypes and interest rates the MCP tool drops, so it classifies
+retirement accounts automatically instead of asking.
 
 [monarch]: https://www.monarchmoney.com
 [mcp]: https://github.com/robcerda/monarch-mcp-server
@@ -58,4 +78,6 @@ site is live at `https://sreppond.github.io/northstar/`.
 
 ## Stack
 
-React 19, TypeScript, Vite, Tailwind CSS v4, Recharts, Motion, Lucide icons.
+React 19, TypeScript, Vite, Zustand on the front end; Fastify, SQLite
+(better-sqlite3) and zod on the server; a dependency-free projection engine in
+`packages/engine`.

@@ -1,0 +1,21 @@
+services:
+  northstar:
+    build: .
+    restart: unless-stopped
+    ports:
+      # 127.0.0.1 on purpose. Binding 0.0.0.0 would put a login form holding
+      # every balance you own on the local network — and the first-run setup
+      # route is claimable by whoever reaches it first.
+      - "127.0.0.1:4000:4000"
+    environment:
+      # Required. Generate with: npm run generate-key
+      NORTHSTAR_ENCRYPTION_KEY: ${NORTHSTAR_ENCRYPTION_KEY:?set NORTHSTAR_ENCRYPTION_KEY in .env}
+      NORTHSTAR_STALENESS_DAYS: ${NORTHSTAR_STALENESS_DAYS:-7}
+      # Only set true behind real TLS. Over plain HTTP a Secure cookie is
+      # dropped by the browser and the symptom is a login that never sticks.
+      NORTHSTAR_SECURE_COOKIES: ${NORTHSTAR_SECURE_COOKIES:-false}
+    volumes:
+      - northstar-data:/data
+
+volumes:
+  northstar-data:

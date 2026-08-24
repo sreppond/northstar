@@ -8,12 +8,14 @@
   ],
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && npm run build --workspace @northstar/server",
     "build:pages": "vite build --mode gh-pages",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit && npm run lint --workspace @northstar/engine",
-    "test": "vitest run && npm run test --workspace @northstar/engine"
+    "lint": "tsc --noEmit && npm run lint --workspace @northstar/engine && npm run lint --workspace @northstar/server",
+    "test": "vitest run && npm run test --workspace @northstar/engine && npm run test --workspace @northstar/server",
+    "server": "npm run start --workspace @northstar/server",
+    "generate-key": "node scripts/generate-key.mjs"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

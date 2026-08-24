@@ -26,6 +26,12 @@ import { Toggle } from './fields';
  */
 interface Props {
   plan: Plan;
+  /**
+   * A snapshot the server already fetched from Monarch. When present the paste
+   * box is hidden — the user did not paste anything and showing them an empty
+   * box asking for JSON would be nonsense. The diff is the same either way.
+   */
+  fetched?: MonarchSnapshot | null;
   onImport(next: Plan, overrides: Record<string, AccountClass>): void;
   onCancel(): void;
 }
@@ -36,7 +42,7 @@ const CHOICE_LABELS: Record<string, string> = {
   taxFreeInvestment: 'Roth / tax-free',
 };
 
-export function ImportDrawer({ plan, onImport, onCancel }: Props) {
+export function ImportDrawer({ plan, fetched, onImport, onCancel }: Props) {
   const [text, setText] = useState('');
   const [answers, setAnswers] = useState<Record<string, AccountClass>>({});
   const [applyCashflow, setApplyCashflow] = useState(false);
@@ -50,6 +56,7 @@ export function ImportDrawer({ plan, onImport, onCancel }: Props) {
   }, [onCancel]);
 
   const parsed = useMemo((): { snapshot: MonarchSnapshot } | { error: string } | null => {
+    if (fetched) return { snapshot: fetched };
     if (!text.trim()) return null;
     try {
       return { snapshot: parseSnapshot(JSON.parse(text)) };
@@ -62,7 +69,7 @@ export function ImportDrawer({ plan, onImport, onCancel }: Props) {
           : describeZodError(e);
       return { error: message };
     }
-  }, [text]);
+  }, [text, fetched]);
 
   const snapshot = parsed && 'snapshot' in parsed ? parsed.snapshot : null;
 
@@ -103,20 +110,25 @@ export function ImportDrawer({ plan, onImport, onCancel }: Props) {
           <div className="ns-section">
             <div className="ns-section-title">Snapshot</div>
             <p className="ns-drawer-hint">
-              Paste a capture from the Monarch MCP server. Balances are read from it; every rate,
-              tax assumption and withdrawal rule in your plan is left exactly as you set it.
+              {fetched
+                ? 'Pulled from Monarch just now. Balances are read from it; every rate, tax assumption and withdrawal rule in your plan is left exactly as you set it.'
+                : 'Paste a capture from the Monarch MCP server. Balances are read from it; every rate, tax assumption and withdrawal rule in your plan is left exactly as you set it.'}
             </p>
-            <textarea
-              className="ns-input ns-import-paste"
-              rows={6}
-              spellCheck={false}
-              autoFocus
-              value={text}
-              placeholder='{ "capturedAt": "…", "accounts": [ … ] }'
-              onChange={(e) => setText(e.target.value)}
-              onPaste={() => setAnswers({})}
-            />
-            {parsed && 'error' in parsed && <p className="ns-import-error">{parsed.error}</p>}
+            {!fetched && (
+              <>
+                <textarea
+                  className="ns-input ns-import-paste"
+                  rows={6}
+                  spellCheck={false}
+                  autoFocus
+                  value={text}
+                  placeholder='{ "capturedAt": "…", "accounts": [ … ] }'
+                  onChange={(e) => setText(e.target.value)}
+                  onPaste={() => setAnswers({})}
+                />
+                {parsed && 'error' in parsed && <p className="ns-import-error">{parsed.error}</p>}
+              </>
+            )}
             {report && (
               <p className="ns-drawer-hint">
                 Captured {report.capturedAt} · net worth {money(report.netWorth)}
