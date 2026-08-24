@@ -1,4 +1,10 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { PathMarkers, Plan, PlanEvent, PlanResult } from "@northstar/engine";
 import { deflate, runPlan } from "@northstar/engine";
 import { codeFor, summarize, toneFor } from "./presentation";
@@ -6,6 +12,13 @@ import { eventDetail } from "./detail";
 import { HoverCard } from "./HoverCard";
 import type { Detail } from "./detail";
 import { axisMoney, money, signedMoney } from "./format";
+import {
+  clampYear,
+  quantiseYear,
+  rubberBandYear,
+  xForYear,
+  yearForClientX,
+} from "./chartMath";
 
 /**
  * Hand-rolled SVG rather than a chart library (docs/PLAN.md §3.2). The two
@@ -34,6 +47,19 @@ const LABEL_TOP = PLOT_TOP + 8;
 const LABEL_LANE_H = 20;
 const LABEL_GAP = 14;
 
+// Shared with chartMath.ts's screen<->year helpers, so the static line and
+// the live scrub/drag math can never disagree about where a year sits.
+const CHART_BOUNDS = { plotLeft: PLOT_LEFT, plotRight: PLOT_RIGHT, viewBoxWidth: VB_W };
+
+// Drag through time (docs/REDESIGN.md §4.1, design-direction move 5).
+/** Pointer movement, in screen px, before a press on a dot/label counts as a
+    drag rather than a click. Below this it's still ambiguous. */
+const DRAG_THRESHOLD_PX = 4;
+/** How long the post-release "landed" squish (see `.ns-event-just-landed` in
+    planner.css) stays applied — a touch longer than `--t-settle` (280ms) so
+    the CSS animation always finishes before the class comes off. */
+const LANDED_MS = 320;
+
 export interface ChartSelection {
   eventId: string;
   label: string;
@@ -46,6 +72,36 @@ export interface ChartSelection {
 export interface CompareSeries {
   name: string;
   result: PlanResult;
+}
+
+/**
+ * State for the one event currently being dragged through time. Local to
+ * this component — the PLAN-level live preview it drives (the ghost/live
+ * marks below are purely visual) flows up to App.tsx as a draft event via
+ * `onDragPreview`, the same `withDraft` mechanism a drawer edit already
+ * uses (see useEventEditor.ts). `originYear`/`ghostDot`/`ghostLabel` are all
+ * captured ONCE, from the geometry as it existed the instant the drag
+ * started, and never recomputed — that is what makes the ghost read as a
+ * fixed "here's where it was" rather than drifting as the reprojection
+ * moves the curve under it.
+ */
+interface DragState {
+  eventId: string;
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  originYear: number;
+  ghostDot: { x: number; y: number; tone: "income" | "cost" | "end" };
+  ghostLabel: { left: number; top: number; tone: "income" | "cost" | "end"; text: string } | null;
+  /** Continuous, rubber-banded past the plan's bounds — only ever used to
+      draw the live mark's x. Never written to the plan. */
+  liveYear: number;
+  /** Quantised + hard-clamped to the plan's bounds — what actually gets fed
+      into the live reprojection and, on release, committed. */
+  candidateYear: number;
+  /** False until the pointer has moved past `DRAG_THRESHOLD_PX` — before
+      that this is still ambiguous with a plain click. */
+  moved: boolean;
 }
 
 /**
@@ -76,6 +132,23 @@ interface Props {
   canFan: boolean;
   onToggleFan(): void;
   onSelect(selection: ChartSelection | null): void;
+  /** The year under the pointer while scrubbing, continuously, or `null`
+      when not pointing at the chart. `hoverYear` (below) stays chart-local
+      state for the in-chart tooltip/guide-line; this is that same value
+      reported upward so the hero figure and the ledger tables can follow
+      the scrub too (docs/REDESIGN.md §4.1). */
+  onScrubYear(year: number | null): void;
+  /** Fired on every pointer-move once a drag has actually started (past the
+      click-vs-drag threshold), with the dragged event's DRAFT — same id,
+      `startYear` moved to the candidate year — and with `null` when a drag
+      ends, committed or not. App.tsx feeds this through the same
+      `withDraft` a drawer edit already uses, for the live reprojection;
+      this component never touches the plan or the store directly. */
+  onDragPreview(draft: PlanEvent | null): void;
+  /** Fired exactly once, on release, only if the drag actually moved the
+      event — never on every pointer-move. The caller commits this with ONE
+      `upsertEvent` call, which is what makes one drag equal one undo entry. */
+  onDragCommit(eventId: string, year: number): void;
 }
 
 export function NetWorthChart({
@@ -89,15 +162,41 @@ export function NetWorthChart({
   canFan,
   onToggleFan,
   onSelect,
+  onScrubYear,
+  onDragPreview,
+  onDragCommit,
 }: Props) {
   const [hoverYear, setHoverYear] = useState<number | null>(null);
   const [hotEdge, setHotEdge] = useState<"low" | "high" | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
+  // Which event just landed from a drag, briefly — drives the one-shot
+  // release "squish" (see `.ns-event-just-landed` in planner.css) and
+  // nothing else; not read for any layout or interaction decision.
+  const [justLandedId, setJustLandedId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  // A click follows a real drag's pointerup practically for free (see the
+  // comment on `handleDragEnd`); this swallows that one click so releasing a
+  // drag never also toggles the chart's selection footer.
+  const suppressClickRef = useRef(false);
 
   // Kept separate from `build()` below so toggling the fan or a comparison
   // plan — both frequent — never re-triggers this: it is the one part of the
   // chart's geometry that cannot be found by just looking at `result`.
   const impactByEventId = useMemo(() => rankImpact(plan, result), [plan, result]);
 
+  // Deliberately NOT excluding the dragged event from the normal dot/label
+  // pass (an earlier version of this did, via a `build()` parameter — see
+  // the git history/report if curious why that got reverted): the REAL
+  // hit target / label button is what's holding pointer capture for the
+  // whole gesture, and removing it from the DOM mid-drag — which excluding
+  // it from `dots`/`labels` would do, since these come straight from a
+  // `.map()` over that array — silently releases capture the instant React
+  // unmounts it (per the Pointer Events spec, capture is released when its
+  // element leaves the document), orphaning the gesture with no pointerup
+  // ever reaching a handler that can commit or cancel it. Instead, the real
+  // element stays mounted and interactive throughout, just hidden with
+  // CSS (`.ns-event-hide-source`, opacity only, `pointer-events` untouched)
+  // once the drag has moved — see that class and the ghost/live marks below.
   const geometry = useMemo(
     () => build(result, plan.events, impactByEventId, compare, fan),
     [result, plan.events, impactByEventId, compare, fan],
@@ -108,6 +207,160 @@ export function NetWorthChart({
     hoverYear === null
       ? null
       : (result.years.find((y) => y.year === hoverYear) ?? null);
+
+  // --- scrub (docs/REDESIGN.md §4.1, design-direction move 4) --------------
+  // Screen -> year goes through the chart's OWN rendered box, not any fixed
+  // ratio, because `preserveAspectRatio="none"` (see `.ns-chart svg` in
+  // planner.css) stretches the svg non-uniformly to fill it.
+  const yearFromClientX = (clientX: number): number => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return result.startYear;
+    return yearForClientX(clientX, rect, CHART_BOUNDS, result.startYear, result.endYear);
+  };
+
+  const scrubTo = (clientX: number) => {
+    const year = clampYear(quantiseYear(yearFromClientX(clientX)), result.startYear, result.endYear);
+    setHoverYear(year);
+    onScrubYear(year);
+  };
+
+  const clearScrub = () => {
+    setHoverYear(null);
+    onScrubYear(null);
+  };
+
+  // Pointer capture on down is what makes this work on touch, which has no
+  // hover state at all — a press-and-slide is touch's whole answer to
+  // "point at a year." For a mouse, plain hover already delivers pointermove
+  // with no button held, so capture changes nothing there. Once an event
+  // drag has captured its OWN pointer (see `startDrag`), this element stops
+  // receiving events for that pointerId entirely — the `drag` guards below
+  // are therefore mostly defensive/self-documenting, not load-bearing.
+  const handleScrubDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (drag) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    scrubTo(e.clientX);
+  };
+  const handleScrubMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (drag) return;
+    scrubTo(e.clientX);
+  };
+  const handleScrubUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Already released.
+    }
+    // A mouse keeps hovering after the button comes up; touch has no such
+    // thing, so lifting the finger is the only "done pointing at this"
+    // signal it gets — the readout should go with it.
+    if (e.pointerType !== "mouse") clearScrub();
+  };
+  const handleScrubLeave = () => {
+    if (drag) return;
+    clearScrub();
+  };
+
+  // --- drag events through time (docs/REDESIGN.md §4.1, design-direction
+  // move 5) ------------------------------------------------------------
+  const startDrag = (e: ReactPointerEvent<HTMLElement>, eventId: string) => {
+    const dot = geometry.dots.find((p) => p.eventId === eventId);
+    if (!dot) return;
+    const label = geometry.labels.find((l) => l.eventId === eventId) ?? null;
+
+    e.currentTarget.setPointerCapture(e.pointerId);
+    // A stale scrub readout hanging around while the user's attention is on
+    // a dragged dot elsewhere reads as a bug, not a feature.
+    clearScrub();
+
+    setDrag({
+      eventId,
+      pointerId: e.pointerId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      originYear: dot.event.startYear,
+      ghostDot: { x: dot.x, y: dot.y, tone: dot.tone },
+      ghostLabel: label && { left: label.left, top: label.top, tone: label.tone, text: label.text },
+      liveYear: dot.event.startYear,
+      candidateYear: dot.event.startYear,
+      moved: false,
+    });
+  };
+
+  const handleDragMove = (e: ReactPointerEvent<HTMLElement>) => {
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const dx = e.clientX - drag.startClientX;
+    const dy = e.clientY - drag.startClientY;
+    if (!drag.moved && Math.hypot(dx, dy) <= DRAG_THRESHOLD_PX) return; // still ambiguous with a click
+
+    const rawYear = yearFromClientX(e.clientX);
+    const candidateYear = clampYear(quantiseYear(rawYear), result.startYear, result.endYear);
+    const liveYear = rubberBandYear(rawYear, result.startYear, result.endYear);
+    const yearChanged = !drag.moved || candidateYear !== drag.candidateYear;
+
+    setDrag({ ...drag, moved: true, liveYear, candidateYear });
+
+    // The rubber-banded `liveYear` still updates every frame either way (for
+    // 1:1 visual tracking); the comparatively expensive full-plan
+    // reprojection only needs to re-run when the whole-year candidate
+    // actually changes.
+    if (yearChanged) {
+      const original = plan.events.find((ev) => ev.id === drag.eventId);
+      if (original) onDragPreview({ ...original, startYear: candidateYear });
+    }
+  };
+
+  const releaseCapture = (e: ReactPointerEvent<HTMLElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Already released.
+    }
+  };
+
+  const handleDragEnd = (e: ReactPointerEvent<HTMLElement>) => {
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    releaseCapture(e);
+
+    if (drag.moved) {
+      onDragCommit(drag.eventId, drag.candidateYear);
+      onDragPreview(null);
+
+      setJustLandedId(drag.eventId);
+      const landedId = drag.eventId;
+      window.setTimeout(() => setJustLandedId((id) => (id === landedId ? null : id)), LANDED_MS);
+
+      // The click a pointerup produces after a real drag needs to be
+      // swallowed — see the onClick handlers below. Cleared on the next
+      // tick: `click` fires synchronously right after `pointerup`, before
+      // this timeout ever runs, so the flag is still `true` when it matters.
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
+    setDrag(null);
+  };
+
+  const handleDragCancel = (e: ReactPointerEvent<HTMLElement>) => {
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    releaseCapture(e);
+    if (drag.moved) onDragPreview(null);
+    setDrag(null);
+  };
+
+  // Escape reverts without committing — the only other way out besides a
+  // normal release.
+  useEffect(() => {
+    if (!drag) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (drag.moved) onDragPreview(null);
+      setDrag(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drag, onDragPreview]);
 
   return (
     <>
@@ -191,8 +444,9 @@ export function NetWorthChart({
           the dots collide and the axis labels clip. Below ~700px it keeps its
           proportions and scrolls sideways instead, like the tables. */}
       <div className="ns-chart-scroll">
-        <div className="ns-chart" onMouseLeave={() => setHoverYear(null)}>
+        <div className="ns-chart">
           <svg
+            ref={svgRef}
             viewBox={`0 0 ${VB_W} ${VB_H}`}
             preserveAspectRatio="none"
             role="img"
@@ -371,19 +625,21 @@ export function NetWorthChart({
               </div>
             ))}
 
-            {/* Hit bands come FIRST so the dots and labels stack above them.
-              Rendered after, they cover everything and swallow every click. */}
-            {geometry.bands.map((band) => (
-              <div
-                key={band.year}
-                className="ns-hit"
-                style={{
-                  left: pct(band.left, VB_W),
-                  width: `${(band.width / VB_W) * 100}%`,
-                }}
-                onMouseEnter={() => setHoverYear(band.year)}
-              />
-            ))}
+            {/* One pointer-capture surface spans the whole plot, replacing
+                the old per-year hover bands with continuous 1:1 scrubbing
+                (docs/REDESIGN.md §4.1, design-direction move 4) — see the
+                handlers above. Rendered FIRST, same reason the old bands
+                were: so the dots and labels stack above it and can still
+                claim their own pointerdown to start a drag rather than a
+                scrub. */}
+            <div
+              className="ns-scrub-surface"
+              onPointerDown={handleScrubDown}
+              onPointerMove={handleScrubMove}
+              onPointerUp={handleScrubUp}
+              onPointerCancel={handleScrubUp}
+              onPointerLeave={handleScrubLeave}
+            />
 
             {/* Every included event gets a dot on the curve at its own year —
                 not a detached row above the plot. Hue is the only thing this
@@ -392,14 +648,85 @@ export function NetWorthChart({
                 busy line and area fill (docs/REDESIGN.md §4.1). HTML, not
                 svg, and purely decorative (the hit target and, for a
                 labelled event, the label button underneath and on top of it
-                respectively are what actually respond to a pointer). */}
+                respectively are what actually respond to a pointer).
+                The event currently being dragged stays in this list — its
+                node is what's holding pointer capture for the whole gesture,
+                and removing it from the DOM mid-drag would silently drop
+                that capture (see the long comment on `geometry` above). It's
+                just visually hidden (opacity, not `display`/unmount) while
+                its ghost + live mark below stand in for it. */}
             {geometry.dots.map((d) => (
               <div
                 key={`dot-${d.eventId}`}
-                className={`ns-event-dot-mark ns-event-dot-${d.tone}`}
+                className={`ns-event-dot-mark ns-event-dot-${d.tone}${
+                  justLandedId === d.eventId ? " ns-event-just-landed" : ""
+                }${drag?.moved && drag.eventId === d.eventId ? " ns-event-hide-source" : ""}`}
                 style={{ left: pct(d.x, VB_W), top: pct(d.y, VB_H) }}
               />
             ))}
+
+            {/* The drag ghost + live mark (docs/REDESIGN.md §4.1,
+                design-direction move 5). The ghost is frozen at the pixel
+                position `startDrag` captured the instant the drag began, so
+                it reads as a fixed "here's where it was" rather than
+                drifting as the live reprojection moves the curve under it.
+                The live mark's x tracks the pointer continuously (including
+                the rubber-banded creep past either bound); its y snaps onto
+                the (live-reprojecting) curve's own value at the candidate
+                year — every dot in this chart sits ON the curve, and a mark
+                free-floating at the raw pointer y would read as a bug, not
+                direct manipulation. Both are decorative HTML overlays, same
+                as the normal dots — the drag itself is still owned by the
+                pointer-captured hit target/label button below. */}
+            {drag?.moved && (
+              <>
+                <div
+                  className={`ns-event-dot-mark ns-event-dot-${drag.ghostDot.tone} ns-event-dot-ghost`}
+                  style={{ left: pct(drag.ghostDot.x, VB_W), top: pct(drag.ghostDot.y, VB_H) }}
+                />
+                {drag.ghostLabel && (
+                  <div
+                    className="ns-event-label-slot ns-event-label-slot-ghost"
+                    style={{ left: pct(drag.ghostLabel.left, VB_W), top: pct(drag.ghostLabel.top, VB_H) }}
+                  >
+                    <span className={`ns-event-label ns-event-label-${drag.ghostLabel.tone} ns-event-label-ghost`}>
+                      {drag.ghostLabel.text}
+                    </span>
+                  </div>
+                )}
+
+                <div
+                  className={`ns-event-dot-mark ns-event-dot-${drag.ghostDot.tone} ns-event-dot-live`}
+                  style={{
+                    left: pct(geometry.xFor(drag.liveYear), VB_W),
+                    top: pct(geometry.pointByYear.get(drag.candidateYear)?.y ?? drag.ghostDot.y, VB_H),
+                  }}
+                />
+                {drag.ghostLabel && (
+                  // Doesn't run the static lane-packing collision pass
+                  // `build()` uses for standing labels — a one-off transient
+                  // overlay the user is actively holding doesn't need to
+                  // dodge the others the way a permanent layout does, so it
+                  // just floats centred above the live dot.
+                  <div
+                    className="ns-event-label-slot ns-event-label-slot-live"
+                    style={{
+                      left: pct(geometry.xFor(drag.liveYear), VB_W),
+                      top: pct(
+                        (geometry.pointByYear.get(drag.candidateYear)?.y ?? drag.ghostDot.y) - 26,
+                        VB_H,
+                      ),
+                    }}
+                  >
+                    <span
+                      className={`ns-event-label ns-event-label-${drag.ghostLabel.tone} ns-event-label-live`}
+                    >
+                      {drag.ghostLabel.text}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Endpoint chips, rendered as HTML after the hit bands for the
                 same reason the dots are: bands swallow SVG hover otherwise.
@@ -450,7 +777,12 @@ export function NetWorthChart({
 
             {/* Unlabelled events: a small hit target sitting exactly on the
                 SVG dot, so hover/tap still reaches every event, not just the
-                top four (docs/REDESIGN.md §4.1: "rest reveal on hover"). */}
+                top four (docs/REDESIGN.md §4.1: "rest reveal on hover").
+                Also the drag surface for those events — pointerdown here
+                starts a drag candidate (see `startDrag`); a plain click,
+                one that never crosses the move threshold, still selects,
+                same as before. `disabled` on the HoverCard keeps the detail
+                popover from fighting a moving dot for attention mid-drag. */}
             {geometry.dots
               .filter((d) => !geometry.labelledIds.has(d.eventId))
               .map((d) => (
@@ -459,13 +791,20 @@ export function NetWorthChart({
                   className="ns-event-hit-slot"
                   style={{ left: pct(d.x, VB_W), top: pct(d.y, VB_H) }}
                 >
-                  <HoverCard detail={eventDetail(d.event)} side="top">
+                  <HoverCard detail={eventDetail(d.event)} side="top" disabled={drag !== null}>
                     <button
                       type="button"
-                      className="ns-event-hit"
+                      className={`ns-event-hit${drag?.eventId === d.eventId ? " ns-event-dragging" : ""}`}
                       aria-pressed={selected?.eventId === d.eventId}
                       aria-label={d.event.name}
-                      onClick={() => onSelect(selectionFor(d, selected))}
+                      onPointerDown={(e) => startDrag(e, d.eventId)}
+                      onPointerMove={handleDragMove}
+                      onPointerUp={handleDragEnd}
+                      onPointerCancel={handleDragCancel}
+                      onClick={() => {
+                        if (suppressClickRef.current) return;
+                        onSelect(selectionFor(d, selected));
+                      }}
                     />
                   </HoverCard>
                 </div>
@@ -474,19 +813,31 @@ export function NetWorthChart({
             {/* The top four by |Δ net worth at horizon| get a standing name
                 instead of waiting for a hover — ranked, not chronological, so
                 a cluster of small early events doesn't crowd out the one
-                thing that actually moves the ending number. */}
+                thing that actually moves the ending number. Same
+                drag/click split as the unlabelled hit targets above. */}
             {geometry.labels.map((l) => (
               <div
                 key={`label-${l.eventId}`}
                 className="ns-event-label-slot"
                 style={{ left: pct(l.left, VB_W), top: pct(l.top, VB_H) }}
               >
-                <HoverCard detail={eventDetail(l.event)} side="top">
+                <HoverCard detail={eventDetail(l.event)} side="top" disabled={drag !== null}>
                   <button
                     type="button"
-                    className={`ns-event-label ns-event-label-${l.tone}`}
+                    className={`ns-event-label ns-event-label-${l.tone}${
+                      drag?.eventId === l.eventId ? " ns-event-dragging" : ""
+                    }${justLandedId === l.eventId ? " ns-event-just-landed" : ""}${
+                      drag?.moved && drag.eventId === l.eventId ? " ns-event-hide-source" : ""
+                    }`}
                     aria-pressed={selected?.eventId === l.eventId}
-                    onClick={() => onSelect(selectionFor(l, selected))}
+                    onPointerDown={(e) => startDrag(e, l.eventId)}
+                    onPointerMove={handleDragMove}
+                    onPointerUp={handleDragEnd}
+                    onPointerCancel={handleDragCancel}
+                    onClick={() => {
+                      if (suppressClickRef.current) return;
+                      onSelect(selectionFor(l, selected));
+                    }}
                   >
                     {l.text}
                   </button>
@@ -796,8 +1147,10 @@ function build(
 ) {
   const years = result.years;
   const span = Math.max(1, result.endYear - result.startYear);
-  const xFor = (year: number) =>
-    PLOT_LEFT + ((year - result.startYear) / span) * (PLOT_RIGHT - PLOT_LEFT);
+  // Delegates to the SAME formula chartMath.ts's live scrub/drag math uses
+  // (`xForYear`), so the static line and a dragged dot's live position can
+  // never quietly disagree about where a year sits.
+  const xFor = (year: number) => xForYear(year, result.startYear, result.endYear, CHART_BOUNDS);
 
   // Clipped to the active plan's horizon: the comparison is "how does the other
   // plan do over MY window", not a merged timeline.
@@ -916,14 +1269,6 @@ function build(
     });
   }
 
-  // Year bands for the hover hit test.
-  const bandWidth = (PLOT_RIGHT - PLOT_LEFT) / Math.max(1, years.length - 1);
-  const bands = years.map((y) => ({
-    year: y.year,
-    left: xFor(y.year) - bandWidth / 2,
-    width: bandWidth,
-  }));
-
   const compareLine =
     compareYears.length > 1
       ? compareYears
@@ -970,13 +1315,16 @@ function build(
     dots,
     labels,
     labelledIds: topIds,
-    bands,
     pointByYear,
     first: points[0],
     last: points[points.length - 1],
     fanBand,
     lowEdge,
     highEdge,
+    // Exposed so the live drag mark can place itself at a continuous
+    // (rubber-banded, not-yet-quantised) year using the exact same mapping
+    // the rest of this geometry was built from.
+    xFor,
   };
 }
 

@@ -3,7 +3,7 @@ import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engi
 import { tableMoney } from '../format';
 import { accountDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
-import { Cell } from './DataTable';
+import { Cell, type CellMagnitude } from './DataTable';
 import { GearIcon } from '../icons';
 
 /**
@@ -16,10 +16,14 @@ import { GearIcon } from '../icons';
 export function AccountsTab({
   window: years,
   accounts,
+  highlightYear,
   onEditType,
 }: {
   window: YearSnapshot[];
   accounts: Account[];
+  /** The scrubbed year (docs/REDESIGN.md §4.1) — null/undefined highlights
+      nothing. */
+  highlightYear?: number | null;
   onEditType(accountClass: AccountClass): void;
 }) {
   const yearLabels = years.map((y) => y.year);
@@ -83,6 +87,13 @@ export function AccountsTab({
         const baseRemaining = (id: string) =>
           lastYearRow?.accounts.find((a) => a.accountId === id)?.nonTaxableBaseRemaining;
 
+        // Magnitude bar, scaled to THIS row's own max across its visible
+        // columns (docs/REDESIGN.md §4.1) — an asset row reuses the "money
+        // in" hue, a liability row the "money out" hue, the same tone
+        // convention EventsTab.tsx's Gantt bars use, applied here to a
+        // dollar magnitude rather than a time span.
+        const rowMax = Math.max(1, ...cells.map((v) => Math.abs(v)));
+
         return (
           <div key={accountClass} className="ns-grid ns-row-child" style={style}>
             <div className="ns-type-cell">
@@ -110,9 +121,20 @@ export function AccountsTab({
                 </HoverCard>
               ) : null}
             </div>
-            {cells.map((v, i) => (
-              <Cell key={i} value={tableMoney(v)} />
-            ))}
+            {cells.map((v, i) => {
+              const magnitude: CellMagnitude = {
+                fraction: Math.abs(v) / rowMax,
+                tone: liability ? 'cost' : 'income',
+              };
+              return (
+                <Cell
+                  key={i}
+                  value={tableMoney(v)}
+                  magnitude={magnitude}
+                  highlighted={yearLabels[i] === highlightYear}
+                />
+              );
+            })}
           </div>
         );
       });
@@ -122,21 +144,23 @@ export function AccountsTab({
       <div className="ns-grid ns-row-head" style={style}>
         <div>Balance sheet</div>
         {yearLabels.map((y) => (
-          <div key={y}>{y}</div>
+          <div key={y} className={y === highlightYear ? 'ns-col-scrub' : undefined}>
+            {y}
+          </div>
         ))}
       </div>
 
       <div className="ns-grid ns-row-total" style={style}>
         <div>Net worth</div>
         {years.map((y) => (
-          <Cell key={y.year} value={tableMoney(y.netWorth)} />
+          <Cell key={y.year} value={tableMoney(y.netWorth)} highlighted={y.year === highlightYear} />
         ))}
       </div>
 
       <div className="ns-grid ns-row-group" style={style}>
         <div>Assets</div>
         {years.map((y) => (
-          <Cell key={y.year} value={tableMoney(y.assets)} />
+          <Cell key={y.year} value={tableMoney(y.assets)} highlighted={y.year === highlightYear} />
         ))}
       </div>
       {renderGroup(ASSET_CLASSES, false)}
@@ -145,7 +169,7 @@ export function AccountsTab({
       <div className="ns-grid ns-row-group" style={style}>
         <div>Liabilities</div>
         {years.map((y) => (
-          <Cell key={y.year} value={tableMoney(y.liabilities)} />
+          <Cell key={y.year} value={tableMoney(y.liabilities)} highlighted={y.year === highlightYear} />
         ))}
       </div>
       {renderGroup(LIABILITY_CLASSES, true)}
@@ -153,4 +177,3 @@ export function AccountsTab({
     </div>
   );
 }
-

@@ -1049,6 +1049,41 @@
   background: var(--out-deep);
 }
 
+/* Drag through time (docs/REDESIGN.md §4.1, design-direction move 5). The
+   dragged event's normal dot is excluded from the pass above while a drag
+   is live (NetWorthChart.tsx's `build()` `excludeEventId`) — these two
+   stand in for it instead, and are never both absent at once. */
+.ns-event-dot-ghost {
+  /* Frozen at the pixel position the drag started from ("ghosts... in its
+     original position"), so it reads as a fixed echo rather than a second
+     thing tracking the reprojecting line. */
+  opacity: 0.3;
+}
+.ns-event-dot-live {
+  /* A grabbed thing gets more tactile presence, not more chrome — bigger
+     and lifted, the same physical read `--jelly-rise`-style depth gives a
+     pressed control elsewhere (docs/REDESIGN.md §5.2), sized by hand here
+     since this mark isn't part of the shared `--jsx`/`--jsy` squash system. */
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  margin-top: -5.5px;
+  border-width: 2.5px;
+  box-shadow: 0 2px 6px rgb(var(--sh) / calc(28% * var(--sh-k)));
+}
+
+/* The one-shot "it landed" squish on release (docs/REDESIGN.md §5.4: "the
+   one place bounce is earned") — a temporary class, added by
+   NetWorthChart.tsx for `LANDED_MS` after a drag commits. Reuses `ns-squish`
+   verbatim rather than a bespoke keyframe: its hand-authored stops (32%
+   overshoot, 64% correction, settle by 100%) already read as a damped
+   spring with one overshoot, so this earns the "prefer the existing
+   CSS-variable system" call without inventing a new curve — and it inherits
+   the blanket reduced-motion rule below for free, collapsing to a snap. */
+.ns-event-just-landed {
+  animation: ns-squish var(--t-settle) var(--ease-soft);
+}
+
 /* The thin line from a labelled dot up to its name — still svg, since a line
    barely one degree off from the non-uniform stretch above is not visible
    the way a distorted circle is. */
@@ -1073,6 +1108,18 @@
   pointer-events: auto;
   z-index: 2;
 }
+/* The ghost/live labels below are plain spans, not HoverCard-wrapping
+   slots — the "never transform a HoverCard anchor" rule these otherwise
+   follow doesn't apply to them, so the live one is free to centre with a
+   transform instead of a precomputed left edge. */
+.ns-event-label-slot-ghost,
+.ns-event-label-slot-live {
+  pointer-events: none;
+}
+.ns-event-label-slot-live {
+  transform: translateX(-50%);
+  z-index: 3;
+}
 .ns-event-label {
   font: inherit;
   font-size: 12px;
@@ -1083,8 +1130,11 @@
   border-radius: 999px;
   padding: 4px 10px;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: grab;
   box-shadow: var(--shadow-control);
+  /* Same reasoning as `.ns-event-hit` — a deliberate press on this chip
+     starts a drag at any width, unconditionally. */
+  touch-action: none;
 }
 .ns-event-label:hover {
   color: var(--ink);
@@ -1094,6 +1144,28 @@
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   animation: ns-squish var(--t-settle) var(--ease-soft);
+}
+.ns-event-dragging {
+  cursor: grabbing;
+}
+/* The real dot/label being dragged stays MOUNTED throughout — it's the
+   element holding pointer capture for the whole gesture, and removing it
+   from the DOM (e.g. via a render-time exclusion) would silently release
+   that capture the instant React unmounts it, orphaning the drag with no
+   element left to receive the eventual pointerup. Opacity only, never
+   `display`/`visibility` — either of those can also affect hit-testing in
+   ways that would break the very capture this is protecting. Its ghost
+   (frozen original position) and live (pointer-following) marks stand in
+   for it visually in the meantime. */
+.ns-event-hide-source {
+  opacity: 0;
+}
+.ns-event-label-ghost {
+  opacity: 0.3;
+}
+.ns-event-label-live {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-tooltip);
 }
 
 /* Every other event still gets a hit target exactly on its (invisible)
@@ -1118,18 +1190,30 @@
   background: transparent;
   border: 0;
   padding: 0;
-  cursor: pointer;
+  cursor: grab;
+  /* Claim horizontal touch gestures unconditionally, at every breakpoint —
+     grabbing a specific small dot is a deliberate gesture, distinct enough
+     from a general swipe that it should start a drag even on a phone,
+     where `.ns-scrub-surface` below cedes horizontal touch to the chart's
+     own sideways scroll. */
+  touch-action: none;
 }
 .ns-event-hit[aria-pressed='true'] {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.ns-hit {
+/* Scrub (docs/REDESIGN.md §4.1, design-direction move 4) — one pointer
+   surface spanning the whole plot, replacing the old per-year hover bands.
+   Rendered first, same reason the bands were: dots/labels stack above it. */
+.ns-scrub-surface {
   position: absolute;
-  top: 0;
-  height: 100%;
+  inset: 0;
   pointer-events: auto;
+  /* Claim horizontal drags for scrubbing; let vertical page-scroll through
+     untouched. Below 700px this flips — see the override in the phone
+     media query further down, next to `.ns-chart-scroll`'s own rule. */
+  touch-action: pan-y;
 }
 
 /* The tooltip pops in, then *glides* between years rather than teleporting.
@@ -1295,6 +1379,11 @@
   padding: 13px 16px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  /* Net cash flow (Cash Flow's one TOTAL row with a magnitude bar — see
+     `.ns-mag-bar` below) needs this cell as its containing block too, or
+     its bar positions itself against whatever ancestor happens to be
+     positioned instead. */
+  position: relative;
 }
 
 .ns-row-group {
@@ -1336,6 +1425,74 @@
   padding: 10px 16px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  /* Containing block for the magnitude bar below, and for the scrub
+     column-highlight's own stacking (it's a plain background, not
+     positioned, but keeping it in the same rule keeps the two together). */
+  position: relative;
+}
+
+/* ---- Ledger magnitude bars (docs/REDESIGN.md §4.1, DESIGN-DIRECTION.md
+   move 6) ------------------------------------------------------------------
+   A quiet bar behind each CHILD row's own figure — never the bold
+   total/group rows, which already carry their own emphasis. Reuses the
+   income/cost hue convention `.ns-bar-income`/`.ns-bar-cost` establish on
+   EventsTab.tsx's Gantt bars, at low opacity so it reads as texture behind
+   the number, not a second data series competing with it. Distinct from
+   those Gantt bars mechanically, not just visually: those encode a TIME
+   SPAN on a row; this encodes a DOLLAR MAGNITUDE, scaled to each row's own
+   max across its visible columns (never the whole table's — see
+   DataTable.tsx's `rowMax`), behind a data-table row.
+   A short, low, fully-rounded strip sitting near the row's text baseline
+   rather than a tall bar filling the cell — "4px rounded end at the
+   baseline" read as an underline-weight mark, not a progress bar. */
+.ns-mag-bar {
+  position: absolute;
+  bottom: 7px;
+  height: 4px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.ns-mag-bar-income {
+  background: color-mix(in srgb, var(--in) 9%, transparent);
+}
+.ns-mag-bar-cost {
+  background: color-mix(in srgb, var(--out) 9%, transparent);
+}
+/* Accounts: grows rightward from the cell's own left edge — every row is
+   already either "assets" or "liabilities," so there's no shared centre to
+   diverge from the way Cash Flow has. */
+.ns-mag-bar-single {
+  left: 4px;
+  width: calc((100% - 8px) * var(--mag, 0));
+}
+/* Cash Flow: grows from a centre shared down the whole table, income rows
+   to the right, expense/tax rows to the left — the table reads as one
+   diverging (two-sided) chart rather than each row inventing its own zero. */
+.ns-mag-bar-pos {
+  left: 50%;
+  width: calc((50% - 4px) * var(--mag, 0));
+}
+.ns-mag-bar-neg {
+  right: 50%;
+  width: calc((50% - 4px) * var(--mag, 0));
+}
+/* Lifted above the bar in paint order regardless of DOM order — an
+   absolutely positioned sibling paints above static in-flow content by
+   default, which would otherwise bury the figure under its own bar. */
+.ns-cell-value {
+  position: relative;
+}
+
+/* Scrub column highlight (docs/REDESIGN.md §4.1) — the balance-sheet and
+   cash-flow columns "follow the year under the pointer." A quiet wash down
+   the whole column, head cell included, using the system accent rather
+   than a data hue: this marks a POSITION (which year), not a value. */
+.ns-col-scrub {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.ns-row-head > div.ns-col-scrub {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 /* ---- Notable points on the line ------------------------------------------
@@ -2911,6 +3068,20 @@
   }
   .ns-chart svg {
     height: auto;
+  }
+
+  /* The chart is now wider than the viewport and needs a native horizontal
+     scroll to see all of it — `.ns-scrub-surface` has to cede horizontal
+     touch gestures to that scroll rather than claiming them for scrubbing,
+     or a swipe could never reach the sideways-scrolling container beneath
+     it. The tradeoff: continuous drag-to-scrub by swiping open background
+     doesn't work at this width. A plain TAP still sets the scrubbed year
+     (pointerdown fires immediately, before the browser decides a drag is a
+     scroll), and grabbing a specific event dot/label to drag it still works
+     regardless of width — `.ns-event-hit`/`.ns-event-label` claim
+     `touch-action: none` unconditionally, above. */
+  .ns-scrub-surface {
+    touch-action: pan-x pan-y;
   }
 }
 

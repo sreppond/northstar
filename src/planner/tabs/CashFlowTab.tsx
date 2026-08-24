@@ -21,11 +21,15 @@ const PLAN_DRIVEN = new Set(['Living expenses', 'Baseline income', 'Taxes']);
 export function CashFlowTab({
   window,
   events,
+  highlightYear,
   onEdit,
   onEditAssumptions,
 }: {
   window: YearSnapshot[];
   events: PlanEvent[];
+  /** The scrubbed year (docs/REDESIGN.md §4.1) — null/undefined highlights
+      nothing. */
+  highlightYear?: number | null;
   onEdit(event: PlanEvent): void;
   onEditAssumptions(): void;
 }) {
@@ -74,6 +78,12 @@ export function CashFlowTab({
       kind: 'child',
       label: rowLabel(label, sourceEventId),
       cells: cells.map(tableMoney),
+      // Diverging (docs/REDESIGN.md §4.1): every income line grows toward
+      // the SAME side, from a baseline shared across the whole table, so
+      // the table as a whole reads as one two-sided chart rather than each
+      // row inventing its own zero point the way Accounts' bars do.
+      values: cells,
+      bar: { tone: 'income', direction: 'diverging' },
     });
   }
 
@@ -89,6 +99,8 @@ export function CashFlowTab({
     kind: 'child',
     label: rowLabel('Taxes'),
     cells: window.map((y) => tableMoney(y.totalTaxes)),
+    values: window.map((y) => y.totalTaxes),
+    bar: { tone: 'cost', direction: 'diverging' },
   });
   for (const { label, cells, sourceEventId } of groupLines(window, (y) => y.expenses)) {
     rows.push({
@@ -96,6 +108,8 @@ export function CashFlowTab({
       kind: 'child',
       label: rowLabel(label, sourceEventId),
       cells: cells.map(tableMoney),
+      values: cells,
+      bar: { tone: 'cost', direction: 'diverging' },
     });
   }
 
@@ -108,7 +122,17 @@ export function CashFlowTab({
       cells: window.map((y) => tableMoney(total(y.withdrawals))),
     });
     for (const { label, cells } of groupLines(window, (y) => y.withdrawals)) {
-      rows.push({ key: `w-${label}`, kind: 'child', label, cells: cells.map(tableMoney) });
+      rows.push({
+        key: `w-${label}`,
+        kind: 'child',
+        label,
+        cells: cells.map(tableMoney),
+        // A withdrawal is money becoming available to spend that year —
+        // the same direction as income, even though it's leaving an
+        // account rather than being earned.
+        values: cells,
+        bar: { tone: 'income', direction: 'diverging' },
+      });
     }
   }
 
@@ -117,6 +141,11 @@ export function CashFlowTab({
     kind: 'total',
     label: 'Net cash flow',
     cells: window.map((y) => signedTableMoney(y.netCashFlow)),
+    // The one row that can genuinely flip sign year to year — its bar's
+    // side and tone follow each cell's own value rather than a fixed
+    // per-row direction (see `RowBar.signed` in DataTable.tsx).
+    values: window.map((y) => y.netCashFlow),
+    bar: { direction: 'diverging', signed: true },
   });
 
   const shortfalls = window.filter((y) => y.unfundedShortfall);
@@ -128,10 +157,12 @@ export function CashFlowTab({
       // A year with no shortfall now falls out as the same en-dash every other
       // nil cell uses, so this no longer needs its own placeholder.
       cells: window.map((y) => tableMoney(y.unfundedShortfall ?? 0)),
+      values: window.map((y) => y.unfundedShortfall ?? 0),
+      bar: { tone: 'cost', direction: 'diverging' },
     });
   }
 
-  return <DataTable caption="Annual cash flow" years={years} rows={rows} />;
+  return <DataTable caption="Annual cash flow" years={years} rows={rows} highlightYear={highlightYear} />;
 }
 
 /** A cash flow row label with its gear. Detail is optional — the assumptions

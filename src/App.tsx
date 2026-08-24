@@ -14,7 +14,7 @@ import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './planner/planner.css';
 
-import type { AccountClass, Account, Plan } from '@northstar/engine';
+import type { AccountClass, Account, Plan, PlanEvent } from '@northstar/engine';
 import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './planner/store/planStore';
 import { HoverCard } from './planner/HoverCard';
@@ -91,6 +91,14 @@ export default function App() {
   const [importing, setImporting] = useState(false);
   const monarch = useMonarch();
 
+  // The instrument (docs/REDESIGN.md §4.1, §5.4): the year under the pointer
+  // while scrubbing the chart, and the event currently being dragged through
+  // time. Both are ordinary React state, NOT store state — nothing here
+  // touches `usePlanStore` until a drag actually commits (see `dragDraft`
+  // below and NetWorthChart's `onDragCommit`).
+  const [scrubYear, setScrubYear] = useState<number | null>(null);
+  const [dragDraft, setDragDraft] = useState<PlanEvent | null>(null);
+
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
 
   // ⌘Z / ⇧⌘Z, but never while a field has focus — the browser's own undo
@@ -110,10 +118,16 @@ export default function App() {
 
   // Both drawers preview live: whichever draft is open stands in for the
   // stored plan in the projection, without ever being written to the store.
-  // That is what makes Cancel free.
+  // That is what makes Cancel free. A drag through time (docs/REDESIGN.md
+  // §4.1) is the same trick played a third time: `withDraft` is a plain,
+  // generic (plan, draft) -> plan substitution, so it composes by chaining —
+  // `dragDraft` overlays on top of whatever the drawers already produced,
+  // with no drawer UI of its own (unlike `editor.change`, it never flips
+  // anything open). In practice at most one of `editor.draft`/`dragDraft` is
+  // ever non-null at a time, but the chain is correct either way.
   const plan = useMemo(
-    () => withDraft(assumptionsDraft ?? stored, editor.draft),
-    [assumptionsDraft, stored, editor.draft],
+    () => withDraft(withDraft(assumptionsDraft ?? stored, editor.draft), dragDraft),
+    [assumptionsDraft, stored, editor.draft, dragDraft],
   );
 
   // The plan is the only source of truth; the result is always derived, never
@@ -214,6 +228,16 @@ export default function App() {
     [plan, result, markers, growth],
   );
 
+  // Scrub (docs/REDESIGN.md §4.1): "point at 2034 and it reads 2034's net
+  // worth." `reading.figure` is the horizon figure and stays the resting
+  // value; while a year is under the pointer, the hero shows THAT year's net
+  // worth instead. Dragging an event is a different, already-live path —
+  // `dragDraft` above reprojects `result` itself, so `reading.figure` (still
+  // the horizon year) moves live on its own without going through this.
+  const heroFigure =
+    (scrubYear !== null ? result.years.find((y) => y.year === scrubYear)?.netWorth : undefined) ??
+    reading.figure;
+
   // The spread the headline figure depends on, at the horizon. Only worth
   // saying when it is genuinely a range — on a plan with no market exposure
   // the two runs land on the same number and the line would be noise.
@@ -301,7 +325,7 @@ export default function App() {
           />
 
           <div className="ns-hero">
-            <AnimatedFigure className="ns-hero-figure" value={money(reading.figure)} />
+            <AnimatedFigure className="ns-hero-figure" value={money(heroFigure)} />
             <p className="ns-hero-read">{reading.read}</p>
 
             {/* Suppressed on a failing plan: a range around a number that
@@ -339,6 +363,19 @@ export default function App() {
             canFan={headlineReturnRate(plan) !== undefined}
             onToggleFan={toggleFan}
             onSelect={setSelected}
+            onScrubYear={setScrubYear}
+            onDragPreview={setDragDraft}
+            onDragCommit={(eventId, year) => {
+              // Commits against `stored` (the source of truth), never
+              // `plan` — `plan` may already have `dragDraft` overlaid on
+              // it, and re-reading the event from there would fold the
+              // in-flight draft into what gets written. One call, so this
+              // is the drag's single undo entry (docs/REDESIGN.md §4.1).
+              // `dragDraft` itself is cleared separately, by the
+              // `onDragPreview(null)` NetWorthChart fires right after this.
+              const event = stored.events.find((e) => e.id === eventId);
+              if (event) upsertEvent(stored.id, { ...event, startYear: year });
+            }}
           />
 
           <div className="ns-selection">
@@ -455,6 +492,7 @@ export default function App() {
             <AccountsTab
               window={windowYears}
               accounts={allAccounts}
+              highlightYear={scrubYear}
               onEditType={(accountClass: AccountClass) => {
                 const owned = stored.accounts.find(
                   (a) => a.accountClass === accountClass && !a.isSynthetic,
@@ -467,6 +505,7 @@ export default function App() {
             <CashFlowTab
               window={windowYears}
               events={plan.events}
+              highlightYear={scrubYear}
               onEdit={(event) => editor.edit(event)}
               onEditAssumptions={() => setAssumptionsDraft(structuredClone(stored))}
             />
