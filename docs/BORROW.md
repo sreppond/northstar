@@ -200,6 +200,10 @@ tax and cuts your first RMD by $31k."* That is FIREMaster's
 
 ## 4. RMDs — a real hole in the model
 
+**Built.** `packages/engine/src/rmd.ts` + step 4.5 in `run.ts` — see
+`docs/PLAN.md` §4.3 and `docs/NEXT.md`. The rest of this section is kept as
+the original reasoning for it.
+
 Not borrowed from anywhere; reading their tax surface exposed it in ours.
 **Nothing in Northstar ever forces a withdrawal.** A tax-deferred account can
 compound untouched to age 95, and it can't. At 73 the IRS starts taking a
@@ -368,7 +372,7 @@ a model.
 
 | # | Item | Effort | Why here |
 |---|---|---|---|
-| 1 | RMD forcing (§4) | S | It's a hole. It changes numbers. Fix before decorating. |
+| 1 | ~~RMD forcing (§4)~~ | S | **Done.** It's a hole. It changes numbers. Fixed before decorating. |
 | 2 | Spending sensitivity strip (§5, partial) | S | Best insight per line in the document. |
 | 3 | Scenario diff (§6) | S–M | Finishes a feature that's already 80% built. |
 | 4 | Accessible vs. locked (§2) | M | New concept, all inputs already modelled. |

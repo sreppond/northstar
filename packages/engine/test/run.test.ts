@@ -289,3 +289,113 @@ describe('runPlan — invariants', () => {
     }
   });
 });
+
+describe('runPlan — RMD', () => {
+  it('forces a distribution once the owner reaches RMD_START_AGE', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1 } as never,
+        participants: [{ id: 'p1', name: 'A', birthYear: 1950, lifeExpectancy: 90, isIncluded: true }],
+        accounts: [
+          asset({
+            id: 'd',
+            name: '401(k)',
+            accountClass: 'taxDeferredInvestment',
+            initialBalance: 1_000_000,
+            withdrawalTaxRate: 20,
+          }),
+        ],
+      }),
+    );
+    // Age 76 in 2026 (1950 + 76). Divisor 23.7.
+    const forced = 1_000_000 / 23.7;
+    const y = result.years[0];
+    expect(y.income.find((l) => l.label.startsWith('Required minimum distribution'))?.amount).toBeCloseTo(
+      forced,
+      2,
+    );
+    expect(y.taxes.find((l) => l.label.startsWith('RMD tax'))?.amount).toBeCloseTo(forced * 0.2, 2);
+  });
+
+  it('does not force a distribution before RMD_START_AGE', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1 } as never,
+        // Default participant is born 1990 — age 36 in 2026.
+        accounts: [
+          asset({
+            id: 'd',
+            name: '401(k)',
+            accountClass: 'taxDeferredInvestment',
+            initialBalance: 1_000_000,
+          }),
+        ],
+      }),
+    );
+    const y = result.years[0];
+    expect(y.income.find((l) => l.label.startsWith('Required minimum distribution'))).toBeUndefined();
+    expect(y.accounts[0].close).toBeCloseTo(1_000_000, 6);
+  });
+
+  it('leaves other account classes alone, even past RMD_START_AGE', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1 } as never,
+        participants: [{ id: 'p1', name: 'A', birthYear: 1950, lifeExpectancy: 90, isIncluded: true }],
+        accounts: [
+          asset({ id: 'b', name: 'Brokerage', accountClass: 'taxableInvestment', initialBalance: 1_000_000 }),
+        ],
+      }),
+    );
+    const y = result.years[0];
+    expect(y.income.find((l) => l.label.startsWith('Required minimum distribution'))).toBeUndefined();
+    expect(y.accounts[0].close).toBeCloseTo(1_000_000, 6);
+  });
+
+  it('compounds growth on the post-RMD balance, not the opening one', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1 } as never,
+        participants: [{ id: 'p1', name: 'A', birthYear: 1950, lifeExpectancy: 90, isIncluded: true }],
+        accounts: [
+          asset({
+            id: 'd',
+            name: '401(k)',
+            accountClass: 'taxDeferredInvestment',
+            initialBalance: 1_000_000,
+            growthRate: 10,
+          }),
+        ],
+      }),
+    );
+    const forced = 1_000_000 / 23.7;
+    const d = result.years[0].accounts[0];
+    expect(d.withdrawals).toBeCloseTo(forced, 2);
+    expect(d.growth).toBeCloseTo((1_000_000 - forced) * 0.1, 2);
+    expect(d.close).toBeCloseTo(d.open + d.contributions - d.withdrawals + d.growth, 4);
+  });
+
+  it('lets after-tax RMD proceeds fall through to the allocation waterfall', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1, baselineIncome: 0, baselineExpenses: 0 } as never,
+        participants: [{ id: 'p1', name: 'A', birthYear: 1950, lifeExpectancy: 90, isIncluded: true }],
+        accounts: [
+          asset({
+            id: 'd',
+            name: '401(k)',
+            accountClass: 'taxDeferredInvestment',
+            initialBalance: 1_000_000,
+            withdrawalTaxRate: 20,
+          }),
+          asset({ id: 'c', name: 'Cash', accountClass: 'cash', growthRateMethod: 'noChange' }),
+        ],
+        rules: [rule('c', 'allocation', 1)],
+      }),
+    );
+    const forced = 1_000_000 / 23.7;
+    const afterTax = forced * 0.8;
+    const cash = result.years[0].accounts.find((a) => a.accountId === 'c')!;
+    expect(cash.contributions).toBeCloseTo(afterTax, 2);
+  });
+});

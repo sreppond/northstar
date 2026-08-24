@@ -341,6 +341,9 @@ for each year Y:
              + compiled expense cash flows for Y (kid costs, property tax, ...)
              + scheduled debt payments
    4. TAX      income tax on ordinary income  -> an expense line
+   4.5 RMD     force a distribution from any taxDeferredInvestment account
+               whose owner is >= RMD_START_AGE, taxed at the account's own
+               rate  -> an income line + a tax line  (rmd.ts)
    5. NET      net = income - expenses
    6a. if net > 0  ALLOCATE surplus down the allocation rule order
    6b. if net < 0  WITHDRAW shortfall down the withdrawal rule order,
@@ -351,7 +354,7 @@ for each year Y:
   10. SNAPSHOT record every line item with its sourceEventId
 ```
 
-Two conventions to fix now:
+Three conventions to fix now:
 
 - **Growth applies to the balance an account *opened* the year with, net of
   any withdrawal — not to the balance after contributions.** This is
@@ -369,6 +372,13 @@ Two conventions to fix now:
 - **Everything runs in nominal (future) dollars.** `dollarMode:'todaysDollars'`
   deflates at *presentation* time by `(1+inflation)^-(Y-Y0)`. Never run the
   engine in real dollars — you will double-deflate something.
+- **A tax-deferred account does not compound untouched forever.** Left alone,
+  nothing forced money out of one — a modelling gap, not a real-world option.
+  Step 4.5 drains `balance / uniformLifetimeDivisor(age)` starting at
+  `RMD_START_AGE` (73), taxed at the account's own `withdrawalTaxRate` rather
+  than folded into the ordinary-income bracket above. The after-tax amount is
+  ordinary income for the year, so any of it not spent falls through to step
+  6a as surplus, same as a paycheck would.
 
 ### 4.4 Growth
 

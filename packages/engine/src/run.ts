@@ -21,6 +21,7 @@ import type {
 import { accountExistsIn, amortizeYear, growthRateFor, scheduledAnnualPayment } from './accounts.js';
 import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
+import { requiredMinimumDistribution, RMD_START_AGE } from './rmd.js';
 import {
   type CashFlowItem,
   type CompileContext,
@@ -322,6 +323,46 @@ export function runPlan(plan: Plan): PlanResult {
       taxes.push({ label: 'Income tax', amount: ordinaryTax, category: 'tax' });
     }
 
+    // 7.5. RMD -- a tax-deferred account whose owner has reached RMD_START_AGE
+    //      is drained by IRS-mandated divisor whether or not the household
+    //      needs the cash (docs/PLAN.md §4.3, rmd.ts). The gross amount is
+    //      new income for the year -- taxed here at the account's own rate,
+    //      not folded into the ordinary-income bracket above -- so any of it
+    //      left over after tax falls through to step 9 as ordinary surplus,
+    //      same as a paycheck would.
+    const withdrawalsByAccount = new Map<string, number>();
+    for (const account of accounts) {
+      if (account.isLiability || closed.has(account.id)) continue;
+      if (account.accountClass !== 'taxDeferredInvestment') continue;
+      if (!accountExistsIn(account, year)) continue;
+
+      const age = ageForAccount(account.id, year);
+      if (age === undefined || age < RMD_START_AGE) continue;
+
+      const openBalance = balances.get(account.id) ?? 0;
+      const forced = requiredMinimumDistribution(openBalance, age);
+      if (forced <= EPSILON) continue;
+
+      balances.set(account.id, openBalance - forced);
+      withdrawalsByAccount.set(account.id, (withdrawalsByAccount.get(account.id) ?? 0) + forced);
+
+      income.push({
+        label: `Required minimum distribution — ${account.name}`,
+        amount: forced,
+        accountId: account.id,
+        category: 'income',
+      });
+      const rmdTax = forced * (account.withdrawalTaxRate / 100);
+      if (rmdTax > EPSILON) {
+        taxes.push({
+          label: `RMD tax — ${account.name}`,
+          amount: rmdTax,
+          accountId: account.id,
+          category: 'tax',
+        });
+      }
+    }
+
     // 8. NET
     const totalIncome = sum(income.map((l) => l.amount));
     const expenseTotal = sum(expenses.map((l) => l.amount));
@@ -345,7 +386,6 @@ export function runPlan(plan: Plan): PlanResult {
       );
     }
 
-    const withdrawalsByAccount = new Map<string, number>();
     let unfundedShortfall = 0;
 
     if (net > EPSILON) {
@@ -414,8 +454,9 @@ export function runPlan(plan: Plan): PlanResult {
     }
 
     // 10. GROWTH and debt balances, then snapshot.
-    //     Growth applies to the CLOSING balance, so money contributed during
-    //     year Y first earns in Y+1 (docs/PLAN.md §4.3).
+    //     Growth applies to the balance each account OPENED the year with, so
+    //     money contributed during year Y first earns in Y+1 (docs/PLAN.md
+    //     §4.3).
     const accountRows: AccountYear[] = [];
 
     for (const account of accounts) {

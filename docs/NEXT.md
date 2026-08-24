@@ -30,9 +30,35 @@ This file predates several merges and stayed stale through them. Corrections:
   exercised.
 - **[`docs/BORROW.md`](./BORROW.md) is new**: a read of a competitor's
   product (FIREMaster) against what Northstar already is, and what's worth
-  building as a result. Ideation, nothing built yet. Its own sequencing (§10)
-  puts RMD forcing first — "it's a hole, it changes numbers" — the same
-  category of bug as the growth-timing fix above.
+  building as a result. Mostly ideation — but its own sequencing (§10) put
+  RMD forcing first ("it's a hole, it changes numbers"), and that one is now
+  built: see the next bullet. The rest of the document (Monte Carlo,
+  accessible-vs-locked, the bracket ribbon, scenario diff, the spending
+  sensitivity strip, Excel export) is still just ideas.
+- **RMDs are now forced.** `packages/engine/src/rmd.ts` + a new step 4.5 in
+  `run.ts`: every `taxDeferredInvestment` account whose owner has reached
+  `RMD_START_AGE` (73) is drained by `balance / uniformLifetimeDivisor(age)`
+  every year, taxed at the account's own `withdrawalTaxRate`, whether or not
+  the household needs the cash. The after-tax amount is ordinary income for
+  the year, so an unspent RMD falls through to the allocation waterfall like
+  a paycheck would. No new UI — it reads existing account/participant fields,
+  so it shows up automatically in the Cash Flow tab's Income section as
+  "Required minimum distribution — «account»" once anyone's old enough.
+- **The pill row of scenarios is gone from the header.** Switching plans
+  moved into the hamburger menu, alongside the analysis views it already
+  had — one menu instead of two competing navigation rows. The header itself
+  is now a floating pill pinned to the top-left of the viewport rather than
+  an in-flow full-width bar. Headline figures (`AnimatedFigure.tsx`) roll in
+  character-by-character on change now, CSS only, no new dependency.
+- **The app is installable.** A PWA manifest + icons exist
+  (`public/manifest.webmanifest`) — "Add to Dock" in Safari or Chrome against
+  a running server gives a real Dock icon with no browser chrome. The
+  intended target is the Docker server below, not the GitHub Pages static
+  build, kept always-on locally via `colima` (a headless Docker runtime,
+  not Docker Desktop) registered as a login service, plus the compose file's
+  existing `restart: unless-stopped`. A `.dockerignore` had to be added in
+  the process — without it `COPY . .` in the Dockerfile shipped the host's
+  macOS-native `node_modules` into the linux/arm64 image.
 
 ## The redesign is underway
 
@@ -348,16 +374,20 @@ docs/PLAN.md              the build guide — domain model, engine, design spec
 docs/NEXT.md              this file
 packages/engine/          pure TS projection engine (no React, no I/O)
   src/run.ts              the year loop; order of operations is PLAN.md §4.3
+  src/rmd.ts              Required Minimum Distributions (step 4.5)
+  src/sepp.ts             SEPP / 72(t) — a standalone calculator, not in run.ts
   src/events/             one module per event kind + the registry
   src/monarch.ts          Monarch snapshot -> plan balances (pure)
   examples/demo.ts        npx tsx examples/demo.ts → a worked 12-year projection
 docs/DESIGN-DIRECTION.md  the UI audit and the redesign plan
 docs/MONARCH-IMPORT.md    the Monarch capture/paste loop
 docs/BACKEND.md           the server: security model, API, deviations from §9
+docs/BORROW.md            competitor read (FIREMaster) + what's worth building
 packages/server/          Fastify + SQLite, single user
   src/monarch/queries.ts  the GraphQL documents — the bit most likely to rot
   src/auth/crypto.ts      scrypt passwords, AES-256-GCM credential envelope
   build.mjs               esbuild bundle (Node cannot run the TS directly)
+public/                   PWA manifest + icons, copied verbatim into dist/
 src/auth/AuthGate.tsx     setup / login / planner
 src/planner/DataBanner.tsx  the freshness line
 scripts/monarch-capture.mjs  raw MCP tool output -> a Northstar snapshot
@@ -371,6 +401,9 @@ src/planner/              chart, tabs, tokens, presentation rules
   reading.ts              the hero's plain-language sentence
   ThemeToggle.tsx         light/dark, stamped on <html>
   useBreakpoint.ts        phone/tablet/desktop + year-column count
+  AnimatedFigure.tsx      per-character roll-in for headline numbers on change
+  Sidebar.tsx             the hamburger menu — views AND plan switching
+  views/                  Retirement / House / SEPP forecast tabs
 ```
 
 The old AI Studio simulator has been deleted, along with the deps only it
