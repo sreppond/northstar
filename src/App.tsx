@@ -10,6 +10,8 @@ import {
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/700.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
 import './planner/planner.css';
 
 import type { AccountClass, Account, Plan } from '@northstar/engine';
@@ -18,7 +20,6 @@ import { usePlanStore } from './planner/store/planStore';
 import { HoverCard } from './planner/HoverCard';
 import { planDetail } from './planner/detail';
 import { AnimatedFigure } from './planner/AnimatedFigure';
-import { SpendingStrip } from './planner/SpendingStrip';
 import { CompareDiff } from './planner/CompareDiff';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
@@ -37,9 +38,10 @@ import {
 import { AccountsTab } from './planner/tabs/AccountsTab';
 import { CashFlowTab } from './planner/tabs/CashFlowTab';
 import { EventsTab } from './planner/tabs/EventsTab';
-import { cagr, money, percent, signedMoney } from './planner/format';
+import { cagr, money, percent } from './planner/format';
 import { heroReading } from './planner/reading';
 import { ThemeToggle } from './planner/ThemeToggle';
+import { HeaderMenu } from './planner/HeaderMenu';
 import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
 import { Sidebar } from './planner/Sidebar';
 import { ViewTabs, type ViewId } from './planner/ViewTabs';
@@ -173,6 +175,11 @@ export default function App() {
   }, [plan]);
 
   const fan = showFan ? spread : undefined;
+  // Shared by the chart's own "Range" pill and the hero's tappable risk
+  // phrase — two doors onto the same one bit of state (docs/REDESIGN.md
+  // §4.1). The chart's own toggle stays the only door on a failing plan,
+  // where the risk phrase is suppressed.
+  const toggleFan = () => setShowFan((on) => !on);
 
   // The moments worth pointing at on the line — chiefly the years the plan
   // runs dry, which until now only appeared in a table if you scrolled to them.
@@ -198,16 +205,9 @@ export default function App() {
     return [...plan.accounts, ...synthetic.values()];
   }, [plan.accounts, result.years]);
 
-  const eventCount = plan.events.filter((e) => e.isIncluded && !e.isHidden).length;
   const first = result.years[0];
   const last = result.years[result.years.length - 1];
   const growth = cagr(first?.netWorth ?? 0, last?.netWorth ?? 0, result.years.length - 1);
-
-  // Compared at the ACTIVE plan's horizon, matching how the chart clips it.
-  const endOfCompare =
-    compare?.result.years.find((y) => y.year === result.endYear)?.netWorth ??
-    compare?.result.years[compare.result.years.length - 1]?.netWorth ??
-    0;
 
   const reading = useMemo(
     () => heroReading(plan, result, markers, growth),
@@ -240,17 +240,34 @@ export default function App() {
   return (
     <div className="ns">
       <header className="ns-head">
-        <div className="ns-wordmark">Forecasting</div>
-        <ViewTabs view={view} onSelect={setView} />
+        <div className="ns-head-row">
+          <div className="ns-wordmark">Northstar</div>
+          <ViewTabs view={view} onSelect={setView} />
+          <div className="ns-head-actions">
+            {/* Visual stub only — Phase 5 wires the real palette
+                (docs/EXECUTION.md Phase 2). */}
+            <button type="button" className="ns-cmdk-stub" title="Command palette (coming soon)">
+              <kbd>⌘K</kbd>
+            </button>
+            <ThemeToggle />
+            <HeaderMenu
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onUndo={undo}
+              onRedo={redo}
+              onImport={() => setImporting(true)}
+              onSignOut={() => void monarch.signOut()}
+            />
+          </div>
+        </div>
         <button
           type="button"
-          className="ns-badge"
+          className="ns-scenario-title"
           onClick={() => setSidebarOpen(true)}
           title="Switch or manage plans"
         >
           {stored.name}
         </button>
-        <ThemeToggle />
       </header>
 
       <main className="ns-main">
@@ -261,51 +278,19 @@ export default function App() {
         {view === 'netWorth' && (
           <>
         <section className="ns-card">
-          <div className="ns-title-row">
-            <div className="ns-title-icon" aria-hidden>
-              <TargetIcon />
-            </div>
-            <div className="ns-title">{plan.name}</div>
-            <div className="ns-title-actions">
-              {canUndo && (
-                <button type="button" className="ns-btn-ghost" onClick={undo} title="Undo (⌘Z)">
-                  Undo
-                </button>
-              )}
-              {canRedo && (
-                <button type="button" className="ns-btn-ghost" onClick={redo} title="Redo (⇧⌘Z)">
-                  Redo
-                </button>
-              )}
+          <div className="ns-hero-actions">
+            <HoverCard detail={planDetail(plan, result.endYear)} side="bottom">
               <button
                 type="button"
                 className="ns-btn"
-                onClick={() => setImporting(true)}
-                title="Import balances from a Monarch snapshot"
+                onClick={() => setAssumptionsDraft(structuredClone(stored))}
               >
-                Import
+                Edit assumptions
               </button>
-              <button
-                type="button"
-                className="ns-btn-ghost"
-                onClick={() => void monarch.signOut()}
-                title="Sign out"
-              >
-                Sign out
-              </button>
-              <HoverCard detail={planDetail(plan, result.endYear)} side="bottom">
-                <button
-                  type="button"
-                  className="ns-btn"
-                  onClick={() => setAssumptionsDraft(structuredClone(stored))}
-                >
-                  Edit assumptions
-                </button>
-              </HoverCard>
-              <button type="button" className="ns-btn ns-btn-primary" onClick={editor.startNew}>
-                + Add event
-              </button>
-            </div>
+            </HoverCard>
+            <button type="button" className="ns-btn ns-btn-primary" onClick={editor.startNew}>
+              + Add event
+            </button>
           </div>
 
           <DataBanner
@@ -320,41 +305,39 @@ export default function App() {
             <p className="ns-hero-read">{reading.read}</p>
 
             {/* Suppressed on a failing plan: a range around a number that
-                never arrives is not the thing to be reading. */}
+                never arrives is not the thing to be reading. Demoted from a
+                permanent second sentence to a single tappable phrase that
+                toggles the same fan band the chart's own "Range" pill drives
+                (docs/REDESIGN.md §4.1) — one bit of state, two doors onto it. */}
             {spreadAtEnd && !reading.isAlarm && (
-              <p className="ns-hero-risk">
+              <button
+                type="button"
+                className="ns-hero-risk"
+                aria-pressed={showFan}
+                onClick={toggleFan}
+              >
                 Between <b>{money(spreadAtEnd.low)}</b> and <b>{money(spreadAtEnd.high)}</b>{' '}
                 depending on how markets run.
-              </p>
+              </button>
             )}
-
-            <div className="ns-hero-meta ns-num">
-              <span>
-                {result.startYear}–{result.endYear}
-              </span>
-              <span>
-                {eventCount} event{eventCount === 1 ? '' : 's'}
-              </span>
-              {compare && (
-                <span>
-                  {signedMoney((last?.netWorth ?? 0) - endOfCompare)} vs {compare.name}
-                </span>
-              )}
-            </div>
           </div>
+        </section>
 
-          <SpendingStrip plan={plan} result={result} />
-
+        {/* The chart as the spine (docs/REDESIGN.md §4.1): full-bleed and
+            unboxed rather than nested in a card, so it reads as the
+            instrument the page is built around rather than one card among
+            several. */}
+        <section className="ns-spine">
           <NetWorthChart
             result={result}
-            events={plan.events}
+            plan={plan}
             rateLabel={percent(headlineReturnRate(plan) ?? 0)}
             selected={selected}
             compare={compare}
             fan={fan}
             markers={markers}
             canFan={headlineReturnRate(plan) !== undefined}
-            onToggleFan={() => setShowFan((on) => !on)}
+            onToggleFan={toggleFan}
             onSelect={setSelected}
           />
 
@@ -598,15 +581,5 @@ export default function App() {
         />
       )}
     </div>
-  );
-}
-
-function TargetIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="4" />
-      <circle cx="12" cy="12" r="0.5" fill="currentColor" />
-    </svg>
   );
 }

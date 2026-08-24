@@ -1,5 +1,6 @@
-import { useMemo, useState, type CSSProperties } from "react";
-import type { PathMarkers, PlanEvent, PlanResult } from "@northstar/engine";
+import { useMemo, useState } from "react";
+import type { PathMarkers, Plan, PlanEvent, PlanResult } from "@northstar/engine";
+import { deflate, runPlan } from "@northstar/engine";
 import { codeFor, summarize, toneFor } from "./presentation";
 import { eventDetail } from "./detail";
 import { HoverCard } from "./HoverCard";
@@ -9,7 +10,7 @@ import { axisMoney, money, signedMoney } from "./format";
 /**
  * Hand-rolled SVG rather than a chart library (docs/PLAN.md §3.2). The two
  * things a library fights us on are exactly the two things this chart needs:
- * event pins that dodge each other when they collide in a year, and a hover
+ * event dots that dodge each other when their labels collide, and a hover
  * that targets a YEAR BAND rather than the nearest data point.
  */
 
@@ -19,8 +20,19 @@ const PLOT_LEFT = 66;
 const PLOT_RIGHT = 1168;
 const PLOT_TOP = 18;
 const PLOT_BOTTOM = 336;
-const PIN_SIZE = 32;
-const PIN_GAP = 6;
+
+// Events on the curve (docs/REDESIGN.md §4.1). A small ring dot marks every
+// one; only the top few by impact get a standing label, laid out in lanes
+// near the top of the plot with a thin leader down to their actual dot — the
+// same horizontal-collision packing the old pin row used, now sized to text
+// instead of a fixed pin, and anchored above the curve instead of ON it so a
+// label never has to dodge the line itself. The dot's own size lives in
+// planner.css's `.ns-event-dot-mark` (real px, not a viewBox unit — see why
+// in that rule's comment).
+const TOP_LABEL_COUNT = 4;
+const LABEL_TOP = PLOT_TOP + 8;
+const LABEL_LANE_H = 20;
+const LABEL_GAP = 14;
 
 export interface ChartSelection {
   eventId: string;
@@ -50,7 +62,9 @@ export interface FanSeries {
 
 interface Props {
   result: PlanResult;
-  events: PlanEvent[];
+  /** The whole plan, not just its events — ranking a dot's label needs to
+      re-run the projection with that one event excluded (see `rankImpact`). */
+  plan: Plan;
   rateLabel: string;
   selected: ChartSelection | null;
   /** A second plan drawn alongside, clipped to this plan's horizon. */
@@ -66,7 +80,7 @@ interface Props {
 
 export function NetWorthChart({
   result,
-  events,
+  plan,
   rateLabel,
   selected,
   compare,
@@ -79,9 +93,14 @@ export function NetWorthChart({
   const [hoverYear, setHoverYear] = useState<number | null>(null);
   const [hotEdge, setHotEdge] = useState<"low" | "high" | null>(null);
 
+  // Kept separate from `build()` below so toggling the fan or a comparison
+  // plan — both frequent — never re-triggers this: it is the one part of the
+  // chart's geometry that cannot be found by just looking at `result`.
+  const impactByEventId = useMemo(() => rankImpact(plan, result), [plan, result]);
+
   const geometry = useMemo(
-    () => build(result, events, compare, fan),
-    [result, events, compare, fan],
+    () => build(result, plan.events, impactByEventId, compare, fan),
+    [result, plan.events, impactByEventId, compare, fan],
   );
   const hover =
     hoverYear === null ? null : (geometry.pointByYear.get(hoverYear) ?? null);
@@ -169,12 +188,13 @@ export function NetWorthChart({
       )}
 
       {/* The chart scales with its viewBox, so squeezing it onto a phone makes
-          the pins collide and the axis labels clip. Below ~700px it keeps its
+          the dots collide and the axis labels clip. Below ~700px it keeps its
           proportions and scrolls sideways instead, like the tables. */}
       <div className="ns-chart-scroll">
         <div className="ns-chart" onMouseLeave={() => setHoverYear(null)}>
           <svg
             viewBox={`0 0 ${VB_W} ${VB_H}`}
+            preserveAspectRatio="none"
             role="img"
             aria-label="Projected net worth over time"
           >
@@ -183,19 +203,6 @@ export function NetWorthChart({
                 <stop offset="0%" stopColor="var(--data-nw)" stopOpacity="0.20" />
                 <stop offset="100%" stopColor="var(--data-nw)" stopOpacity="0.02" />
               </linearGradient>
-
-              {/* A dot lattice gives the plot a surface to sit on. Faint enough
-                  to read as paper texture rather than as data. */}
-              <pattern
-                id="ns-dot-grid"
-                x="0"
-                y="0"
-                width="18"
-                height="18"
-                patternUnits="userSpaceOnUse"
-              >
-                <circle cx="9" cy="9" r="1" fill="var(--border-strong)" fillOpacity="0.5" />
-              </pattern>
 
               {/* Lifts the line off the fan band. Soft and neutral — a coloured
                   glow would read as a value the chart does not have. */}
@@ -210,15 +217,6 @@ export function NetWorthChart({
               </filter>
             </defs>
 
-            <rect
-              x={PLOT_LEFT}
-              y={PLOT_TOP}
-              width={PLOT_RIGHT - PLOT_LEFT}
-              height={PLOT_BOTTOM - PLOT_TOP}
-              fill="url(#ns-dot-grid)"
-              pointerEvents="none"
-            />
-
             {geometry.gridlines.map((g) => (
               <line
                 key={g.value}
@@ -227,18 +225,6 @@ export function NetWorthChart({
                 y1={g.y}
                 y2={g.y}
                 stroke="var(--rule)"
-                strokeWidth={1}
-              />
-            ))}
-
-            {geometry.pins.map((pin) => (
-              <line
-                key={`rule-${pin.eventId}`}
-                x1={pin.x}
-                x2={pin.x}
-                y1={PLOT_TOP}
-                y2={PLOT_BOTTOM}
-                stroke="var(--border-strong)"
                 strokeWidth={1}
               />
             ))}
@@ -315,6 +301,24 @@ export function NetWorthChart({
               filter="url(#ns-line-lift)"
             />
 
+            {/* The leader is the only part of an event's mark still drawn in
+                the svg — a 1px line barely shows the couple-percent
+                non-uniform stretch `preserveAspectRatio="none"` (full-bleed
+                sizing, see planner.css) introduces. The dot itself is HTML
+                (below, in the overlay), because that stretch would turn an
+                svg circle visibly oval on any viewport whose aspect ratio
+                drifts from the chart's own 1176:372. */}
+            {geometry.labels.map((l) => (
+              <line
+                key={`leader-${l.eventId}`}
+                x1={l.dotX}
+                y1={l.dotY}
+                x2={l.leaderX}
+                y2={l.leaderY}
+                className="ns-event-leader"
+              />
+            ))}
+
             {hover && (
               <>
                 <line
@@ -367,8 +371,8 @@ export function NetWorthChart({
               </div>
             ))}
 
-            {/* Hit bands come FIRST so the pins stack above them. Rendered after,
-              they cover the pins and swallow every click. */}
+            {/* Hit bands come FIRST so the dots and labels stack above them.
+              Rendered after, they cover everything and swallow every click. */}
             {geometry.bands.map((band) => (
               <div
                 key={band.year}
@@ -381,8 +385,24 @@ export function NetWorthChart({
               />
             ))}
 
+            {/* Every included event gets a dot on the curve at its own year —
+                not a detached row above the plot. Hue is the only thing this
+                chart uses to encode "what does this do to cash"; a 2px ring
+                in the surface colour keeps it legible sitting on top of the
+                busy line and area fill (docs/REDESIGN.md §4.1). HTML, not
+                svg, and purely decorative (the hit target and, for a
+                labelled event, the label button underneath and on top of it
+                respectively are what actually respond to a pointer). */}
+            {geometry.dots.map((d) => (
+              <div
+                key={`dot-${d.eventId}`}
+                className={`ns-event-dot-mark ns-event-dot-${d.tone}`}
+                style={{ left: pct(d.x, VB_W), top: pct(d.y, VB_H) }}
+              />
+            ))}
+
             {/* Endpoint chips, rendered as HTML after the hit bands for the
-                same reason the pins are: bands swallow SVG hover otherwise.
+                same reason the dots are: bands swallow SVG hover otherwise.
                 Hovering one dims the opposite edge, so the band reads as a
                 range with a side rather than as two unrelated lines. */}
             {fan && geometry.highEdge && geometry.lowEdge && (
@@ -428,39 +448,47 @@ export function NetWorthChart({
               </div>
             ))}
 
-            {geometry.pins.map((pin, i) => (
+            {/* Unlabelled events: a small hit target sitting exactly on the
+                SVG dot, so hover/tap still reaches every event, not just the
+                top four (docs/REDESIGN.md §4.1: "rest reveal on hover"). */}
+            {geometry.dots
+              .filter((d) => !geometry.labelledIds.has(d.eventId))
+              .map((d) => (
+                <div
+                  key={`hit-${d.eventId}`}
+                  className="ns-event-hit-slot"
+                  style={{ left: pct(d.x, VB_W), top: pct(d.y, VB_H) }}
+                >
+                  <HoverCard detail={eventDetail(d.event)} side="top">
+                    <button
+                      type="button"
+                      className="ns-event-hit"
+                      aria-pressed={selected?.eventId === d.eventId}
+                      aria-label={d.event.name}
+                      onClick={() => onSelect(selectionFor(d, selected))}
+                    />
+                  </HoverCard>
+                </div>
+              ))}
+
+            {/* The top four by |Δ net worth at horizon| get a standing name
+                instead of waiting for a hover — ranked, not chronological, so
+                a cluster of small early events doesn't crowd out the one
+                thing that actually moves the ending number. */}
+            {geometry.labels.map((l) => (
               <div
-                key={pin.eventId}
-                className="ns-pin-slot"
-                // --i staggers the drop-in left to right, so the pins land in
-                // chronological order rather than all at once. It sits on the
-                // slot rather than the button because the slot is what gets
-                // positioned; custom properties inherit down to .ns-pin.
-                style={
-                  { left: pct(pin.x, VB_W), top: pct(pin.top, VB_H), "--i": i } as CSSProperties
-                }
+                key={`label-${l.eventId}`}
+                className="ns-event-label-slot"
+                style={{ left: pct(l.left, VB_W), top: pct(l.top, VB_H) }}
               >
-                <HoverCard detail={eventDetail(pin.event)} side="bottom">
+                <HoverCard detail={eventDetail(l.event)} side="top">
                   <button
                     type="button"
-                    className={`ns-pin ns-pin-${pin.tone}`}
-                    aria-pressed={selected?.eventId === pin.eventId}
-                    onClick={() =>
-                      onSelect(
-                        selected?.eventId === pin.eventId
-                          ? null
-                          : {
-                              eventId: pin.eventId,
-                              label: pin.label,
-                              year: pin.year,
-                              detail: pin.detail,
-                              tone: pin.tone,
-                              code: pin.code,
-                            },
-                      )
-                    }
+                    className={`ns-event-label ns-event-label-${l.tone}`}
+                    aria-pressed={selected?.eventId === l.eventId}
+                    onClick={() => onSelect(selectionFor(l, selected))}
                   >
-                    {pin.code}
+                    {l.text}
                   </button>
                 </HoverCard>
               </div>
@@ -495,16 +523,57 @@ export function NetWorthChart({
 
 // ---------------------------------------------------------------------------
 
-interface Pin {
+interface EventPoint {
   eventId: string;
-  year: number;
-  code: string;
-  label: string;
-  detail: string;
-  tone: "income" | "cost" | "end";
   x: number;
-  top: number;
+  y: number;
+  tone: "income" | "cost" | "end";
   event: PlanEvent;
+}
+
+// Positioned by its LEFT edge, not centred — this file never puts a
+// `transform` on anything that wraps a `HoverCard` (see `.ns-mark-slot` /
+// `.ns-fan-slot` in planner.css, both centred with a static margin instead),
+// and a variable-width chip can't be centred with a static margin. Anchoring
+// by the packed left edge from `build()`'s lane-packing sidesteps the need
+// for either.
+interface EventLabel {
+  eventId: string;
+  event: PlanEvent;
+  tone: "income" | "cost" | "end";
+  /** Chip's top-left corner, post lane-packing. */
+  left: number;
+  top: number;
+  /** Where the leader line lands — the chip's horizontal centre — kept
+      separate from `left` since the leader should point at the middle of
+      the name, not its edge. */
+  leaderX: number;
+  leaderY: number;
+  /** The dot on the curve this label belongs to; the leader's other end. */
+  dotX: number;
+  dotY: number;
+  text: string;
+}
+
+// Structural, not `EventPoint` — `EventLabel` satisfies this too (both carry
+// `event`, which is all a selection actually needs) without having to also
+// carry a `year`/`code` a label doesn't otherwise use.
+interface Selectable {
+  eventId: string;
+  event: PlanEvent;
+  tone: "income" | "cost" | "end";
+}
+
+function selectionFor(p: Selectable, selected: ChartSelection | null): ChartSelection | null {
+  if (selected?.eventId === p.eventId) return null;
+  return {
+    eventId: p.eventId,
+    label: p.event.name,
+    year: p.event.startYear,
+    detail: summarize(p.event),
+    tone: p.tone,
+    code: codeFor(p.event.kind),
+  };
 }
 
 function compareAt(compare: CompareSeries, year: number): number {
@@ -668,9 +737,60 @@ function FanChip({
   );
 }
 
+/**
+ * How much each included event moves the ending net worth — an actual
+ * counterfactual, not a proxy: re-run the plan with that one event switched
+ * off (`isIncluded: false`, the same flag `run.ts` already reads) and diff
+ * the horizon figure against the real result. `runPlan` is cheap enough that
+ * doing this once per event, on every plan change, is still sub-millisecond
+ * work (the same bet `App.tsx` already makes twice over for the return fan).
+ *
+ * Deflates the variant the same way `App.tsx` deflates `result`, so a
+ * today's-dollars plan compares like against like — otherwise every event
+ * would look inflated by decades of compounding it never caused.
+ *
+ * `endOfPlan` is excluded: switching it off changes the horizon itself
+ * (`run.ts` reads it to set `endYear`), which would compare two different
+ * years rather than the same year with and without the event.
+ */
+function rankImpact(plan: Plan, result: PlanResult): Map<string, number> {
+  const baseEnd =
+    result.years.find((y) => y.year === result.endYear)?.netWorth ??
+    result.years[result.years.length - 1]?.netWorth ??
+    0;
+
+  const toDisplay = (r: PlanResult): PlanResult =>
+    plan.settings.dollarMode === "todaysDollars"
+      ? deflate(r, plan.settings.inflationRate)
+      : r;
+
+  const impacts = new Map<string, number>();
+  for (const event of plan.events) {
+    if (!event.isIncluded || event.isHidden || event.kind === "endOfPlan") continue;
+    const withoutRaw = runPlan({
+      ...plan,
+      events: plan.events.map((e) => (e.id === event.id ? { ...e, isIncluded: false } : e)),
+    });
+    const without = toDisplay(withoutRaw);
+    const withoutEnd =
+      without.years.find((y) => y.year === result.endYear)?.netWorth ??
+      without.years[without.years.length - 1]?.netWorth ??
+      0;
+    impacts.set(event.id, Math.abs(baseEnd - withoutEnd));
+  }
+  return impacts;
+}
+
+/** A label's rough pixel footprint, close enough for lane-packing purposes —
+    the same approximation the old pin row made with a fixed `PIN_SIZE`. */
+function estimateLabelWidth(text: string): number {
+  return Math.min(172, Math.max(38, text.length * 6.3 + 18));
+}
+
 function build(
   result: PlanResult,
   events: PlanEvent[],
+  impactByEventId: Map<string, number>,
   compare?: CompareSeries,
   fan?: FanSeries,
 ) {
@@ -697,7 +817,7 @@ function build(
     ...compareYears.map((y) => y.netWorth),
     ...fanYears(fan?.high).map((y) => y.netWorth),
   );
-  const top = niceCeiling(maxNetWorth);
+  const top = honestCeiling(maxNetWorth);
   const yFor = (value: number) =>
     PLOT_BOTTOM - (value / top) * (PLOT_BOTTOM - PLOT_TOP);
 
@@ -733,40 +853,68 @@ function build(
     xTicks.push({ year: result.endYear, x: xFor(result.endYear) });
   }
 
-  // Pins stack downward when they would OVERLAP, not merely when they share a
-  // year. On a 20-year plan same-year is the only collision; on a 60-year one
-  // adjacent years are only a few pixels apart, and stacking by year alone
-  // left them overlapping and unreadable.
-  //
-  // Each row remembers the right edge of its last pin; a pin drops to the
-  // first row it clears.
-  const rowRightEdges: number[] = [];
-  const pins: Pin[] = events
-    .filter((e) => e.isIncluded && !e.isHidden)
-    .filter(
-      (e) => e.startYear >= result.startYear && e.startYear <= result.endYear,
-    )
-    .sort((a, b) => a.startYear - b.startYear)
-    .map((event) => {
-      const x = xFor(event.startYear);
-      const left = x - PIN_SIZE / 2;
+  // Every included event becomes a dot sitting AT the curve's own value in its
+  // year — not a detached row above the plot (docs/REDESIGN.md §4.1). The
+  // plan horizon marker is excluded: it is not a life event and its "impact"
+  // isn't a meaningful counterfactual (removing it changes the horizon
+  // itself, see `rankImpact`).
+  const dotEvents = events
+    .filter((e) => e.isIncluded && !e.isHidden && e.kind !== "endOfPlan")
+    .filter((e) => e.startYear >= result.startYear && e.startYear <= result.endYear)
+    .sort((a, b) => a.startYear - b.startYear);
 
-      let depth = rowRightEdges.findIndex((edge) => left >= edge);
-      if (depth === -1) depth = rowRightEdges.length;
-      rowRightEdges[depth] = x + PIN_SIZE / 2 + PIN_GAP;
-
-      return {
-        eventId: event.id,
-        year: event.startYear,
-        code: codeFor(event.kind),
-        label: event.name,
-        detail: summarize(event),
-        tone: toneFor(event.kind),
-        x,
-        top: PLOT_TOP - PIN_SIZE / 2 + depth * (PIN_SIZE + PIN_GAP),
-        event,
-      };
+  const dots: EventPoint[] = [];
+  for (const event of dotEvents) {
+    const p = pointByYear.get(event.startYear);
+    if (!p) continue;
+    dots.push({
+      eventId: event.id,
+      x: p.x,
+      y: p.y,
+      tone: toneFor(event.kind),
+      event,
     });
+  }
+
+  // Rank by |Δ net worth at horizon| and label the top few — a cluster of
+  // small early events no longer wins the label just by being first.
+  const topIds = new Set(
+    dots
+      .slice()
+      .sort((a, b) => (impactByEventId.get(b.eventId) ?? 0) - (impactByEventId.get(a.eventId) ?? 0))
+      .slice(0, TOP_LABEL_COUNT)
+      .map((d) => d.eventId),
+  );
+
+  // Labels pack into lanes near the top of the plot, left to right in time
+  // order, same collision rule the old pin row used: a label drops to the
+  // next lane down only when it would overlap the last one placed in its
+  // current lane. With at most four of them the lanes rarely go past one or
+  // two deep even when the events themselves are bunched in the same year.
+  const laneRightEdges: number[] = [];
+  const labels: EventLabel[] = [];
+  for (const d of dots) {
+    if (!topIds.has(d.eventId)) continue;
+    const width = estimateLabelWidth(d.event.name);
+    const left = d.x - width / 2;
+    let lane = laneRightEdges.findIndex((edge) => left >= edge);
+    if (lane === -1) lane = laneRightEdges.length;
+    laneRightEdges[lane] = left + width + LABEL_GAP;
+    const top = LABEL_TOP + lane * LABEL_LANE_H;
+
+    labels.push({
+      eventId: d.eventId,
+      event: d.event,
+      tone: d.tone,
+      left,
+      top,
+      leaderX: d.x,
+      leaderY: top + 10,
+      dotX: d.x,
+      dotY: d.y,
+      text: d.event.name,
+    });
+  }
 
   // Year bands for the hover hit test.
   const bandWidth = (PLOT_RIGHT - PLOT_LEFT) / Math.max(1, years.length - 1);
@@ -819,7 +967,9 @@ function build(
     compareLine,
     gridlines,
     xTicks,
-    pins,
+    dots,
+    labels,
+    labelledIds: topIds,
     bands,
     pointByYear,
     first: points[0],
@@ -830,14 +980,18 @@ function build(
   };
 }
 
-/** Round a maximum up to a clean axis top so gridline labels read well. */
-function niceCeiling(value: number): number {
-  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-  for (const step of [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]) {
-    const candidate = step * magnitude;
-    if (candidate >= value) return candidate;
-  }
-  return 10 * magnitude;
+/**
+ * The plot's y-axis top.
+ *
+ * Previously rounded up to the next "nice" gridline tier (1 / 1.25 / 1.5 / 2
+ * / 2.5 / 3 / 4 / 5 / 7.5 / 10 × a power of ten) — a `$4.3M` peak could push
+ * the axis to `$5M`, wasting a sixth of the plot's height on headroom nobody
+ * asked for. An instrument reads its actual ceiling: a small margin so the
+ * peak clears the top edge and the fan (when it's the higher line) doesn't
+ * touch it, nothing more (docs/REDESIGN.md §4.1, design-direction move 2).
+ */
+function honestCeiling(value: number): number {
+  return value > 0 ? value * 1.06 : 1;
 }
 
 function pct(value: number, total: number): string {

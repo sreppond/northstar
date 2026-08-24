@@ -52,6 +52,12 @@
 :root {
   color-scheme: light;
 
+  /* -- typography: DM Sans is the UI/body voice; IBM Plex Mono is the data
+     voice — axis labels, small metadata, timestamps (docs/REDESIGN.md §5.3).
+     Never the hero figure: that stays proportional DM Sans on purpose, so a
+     display number reads as a number rather than a printout. -- */
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
   /* -- chrome: ground & surface -- */
   --bg: #edf0f3;
   --surface: #ffffff;
@@ -363,7 +369,8 @@
 .ns-plan-row-select,
 .ns-tab,
 .ns-kind,
-.ns-pin,
+.ns-event-label,
+.ns-event-hit,
 .ns-bar,
 .ns-toggle-row input[type='checkbox'] {
   transform: translate(var(--jx, 0px), var(--jy, 0px)) scale(var(--jsx, 1), var(--jsy, 1));
@@ -380,7 +387,7 @@
 .ns-btn:hover:not(:disabled),
 .ns-plan-row-select:hover,
 .ns-kind:hover,
-.ns-pin:hover,
+.ns-event-label:hover,
 .ns-bar:hover {
   --jy: -1px;
 }
@@ -392,7 +399,8 @@
 .ns-plan-row-select:active,
 .ns-tab:active,
 .ns-kind:active,
-.ns-pin:active {
+.ns-event-label:active,
+.ns-event-hit:active {
   --jsx: 1.045;
   --jsy: 0.915;
   --jy: 1px;
@@ -489,46 +497,134 @@
 
 /* --- page frame ---------------------------------------------------------- */
 
-/* Floats over the page rather than sitting in flow, pinned to the top-left
-   corner — a compact pill, not a full-width bar, so it reads as a control
-   cluster rather than a masthead. `.ns-main` carries matching top padding
-   so page content clears it. */
+/* A translucent full-width bar rather than a floating pill (docs/REDESIGN.md
+   §3.2): content scrolls underneath it, so `backdrop-filter` is what keeps
+   the wordmark and lenses legible over a moving chart rather than a solid
+   fill. `.ns-main` carries matching top padding so page content clears it.
+   Two rows, both centred: the wordmark/lenses/utilities row, then the
+   scenario name acting as the document title underneath it. */
 .ns-head {
   position: fixed;
-  top: 20px;
-  left: 20px;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 30;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  width: max-content;
-  max-width: calc(100vw - 40px);
-  padding: 10px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: var(--jelly-rise-hi), 0 12px 32px -16px rgb(var(--sh) / calc(24% * var(--sh-k)));
+  gap: 2px;
+  padding: 14px 34px 10px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
   backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+}
+/* A scroll-edge fade in place of a hard `border-bottom` — chrome that thins
+   into the page rather than a card edge sitting on top of it. */
+.ns-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 18px;
+  background: linear-gradient(to bottom, rgb(var(--sh) / calc(7% * var(--sh-k))), transparent);
+  pointer-events: none;
+}
+
+/* Grid rather than flex: the lenses are the primary nav and have to land in
+   the true visual centre regardless of how wide the wordmark or the utility
+   cluster on either side happen to be — `space-between` centres nothing once
+   its two ends differ in width. */
+.ns-head-row {
+  width: 100%;
+  max-width: 1320px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+}
+.ns-head-row .ns-view-switch {
+  justify-self: center;
+}
+.ns-head-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .ns-wordmark {
-  font-size: 20px;
+  justify-self: start;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.022em;
   color: var(--ink);
   flex: none;
 }
 
-/* Pushed to the far end of the header rather than sat next to the scenarios,
-   because it is a preference, not part of the plan. */
-.ns-theme {
-  margin-left: auto;
+/* The scenario name — the single place the plan name lives now (fixes the
+   "shown twice" redundancy the old card title + header badge had). Reads as
+   a document title, not a chip: quiet ink, no pill chrome, until touched. */
+.ns-scenario-title {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 2px 10px;
+  cursor: pointer;
+  max-width: calc(100vw - 40px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 140ms var(--ease-soft), background-color 140ms var(--ease-soft);
+}
+.ns-scenario-title:hover {
+  color: var(--ink);
+  background: var(--chip);
+}
+
+/* ⌘K, the theme toggle and the overflow menu read as one quiet utility
+   cluster: same footprint, same hover treatment, neutral until touched. */
+.ns-cmdk-stub {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-light);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-soft),
+    color 140ms var(--ease-soft),
+    border-color 140ms var(--ease-soft);
+}
+.ns-cmdk-stub:hover {
+  color: var(--ink);
+  background: var(--chip);
+  border-color: var(--border);
+}
+.ns-cmdk-stub kbd {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+.ns-theme,
+.ns-head-icon-btn {
   flex: none;
   width: 34px;
   height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 17px;
+  line-height: 1;
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
@@ -539,41 +635,37 @@
     color 140ms var(--ease-soft),
     border-color 140ms var(--ease-soft);
 }
-.ns-theme:hover {
+.ns-theme:hover,
+.ns-head-icon-btn:hover {
   color: var(--ink);
   background: var(--chip);
   border-color: var(--border);
 }
 
-/* Doubles as the plan switcher: naming the active plan is also the
-   affordance for changing it, so there's one control for "which plan" and
-   nothing to hunt for in the drawer. */
-.ns-badge {
-  font: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  background-color: var(--chip);
-  border: 0;
-  border-radius: 999px;
-  padding: 4px 10px;
-  box-shadow: inset 0 1px 0 var(--jelly-lit);
-  cursor: pointer;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color 140ms var(--ease-soft), background-color 140ms var(--ease-soft);
+.ns-head-menu {
+  position: relative;
+  flex: none;
 }
-.ns-badge:hover {
-  color: var(--ink);
-  background-color: var(--tint-row);
+/* Hangs from the right edge of its trigger rather than the left — the
+   shared `.ns-menu` (docs/planner.css "compare picker" section) defaults
+   left-aligned, which would hang this one off the viewport edge. Compound
+   selector rather than `.ns-menu-right` alone: that base rule is defined
+   later in this file, and equal-specificity rules resolve by source order,
+   so a same-specificity override written earlier would silently lose. */
+.ns-menu.ns-menu-right {
+  left: auto;
+  right: 0;
+}
+.ns-menu-hint {
+  float: right;
+  margin-left: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-light);
 }
 
-/* Compact rider on `.ns-segmented`/`.ns-tab` so the four-view switcher fits
-   the header pill instead of the full card tab bar. */
+/* Compact rider on `.ns-segmented`/`.ns-tab` so the lens switcher fits the
+   header bar instead of the full card tab bar. */
 .ns-view-switch {
   padding: 3px;
 }
@@ -585,22 +677,21 @@
 .ns-main {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 88px 34px 0;
+  padding: 96px 34px 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-/* Cards are the one large soft body: a lit top edge and a wide, low ambient
-   shadow. No hover state — a card is a surface, not a control. */
+/* A card is read, not pressed — a hairline and one soft shadow, no jelly
+   highlight (docs/REDESIGN.md §5.2: depth is a signal of interactivity, not
+   a texture applied everywhere). No hover state either — a card is a
+   surface, not a control. */
 .ns-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 22px;
-  box-shadow:
-    inset 0 1px 0 var(--jelly-lit),
-    0 1px 2px rgb(var(--sh) / calc(5% * var(--sh-k))),
-    0 10px 28px -14px rgb(var(--sh) / calc(16% * var(--sh-k)));
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
@@ -712,44 +803,20 @@
 
 /* --- plan card ----------------------------------------------------------- */
 
-.ns-title-row {
+/* What used to be the card's title row now that the title itself lives in
+   the header (docs/REDESIGN.md §3.2): just the two actions someone actually
+   reaches for every session. Import / Sign out / Undo / Redo moved to the
+   header's overflow menu — see `HeaderMenu.tsx`. */
+.ns-hero-actions {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 20px 24px 18px;
-}
-
-.ns-title-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  background-color: var(--chip);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  flex: none;
-  box-shadow:
-    inset 0 1px 0 var(--jelly-lit),
-    inset 0 -2px 4px rgb(var(--sh) / calc(5% * var(--sh-k)));
-}
-
-.ns-title {
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 24px 14px;
 }
 
 .ns-subtle {
   font-size: 13px;
   color: var(--muted);
-}
-
-.ns-title-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 10px;
-  align-items: center;
 }
 
 /* --- the hero reading -----------------------------------------------------
@@ -758,9 +825,11 @@
  * above the chart competing with it, and three of the four numbers were
  * things nobody acts on.
  *
- * What a person came for is one figure and one sentence. So: the horizon net
- * worth at display size, a plain-language reading of how it gets there, and
- * the spread it depends on. Everything else demoted to a metadata line.
+ * Cut further for docs/REDESIGN.md §4.1: the figure and one reading line are
+ * all that's left standing. The spread is a tappable phrase now, not a
+ * permanent second sentence, and the `2026–2046 · N events` metadata line is
+ * gone outright — the year range is already the chart's x-axis, and the
+ * event count told nobody anything they could act on.
  * ------------------------------------------------------------------------ */
 
 .ns-hero {
@@ -812,12 +881,31 @@
 }
 
 /* The spread is the honest half of the reading: the headline figure is a
-   point estimate of something that genuinely is not a point. */
+   point estimate of something that genuinely is not a point. Now a button —
+   tapping it toggles the same fan band the chart's own "Range" pill drives
+   (docs/REDESIGN.md §4.1) — styled as a quiet dotted-underline phrase rather
+   than a pill, so it still reads as a sentence first and a control second. */
 .ns-hero-risk {
+  font: inherit;
   font-size: 14px;
   line-height: 1.45;
   color: var(--muted);
   max-width: 54ch;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  transition: color 140ms var(--ease-soft), text-decoration-color 140ms var(--ease-soft);
+}
+.ns-hero-risk:hover,
+.ns-hero-risk[aria-pressed='true'] {
+  color: var(--child-ink);
+  text-decoration-color: var(--muted);
 }
 .ns-hero-risk b {
   font-weight: 500;
@@ -825,98 +913,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-.ns-hero-meta {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.075em;
-  text-transform: uppercase;
-  color: var(--muted-light);
+/* --- the spine ------------------------------------------------------------
+ * The chart, unboxed (docs/REDESIGN.md §4.1): no card background, border or
+ * padding around it, so it reads as the instrument the page is organised
+ * around rather than one card among several. The selection footer and any
+ * warning band still belong to it, so they stay inside this section and
+ * pick up a matching bottom radius instead of the card's.
+ * ------------------------------------------------------------------------ */
+.ns-spine {
+  position: relative;
 }
-.ns-hero-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-.ns-hero-meta span::after {
-  content: '';
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--pill-border);
-}
-.ns-hero-meta span:last-child::after {
-  display: none;
-}
-
-/* --- spending strip -------------------------------------------------------
- * "Spending less isn't reported in dollars, it's reported in time bought"
- * (docs/BORROW.md §8) — five fixed deltas against the runway, read at a
- * glance rather than operated like a control. */
-
-.ns-spending-strip {
-  margin: 18px 24px 4px;
-  padding-top: 18px;
-  border-top: 1px solid var(--rule);
-}
-
-.ns-spending-strip-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted-light);
-  margin-bottom: 10px;
-}
-
-/* Three zones — less / current / more — not five equal-weight tiles in a
-   row: the wider gaps either side of "Current" are what let it read as an
-   anchor with two directions, rather than a list of five numbers. */
-.ns-spending-tiles {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 18px;
-}
-
-.ns-spending-zone {
-  display: flex;
-  flex: 1 1 260px;
-  gap: 8px;
-}
-
-.ns-spending-tile {
-  flex: 1 1 120px;
-  background: var(--surface-sub);
-  border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: 10px 14px;
-}
-.ns-spending-tile-current {
-  flex: 0 1 110px;
-  background: var(--chip);
-}
-
-.ns-spending-tile-delta {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.ns-spending-tile-runway {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-.ns-spending-tile-up .ns-spending-tile-runway {
-  color: var(--in);
-}
-.ns-spending-tile-down .ns-spending-tile-runway {
-  color: var(--out);
+.ns-spine .ns-selection {
+  border-radius: 0 0 16px 16px;
 }
 
 /* --- chart --------------------------------------------------------------- */
@@ -959,14 +967,26 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+/* Full-bleed and viewport-scaled rather than boxed at a size derived from
+   its own width (docs/REDESIGN.md §4.1, design-direction move 2): the plot
+   claims a real, deliberate slice of the screen on any width. The svg's
+   `viewBox` keeps every geometry calculation in NetWorthChart.tsx in the
+   same 1176×372 unit space it always was; `preserveAspectRatio="none"` (set
+   in the component) lets that box stretch to fill whatever height the page
+   gives it here, the same trade a responsive `<img>` with `object-fit: fill`
+   makes. The stretch is not always small — event dots are html precisely
+   because it is not (see `.ns-event-dot-mark` below) — but a fill, a 2.75px
+   line and 1px gridlines read fine unevenly scaled; only true circles show
+   it. */
 .ns-chart {
   position: relative;
+  height: clamp(360px, 58vh, 640px);
   padding: 0 24px 8px;
 }
 .ns-chart svg {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   overflow: visible;
 }
 
@@ -985,7 +1005,9 @@
 .ns-y-tick,
 .ns-x-tick {
   position: absolute;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
   color: var(--muted-light);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -997,68 +1019,110 @@
   transform: translateX(-50%);
 }
 
-/* Event pins are the most touchable thing on the page and the one place a
-   full jelly entrance is worth it: a new event plops onto the chart. They
-   only mount when an event is added or the scenario changes, so this is a
-   moment, not a loop — editing an existing event moves the pin silently
-   because React keeps the same element. */
-.ns-pin {
-  --jx: -50%;
+/* Events on the curve (docs/REDESIGN.md §4.1) — a dot at every included
+   event's own year and value, not a detached row above the plot. Hue is the
+   only thing here that encodes data (income adds, cost takes); the ring is
+   always the surface colour, which is what keeps a dot legible sitting on
+   top of the busy line and area fill.
+   HTML, not svg, deliberately: the full-bleed chart's svg is stretched with
+   `preserveAspectRatio="none"` (see `.ns-chart svg` above) so its viewBox
+   fills whatever box the page gives it, and on most viewports that stretch
+   is not uniform between x and y. A 1px leader line barely shows that; an
+   svg circle visibly ovals. Centred with a static margin rather than a
+   transform, matching every other HoverCard-adjacent mark in this file (see
+   `.ns-mark-slot` below) even though this one has no HoverCard of its own —
+   consistency over cleverness. */
+.ns-event-dot-mark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  pointer-events: none;
+}
+.ns-event-dot-income {
+  background: var(--in-deep);
+}
+.ns-event-dot-cost {
+  background: var(--out-deep);
+}
+
+/* The thin line from a labelled dot up to its name — still svg, since a line
+   barely one degree off from the non-uniform stretch above is not visible
+   the way a distorted circle is. */
+.ns-event-leader {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+/* The top few by |Δ net worth at horizon| get a standing name instead of
+   waiting for a hover. Plain ink, not a data hue — a name is wayfinding, not
+   a value; the dot at the leader's other end already carries the colour.
+   Pressable (docs/REDESIGN.md §5.2: tactile depth is kept on the chart's
+   dots), so it joins the shared jelly-interactive rule below rather than
+   the quiet single-shadow treatment cards and chips get.
+   Anchored at the packed left/top corner NetWorthChart.tsx's `build()`
+   already computed, not centred — no margin or transform needed, which
+   keeps it clear of the one rule every HoverCard-wrapping slot in this file
+   follows (see `.ns-mark-slot` / `.ns-fan-slot` below): never put a
+   `transform` on an element that wraps a `HoverCard`. */
+.ns-event-label-slot {
   position: absolute;
   pointer-events: auto;
-  cursor: pointer;
-  width: 32px;
-  height: 32px;
-  border-radius: 11px;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--jelly-rise);
-  /* Above the hover hit bands, so a pin click reaches the pin. */
   z-index: 2;
-  animation: ns-plop 460ms var(--ease-soft) both;
-  animation-delay: calc(var(--i, 0) * 45ms);
 }
-.ns-pin:hover {
-  box-shadow: var(--jelly-rise-hi);
+.ns-event-label {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--child-ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--shadow-control);
 }
-.ns-pin:active {
-  box-shadow: var(--jelly-press);
+.ns-event-label:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
 }
-.ns-pin-income {
-  background-color: var(--in-tint);
-  border: 1px solid var(--in-line);
-  color: var(--in-deep);
-}
-.ns-pin-income:hover {
-  background-color: var(--in-hover);
-}
-.ns-pin-cost {
-  background-color: var(--out-tint);
-  border: 1px solid var(--out-line);
-  color: var(--out-deep);
-}
-.ns-pin-cost:hover {
-  background-color: var(--out-hover);
-}
-.ns-pin-end {
-  background-color: var(--inverse);
-  background-image: var(--jelly-gloss);
-  border: 1px solid var(--inverse);
-  color: var(--on-inverse);
-}
-.ns-pin-end:hover {
-  background-color: var(--ink-deep);
-}
-/* Selection re-runs the squish, so clicking a pin feels answered. */
-.ns-pin[aria-pressed='true'] {
+.ns-event-label[aria-pressed='true'] {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   animation: ns-squish var(--t-settle) var(--ease-soft);
+}
+
+/* Every other event still gets a hit target exactly on its (invisible)
+   dot, sized for a comfortable tap rather than the visible 8px mark — hover
+   or tap reveals the same detail card a label's dot gets, just without the
+   standing name (docs/REDESIGN.md §4.1: "rest reveal on hover"). Centred
+   with a static margin, the same convention every other HoverCard-wrapping
+   slot in this file uses (see `.ns-mark-slot` below) — a fixed 20px target
+   needs no more than that. */
+.ns-event-hit-slot {
+  position: absolute;
+  margin-left: -10px;
+  margin-top: -10px;
+  pointer-events: auto;
+  z-index: 1;
+}
+.ns-event-hit {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.ns-event-hit[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .ns-hit {
@@ -1114,15 +1178,17 @@
   min-height: 38px;
   background: var(--surface-sub);
 }
+/* A static readout, not a control — no gloss (docs/REDESIGN.md §5.2), and
+   set in the mono data voice like the rest of the chart's small metadata. */
 .ns-ref {
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--accent);
   background-color: var(--chip);
-  background-image: var(--jelly-gloss);
   border-radius: 999px;
   padding: 4px 10px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .ns-ref-cost {
   color: var(--out-deep);
@@ -1185,7 +1251,9 @@
   gap: 8px;
 }
 .ns-window-label {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -1370,6 +1438,9 @@
 /* No z-index juggling needed here: HoverCard portals to document.body, so a
    chip's card escapes this slot's stacking context and the opposite chip
    cannot paint over it. */
+/* Hover-only, never clicked (`cursor: default`) — a chip that's read, not
+   pressed, so it gets the same quiet single-shadow treatment as `.ns-card`
+   rather than the jelly rise (docs/REDESIGN.md §5.2). */
 .ns-fan-chip {
   display: inline-flex;
   align-items: center;
@@ -1383,13 +1454,9 @@
   white-space: nowrap;
   cursor: default;
   background: var(--surface);
-  box-shadow: var(--jelly-rise);
-  transition:
-    box-shadow 180ms var(--ease-soft),
-    transform var(--t-settle) var(--ease-jelly);
-}
-.ns-fan-chip:hover {
-  box-shadow: var(--jelly-rise-hi);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-control);
+  transition: border-color 140ms var(--ease-soft);
 }
 .ns-fan-chip-mark {
   font-size: 8px;
@@ -2013,7 +2080,8 @@
   .ns-plan-row-select,
   .ns-tab,
   .ns-kind,
-  .ns-pin,
+  .ns-event-label,
+  .ns-event-hit,
   .ns-bar,
   .ns-toggle-row input[type='checkbox'] {
     --jsx: 1 !important;
@@ -2291,26 +2359,6 @@
 /* The assumptions trigger keeps the button's own look. */
 .ns-hovercard-anchor > .ns-btn {
   white-space: nowrap;
-}
-
-/* Pins are positioned by a wrapper so the hover card can anchor to the button.
-   Centred with a negative margin, NOT translateX: a transform on an ancestor
-   becomes the containing block for `position: fixed` descendants, which would
-   silently reposition every hover card relative to the pin instead of the
-   viewport. Pin is 32px wide, so -16px centres it. */
-.ns-pin-slot {
-  position: absolute;
-  margin-left: -16px;
-  pointer-events: auto;
-  z-index: 2;
-}
-.ns-pin-slot .ns-pin {
-  position: static;
-  /* The slot already centres the pin with margin-left, so the pin must not
-     shift itself by another -50%. Zero the offset variable rather than writing
-     `transform: none` — that would cancel the whole jelly transform and take
-     the squash-and-stretch with it. */
-  --jx: 0px;
 }
 
 .ns-row-add > div:first-child {
@@ -2681,19 +2729,13 @@
     padding-left: 20px;
     padding-right: 20px;
   }
-  .ns-head {
-    flex-wrap: wrap;
+  .ns-head-row {
     gap: 10px;
   }
 
-  .ns-title-row {
+  .ns-hero-actions {
     flex-wrap: wrap;
     padding: 16px 18px 14px;
-  }
-  .ns-title-actions {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
   }
 
   .ns-kpis {
@@ -2743,26 +2785,37 @@
 
 @media (max-width: 640px) {
   .ns-head {
-    top: 12px;
-    left: 12px;
-    max-width: calc(100vw - 24px);
-    padding: 8px 12px;
+    padding: 10px 12px 8px;
   }
   .ns-main {
     padding-left: 12px;
     padding-right: 12px;
   }
   .ns-wordmark {
-    font-size: 19px;
+    font-size: 17px;
+  }
+  .ns-scenario-title {
+    font-size: 13px;
   }
 
-  /* The switcher gets its own full-width row rather than squeezing onto the
-     wordmark/badge/theme row and wrapping mid-label — `.ns-head` is already
-     `flex-wrap: wrap` above 640px, so a flex-basis: 100% item is enough to
-     push it down without touching the header's markup order. */
-  .ns-view-switch {
-    order: 3;
-    flex-basis: 100%;
+  /* The lenses get their own full-width row under the wordmark/utilities row
+     rather than squeezing onto it and wrapping mid-label. Grid areas rather
+     than `order`, so it works from a two-column row instead of assuming a
+     wrap. */
+  .ns-head-row {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: 'word actions' 'lenses lenses';
+    row-gap: 8px;
+  }
+  .ns-wordmark {
+    grid-area: word;
+  }
+  .ns-head-actions {
+    grid-area: actions;
+  }
+  .ns-head-row .ns-view-switch {
+    grid-area: lenses;
+    justify-self: stretch;
     justify-content: stretch;
   }
   .ns-view-switch .ns-tab {
@@ -2789,18 +2842,12 @@
     font-size: 26px;
   }
 
-  .ns-title {
-    font-size: 18px;
-  }
-  .ns-title-row {
-    gap: 10px;
+  .ns-hero-actions {
+    gap: 8px;
     padding: 14px 14px 12px;
   }
   /* Buttons go full-width rather than crowding into a strip. */
-  .ns-title-actions {
-    gap: 8px;
-  }
-  .ns-title-actions .ns-btn {
+  .ns-hero-actions .ns-btn {
     flex: 1;
     padding: 10px 12px;
     text-align: center;
@@ -2845,14 +2892,25 @@
 }
 
 /* Below the tablet breakpoint the chart keeps its proportions and scrolls,
-   rather than compressing until the pins collide and the axis clips. */
+   rather than compressing until the dots collide and the axis clips. Height
+   reverts to auto here too: full-bleed's viewport-height sizing assumes a
+   viewport-width svg, and forcing 58vh onto a fixed 800px-wide strip would
+   stretch the viewBox far off its own ratio — line and gridline stroke
+   widths scale unevenly under a non-uniform transform, the line thinner one
+   way than the other, same trouble a distorted circle would have been before
+   the dots moved to html. Auto lets the svg's intrinsic 1176:372 ratio size
+   it from the 800px width instead, the same way it did before full-bleed. */
 @media (max-width: 700px) {
   .ns-chart-scroll {
     overflow-x: auto;
     overscroll-behavior-x: contain;
   }
   .ns-chart {
+    height: auto;
     min-width: 800px;
+  }
+  .ns-chart svg {
+    height: auto;
   }
 }
 
