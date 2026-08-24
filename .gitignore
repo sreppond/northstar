@@ -12,3 +12,6 @@ packages/server/dist/
 
 # local tooling
 .claude/
+
+# unrelated content that happens to live in this directory
+Skills/
