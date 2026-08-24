@@ -162,7 +162,7 @@ const TIMING_LABEL: Record<string, string> = {
   starting_year: 'From a set year',
 };
 
-function formatAccountValue(raw: unknown, field: AccountFieldSpec): string {
+export function formatAccountValue(raw: unknown, field: AccountFieldSpec): string {
   if (field.kind === 'growthMethod') return GROWTH_LABEL[String(raw)] ?? String(raw);
   if (field.kind === 'withdrawalTiming') return TIMING_LABEL[String(raw)] ?? String(raw);
   if (field.kind === 'growthSchedule') return formatSchedule(raw);
