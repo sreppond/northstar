@@ -272,6 +272,12 @@ this whole page.
 
 ## 6. Scenario diff — finishing the A/B sentence
 
+**Built.** `src/planner/diff.ts` (`diffPlans` + `diffOutcomes`) and
+`CompareDiff.tsx`, rendered above the tab content whenever a compare plan is
+selected. See `docs/NEXT.md`. "Success rate 82% → 71%" from the example below
+is not reproducible without Monte Carlo (§1, not built) — dropped rather than
+faked.
+
 **The gap.** We have full scenarios and A/B comparison, and comparing them
 means eyeballing two lines and remembering what you changed. FIREMaster's
 "Active Scenario" panel narrates its overrides in plain English, and it's the
@@ -379,7 +385,7 @@ a model.
 |---|---|---|---|
 | 1 | ~~RMD forcing (§4)~~ | S | **Done.** It's a hole. It changes numbers. Fixed before decorating. |
 | 2 | ~~Spending sensitivity strip (§5, partial)~~ | S | **Done.** Best insight per line in the document. |
-| 3 | Scenario diff (§6) | S–M | Finishes a feature that's already 80% built. |
+| 3 | ~~Scenario diff (§6)~~ | S–M | **Done.** Finishes a feature that's already 80% built. |
 | 4 | Accessible vs. locked (§2) | M | New concept, all inputs already modelled. |
 | 5 | Monte Carlo (§1) | M–L | Biggest truth gain; needs a worker and seeded RNG. |
 | 6 | Bracket ribbon + headroom (§3) | M | Unlocks Roth laddering; needs a maintained table. |

@@ -30,10 +30,10 @@ This file predates several merges and stayed stale through them. Corrections:
   exercised.
 - **[`docs/BORROW.md`](./BORROW.md) is new**: a read of a competitor's
   product (FIREMaster) against what Northstar already is, and what's worth
-  building as a result. Its own sequencing (§10) put RMD forcing and the
-  spending strip first — both are now built, see the next two bullets. Monte
-  Carlo, accessible-vs-locked, the bracket ribbon, scenario diff, the general
-  tornado (the rest of §5), and Excel export are still just ideas.
+  building as a result. Its own top three (§10) — RMD forcing, the spending
+  strip, scenario diff — are now all built; see the next three bullets. Monte
+  Carlo, accessible-vs-locked, the bracket ribbon, the general tornado (the
+  rest of §5), and Excel export are still just ideas.
 - **RMDs are now forced.** `packages/engine/src/rmd.ts` + a new step 4.5 in
   `run.ts`: every `taxDeferredInvestment` account whose owner has reached
   `RMD_START_AGE` (73) is drained by `balance / uniformLifetimeDivisor(age)`
@@ -53,12 +53,35 @@ This file predates several merges and stayed stale through them. Corrections:
   horizon if the plan never fails). This is the cheap version BORROW.md §10
   said to ship first — not clickable, not the general tornado (flex every
   assumption, rank by impact) that's still just an idea in §5.
-- **The pill row of scenarios is gone from the header.** Switching plans
-  moved into the hamburger menu, alongside the analysis views it already
-  had — one menu instead of two competing navigation rows. The header itself
-  is now a floating pill pinned to the top-left of the viewport rather than
-  an in-flow full-width bar. Headline figures (`AnimatedFigure.tsx`) roll in
-  character-by-character on change now, CSS only, no new dependency.
+- **Comparing two plans now answers the question instead of asking you to
+  eyeball it.** `src/planner/diff.ts` (`diffPlans` + `diffOutcomes`) and
+  `CompareDiff.tsx` — appears above the tab content whenever a compare plan
+  is selected, as "What's different" (a pure structural diff over settings,
+  accounts, events and rules, matched by id so a reordered-but-untouched
+  account diffs as nothing) and "What it costs" (terminal net worth delta,
+  any change to the first year the plan runs dry — both clipped to the
+  active plan's horizon, matching the chart). Every changed field reads from
+  the same specs the drawers and hover cards already render from
+  (`ACCOUNT_TYPES`, `EVENT_MODULES`, `describeSchema`), so a field added to a
+  schema shows up here automatically. `formatAccountValue` is now exported
+  from `detail.ts` for this to reuse rather than reimplement.
+- **The pill row of scenarios is gone from the header, and so is the
+  hamburger's split job.** View switching (Net Worth / Retirement / House /
+  SEPP) is now `ViewTabs.tsx`, a segmented control living directly in the
+  header pill — four destinations were cheap enough to keep visible.
+  `Sidebar.tsx` narrows to its one remaining job, plan management, opened
+  from the header's plan-name badge. The header itself is a floating pill
+  pinned to the top-left of the viewport rather than an in-flow full-width
+  bar. Headline figures (`AnimatedFigure.tsx`) roll in character-by-character
+  on change now, CSS only, no new dependency.
+- **The "add event" picker groups kinds that share a mechanic.**
+  newJob/careerBreak/retirement behind one "Work status change" tile,
+  annualExpense/otherExpense behind one "Expense" tile — each opens a
+  two-item sub-picker rather than adding directly, so the first decision is
+  "what kind of thing" rather than scanning eleven flat cards.
+  `otherExpense`'s chart-pin code moved from `'EXP'` to `'ONE'` in the
+  process — it was silently colliding with `annualExpense`'s code, so the
+  two were indistinguishable as chart pins.
 - **The app is installable.** A PWA manifest + icons exist
   (`public/manifest.webmanifest`) — "Add to Dock" in Safari or Chrome against
   a running server gives a real Dock icon with no browser chrome. The
@@ -411,8 +434,11 @@ src/planner/              chart, tabs, tokens, presentation rules
   ThemeToggle.tsx         light/dark, stamped on <html>
   useBreakpoint.ts        phone/tablet/desktop + year-column count
   AnimatedFigure.tsx      per-character roll-in for headline numbers on change
-  SpendingStrip.tsx       five runway tiles: a spending delta as years, not $
-  Sidebar.tsx             the hamburger menu — views AND plan switching
+  SpendingStrip.tsx       spending deltas either side of Current, as years not $
+  diff.ts                 diffPlans + diffOutcomes — what's different, what it costs
+  CompareDiff.tsx         renders diff.ts above the tab content when comparing
+  ViewTabs.tsx            Net Worth / Retirement / House / SEPP, in the header
+  Sidebar.tsx             plan management only — view switching moved to ViewTabs
   views/                  Retirement / House / SEPP forecast tabs
 ```
 
