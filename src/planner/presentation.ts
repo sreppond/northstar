@@ -16,6 +16,7 @@ export type EventTone = 'income' | 'cost' | 'end';
  */
 const TONE: Record<EventKind, EventTone> = {
   income: 'income',
+  job: 'income',
   newJob: 'income',
   windfall: 'income',
   socialSecurity: 'income',
@@ -54,6 +55,7 @@ export function summarize(event: PlanEvent): string {
       ]
         .filter(Boolean)
         .join(', ');
+    case 'job':
     case 'newJob':
       return [
         c.salary !== undefined ? `${money(c.salary)}/yr` : null,

@@ -75,5 +75,6 @@ export function plan(over: Partial<Plan> = {}): Plan {
     accounts: over.accounts ?? [],
     events: over.events ?? [],
     rules: over.rules ?? [],
+    goals: over.goals,
   };
 }

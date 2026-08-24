@@ -88,7 +88,7 @@ describe('describeSchema', () => {
         if (field.kind === 'custom') custom.push(`${kind}.${field.name}`);
       }
     }
-    expect(custom).toEqual(['retirement.incomeRetentionByEvent']);
+    expect(custom).toEqual(['job.rsuVesting', 'job.compSteps', 'retirement.incomeRetentionByEvent']);
   });
 });
 

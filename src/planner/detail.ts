@@ -89,7 +89,7 @@ function takeHomeIncome(plan: Plan): number {
     if (event.kind === 'income' && (config.endYear ?? Infinity) >= year) {
       total += config.amount ?? 0;
     }
-    if (event.kind === 'newJob' && (config.endYear ?? Infinity) >= year) {
+    if ((event.kind === 'job' || event.kind === 'newJob') && (config.endYear ?? Infinity) >= year) {
       total += config.salary ?? 0;
     }
   }

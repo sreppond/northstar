@@ -19,6 +19,7 @@ import type {
   YearSnapshot,
 } from './types.js';
 import { accountExistsIn, amortizeYear, growthRateFor, scheduledAnnualPayment } from './accounts.js';
+import { sweepAllocationLabel } from './goals.js';
 import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
 import { requiredMinimumDistribution, RMD_START_AGE } from './rmd.js';
@@ -415,7 +416,10 @@ export function runPlan(plan: Plan): PlanResult {
           (contributionsByAccount.get(sweepAccount.id) ?? 0) + allocation.unallocated,
         );
         allocationLines.push({
-          label: `To ${sweepAccount.name} (unallocated)`,
+          // The residual bucket is named "Savings" (docs/REDESIGN.md §2.2),
+          // not surfaced as the jargon "unallocated". Behaviour is unchanged:
+          // the money still lands in the sweep account below.
+          label: sweepAllocationLabel(),
           amount: allocation.unallocated,
           accountId: sweepAccount.id,
         });

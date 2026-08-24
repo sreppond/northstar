@@ -11,7 +11,7 @@ import { emptyCompiled } from './kit.js';
 import { income } from './income.js';
 import { annualExpense, otherExpense, windfall } from './expenses.js';
 import { buyAHome } from './buyAHome.js';
-import { careerBreak, newJob, retirement, socialSecurity } from './work.js';
+import { careerBreak, job, newJob, retirement, socialSecurity } from './work.js';
 import { endOfPlan, haveAKid } from './life.js';
 
 export const EVENT_MODULES = {
@@ -21,6 +21,7 @@ export const EVENT_MODULES = {
   endOfPlan,
   haveAKid,
   income,
+  job,
   newJob,
   otherExpense,
   retirement,

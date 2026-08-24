@@ -12,3 +12,4 @@ export * from './rmd.js';
 export * from './sensitivity.js';
 export * from './markers.js';
 export * from './monarch.js';
+export * from './goals.js';

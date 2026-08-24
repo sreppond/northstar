@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { Account, Plan, PlanEvent } from '@northstar/engine';
+import type { Account, Goal, Plan, PlanEvent } from '@northstar/engine';
+import { mergeGoalRules } from '@northstar/engine';
 import { SAMPLE_PLANS } from '../samplePlan';
 
 /**
@@ -47,6 +48,9 @@ interface PlanState {
   upsertEvent(planId: string, event: PlanEvent): void;
   upsertAccount(planId: string, account: Account): void;
   deleteEvent(planId: string, eventId: string): void;
+  upsertGoal(planId: string, goal: Goal): void;
+  deleteGoal(planId: string, goalId: string): void;
+  reorderGoals(planId: string, goalIds: string[]): void;
   updateSettings(planId: string, patch: Partial<Plan['settings']>): void;
   replacePlan(plan: Plan): void;
   createPlan(name: string): void;
@@ -117,6 +121,48 @@ export const usePlanStore = create<PlanState>((set, get) => ({
           accounts: plan.accounts.filter((a) => a.sourceEventId !== eventId),
           rules: plan.rules.filter((r) => !r.accountId.startsWith(`${eventId}:`)),
         };
+      }),
+    ));
+  },
+
+  // Goals are a friendly surface over the allocation waterfall
+  // (docs/REDESIGN.md §2.2) — every mutation re-derives that plan's
+  // goal-tagged rules via `mergeGoalRules` so `plan.rules` never drifts from
+  // what `plan.goals` actually implies. `run.ts` only ever reads `plan.rules`;
+  // it has no goal-specific logic of its own.
+  upsertGoal(planId, goal) {
+    set((state) => commit(state, (plans) =>
+      plans.map((plan) => {
+        if (plan.id !== planId) return plan;
+        const goals = plan.goals ?? [];
+        const exists = goals.some((g) => g.id === goal.id);
+        const nextGoals = exists ? goals.map((g) => (g.id === goal.id ? goal : g)) : [...goals, goal];
+        const withGoals = { ...plan, goals: nextGoals };
+        return { ...withGoals, rules: mergeGoalRules(withGoals) };
+      }),
+    ));
+  },
+
+  deleteGoal(planId, goalId) {
+    set((state) => commit(state, (plans) =>
+      plans.map((plan) => {
+        if (plan.id !== planId) return plan;
+        const withGoals = { ...plan, goals: (plan.goals ?? []).filter((g) => g.id !== goalId) };
+        return { ...withGoals, rules: mergeGoalRules(withGoals) };
+      }),
+    ));
+  },
+
+  reorderGoals(planId, goalIds) {
+    set((state) => commit(state, (plans) =>
+      plans.map((plan) => {
+        if (plan.id !== planId) return plan;
+        const byId = new Map((plan.goals ?? []).map((g) => [g.id, g]));
+        // Priority order is position in the array, so a goal id this plan
+        // doesn't have is silently ignored rather than inserted.
+        const reordered = goalIds.map((id) => byId.get(id)).filter((g): g is Goal => g !== undefined);
+        const withGoals = { ...plan, goals: reordered };
+        return { ...withGoals, rules: mergeGoalRules(withGoals) };
       }),
     ));
   },

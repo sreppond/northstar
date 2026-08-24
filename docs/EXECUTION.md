@@ -85,6 +85,40 @@ P1 model ─┬─ P2 shell+overview ── P3 instrument ─┐
 rule derivation + funding progress; every existing test still passes; lint and
 build green. No React changes in this phase.
 
+**Status: done, with one deliberate deviation.** Everything above shipped —
+`job` (salary curve + `rsuVesting` + `compSteps`, compiled through one shared
+`compileEmployment`), `Goal` + `goals.ts` (`requiredAnnualContribution`,
+`goalsToAllocationRules`, `mergeGoalRules`, `goalFundingProgress`), store CRUD
+(`upsertGoal`/`deleteGoal`/`reorderGoals`, each re-deriving `plan.rules` via
+`mergeGoalRules` so a goal's rule never goes stale), and the sample plan
+migrated in source to one "Amazon" job plus a house and a retirement goal. 322
+tests green, lint and build clean in all three packages.
+
+The one deviation: **no automatic runtime migration that groups an existing
+plan's scattered `income`/`windfall`/`newJob` events into a `job`.** Given this
+codebase's own precedent — Monarch import refuses to guess an ambiguous
+account's tax treatment rather than silently getting someone's money wrong
+(`docs/MONARCH-IMPORT.md`) — silently deciding which of a person's *other*
+income events "belong" to a new job is the same category of guess, with the
+same real-money stakes, and there is no reliable signal to key it on. Old kinds
+(`newJob`, `income`, `windfall`) stay fully registered and functional, so
+nothing breaks; a plan just keeps reading as separate events until a person
+chooses to consolidate it by hand. The sample plan's migration happened in
+source instead, by a human (the agent) reasoning about that one specific case.
+
+Also folded in, beyond the original brief, because leaving them undone would
+have shipped `job` half-integrated: the two bespoke schedule editors in the
+drawer (`src/planner/drawer/JobSchedules.tsx` — `RsuVestingEditor` /
+`CompStepsEditor`, in the same visual language as `RateSchedule.tsx`), `job`
+replacing `newJob` in the "Work status change" picker, `schemaForm.test.ts`'s
+pinned custom-field list, and every other file with a `case 'newJob'` a `job`
+event would otherwise have silently fallen through (`reading.ts`'s hero
+sentence — the one place REDESIGN.md's own worked example depends on it,
+`detail.ts`'s take-home-income figure, `EventsTab.tsx`'s Gantt bar span, and
+retirement's income-retention targeting). Also fixed in passing: `annualRaise`
+rendered with a `$` prefix instead of `%` — `unitFor()`'s currency regex
+matched the substring "annual" before the percent check ran. One line.
+
 ---
 
 ## Phase 2 — Shell & Overview (builder: shell)

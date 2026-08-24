@@ -2246,6 +2246,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The three-value variant a job's RSU/comp-step rows need (year, amount,
+   label) alongside the two-value `.ns-sched-row` every rate schedule uses. */
+.ns-sched-head-3,
+.ns-sched-row-3 {
+  display: grid;
+  grid-template-columns: 0.7fr 1fr 1fr 34px;
+  gap: 8px;
+  align-items: center;
+}
+.ns-sched-row-3 + .ns-sched-row-3 {
+  margin-top: 8px;
+}
+.ns-sched-head-3 {
+  margin-bottom: 2px;
+}
+
 /* --- read-only synthetic accounts in the settings drawer ----------------- */
 
 .ns-readonly-note {

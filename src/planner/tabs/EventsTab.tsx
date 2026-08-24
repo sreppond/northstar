@@ -171,6 +171,7 @@ function spanEnd(event: PlanEvent, planEnd: number): number {
       return Math.min(planEnd, event.startYear + 1);
     case 'income':
     case 'annualExpense':
+    case 'job':
     case 'newJob':
       return Math.min(planEnd, c.endYear ?? planEnd);
     default:

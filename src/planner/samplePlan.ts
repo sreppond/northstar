@@ -1,4 +1,4 @@
-import type { Account, Plan, PlanEvent } from '@northstar/engine';
+import type { Account, Goal, Plan, PlanEvent } from '@northstar/engine';
 
 const START = 2026;
 
@@ -36,42 +36,47 @@ function brokerage(): Account {
   };
 }
 
+/**
+ * One employer, its whole arc (docs/REDESIGN.md §2.1). This is the six events
+ * the old sample scattered — a current salary, two RSU distributions, a new
+ * role and two promotions — collapsed into a single `job` named "Amazon":
+ *
+ *  - the salary starts at today's $148K and raises 3% a year;
+ *  - `rsuVesting` carries the two RSU vests ($35K in 2026, $80K in 2027);
+ *  - `compSteps` carry the new role and the two promotions, each resetting the
+ *    base salary the raise then compounds from. The step values reproduce the
+ *    old earned-income curve closely (the 2032 step is chosen so the earned
+ *    income across the rest of the plan sums to what the flat "+$50K promotion"
+ *    events produced), so the net-worth line stays the same money, told once.
+ *
+ * No 401(k) fields: the sample funds its tax-deferred account through that
+ * account's own standing $12K contribution, exactly as before.
+ */
+const amazonJob: PlanEvent = {
+  id: 'amazon',
+  kind: 'job',
+  name: 'Amazon',
+  startYear: 2026,
+  isIncluded: true,
+  config: {
+    salary: 148_000,
+    bonusPercent: 0,
+    annualRaise: 3,
+    replacesEarnedIncome: true,
+    rsuVesting: [
+      { year: 2026, amount: 35_000 },
+      { year: 2027, amount: 80_000 },
+    ],
+    compSteps: [
+      { year: 2028, newBaseSalary: 250_000, label: 'New role' },
+      { year: 2029, newBaseSalary: 307_500, label: 'Promotion' },
+      { year: 2032, newBaseSalary: 367_000, label: 'Promotion' },
+    ],
+  },
+};
+
 const houseEvents: PlanEvent[] = [
-  {
-    // Modelled as an event with an end year rather than as `baselineIncome`,
-    // so it STOPS when the new role starts. Left as a standing baseline it
-    // would stack with the new salary and quietly double the plan's income.
-    id: 'current',
-    kind: 'income',
-    name: 'Current salary',
-    startYear: 2026,
-    isIncluded: true,
-    config: { amount: 148_000, endYear: 2027, growthRate: 3, isEarned: true, isTaxable: true },
-  },
-  {
-    id: 'rsu1',
-    kind: 'windfall',
-    name: 'RSU distribution',
-    startYear: 2026,
-    isIncluded: true,
-    config: { amount: 35_000, taxRate: 32 },
-  },
-  {
-    id: 'rsu2',
-    kind: 'windfall',
-    name: 'RSU distribution',
-    startYear: 2027,
-    isIncluded: true,
-    config: { amount: 80_000, taxRate: 32 },
-  },
-  {
-    id: 'job',
-    kind: 'newJob',
-    name: 'New role — base salary',
-    startYear: 2028,
-    isIncluded: true,
-    config: { salary: 250_000, bonusPercent: 0, annualRaise: 3 },
-  },
+  amazonJob,
   {
     id: 'kid1',
     kind: 'haveAKid',
@@ -84,14 +89,6 @@ const houseEvents: PlanEvent[] = [
       supportYears: 18,
       collegeAnnualCost: 0,
     },
-  },
-  {
-    id: 'promo1',
-    kind: 'income',
-    name: 'Promotion',
-    startYear: 2029,
-    isIncluded: true,
-    config: { amount: 50_000, isEarned: true, isTaxable: true },
   },
   {
     id: 'kid2',
@@ -125,14 +122,6 @@ const houseEvents: PlanEvent[] = [
     },
   },
   {
-    id: 'promo2',
-    kind: 'income',
-    name: 'Promotion',
-    startYear: 2032,
-    isIncluded: true,
-    config: { amount: 50_000, isEarned: true, isTaxable: true },
-  },
-  {
     id: 'end',
     kind: 'endOfPlan',
     name: 'End of plan',
@@ -164,7 +153,38 @@ function retirement401k(): Account {
   };
 }
 
-function base(id: string, name: string, events: PlanEvent[]): Plan {
+/**
+ * The house down-payment goal (docs/REDESIGN.md §2.2): 20% of the $1.15M home
+ * is $230K, earmarked from the liquid accounts, due the year the home is
+ * bought. `linkedEventId` ties it to the `buyAHome` event when the scenario
+ * has one.
+ */
+function houseGoal(linkedEventId?: string): Goal {
+  return {
+    id: 'goal-house',
+    name: 'Home down payment',
+    kind: 'house',
+    targetAmount: 230_000,
+    byYear: 2031,
+    fundedFromAccountIds: ['brokerage', 'cash'],
+    ...(linkedEventId ? { linkedEventId } : {}),
+  };
+}
+
+/** The retirement goal: a portfolio target by the year work stops. */
+function retirementGoal(linkedEventId?: string): Goal {
+  return {
+    id: 'goal-retirement',
+    name: 'Retirement',
+    kind: 'retirement',
+    targetAmount: 2_000_000,
+    byYear: 2042,
+    fundedFromAccountIds: ['retirement', 'brokerage'],
+    ...(linkedEventId ? { linkedEventId } : {}),
+  };
+}
+
+function base(id: string, name: string, events: PlanEvent[], goals: Goal[]): Plan {
   return {
     id,
     name,
@@ -173,8 +193,8 @@ function base(id: string, name: string, events: PlanEvent[]): Plan {
       projectionYears: 21,
       inflationRate: 2.5,
       dollarMode: 'futureDollars',
-      // Earned income is carried entirely by events (see 'Current salary'),
-      // so the standing baseline is zero.
+      // Earned income is carried entirely by the Amazon job event, so the
+      // standing baseline is zero.
       baselineIncome: 0,
       baselineExpenses: 78_000,
       incomeTaxRate: 28,
@@ -189,15 +209,18 @@ function base(id: string, name: string, events: PlanEvent[]): Plan {
       { accountId: 'cash', ruleType: 'withdrawal', order: 1 },
       { accountId: 'brokerage', ruleType: 'withdrawal', order: 2 },
     ],
+    goals,
   };
 }
 
 /**
  * Two scenarios so the switcher and the eventual A/B comparison have something
- * real to work against. Placeholder data until plans are user-created.
+ * real to work against. Placeholder data until plans are user-created. Both
+ * carry a house goal and a retirement goal so the House and Retirement lenses
+ * always have real funding data to read (docs/REDESIGN.md §2.2).
  */
 export const SAMPLE_PLANS: Plan[] = [
-  base('house', 'House Forecast', houseEvents),
+  base('house', 'House Forecast', houseEvents, [houseGoal('house'), retirementGoal()]),
   base(
     'retirement',
     'Retirement Forecast',
@@ -232,5 +255,6 @@ export const SAMPLE_PLANS: Plan[] = [
           config: {},
         },
       ]),
+    [houseGoal(), retirementGoal('retire')],
   ),
 ];

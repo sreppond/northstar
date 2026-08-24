@@ -18,6 +18,7 @@ export type EventKind =
   | 'endOfPlan'
   | 'haveAKid'
   | 'income'
+  | 'job'
   | 'newJob'
   | 'otherExpense'
   | 'retirement'
@@ -29,6 +30,7 @@ export type WithdrawalTiming = 'always' | 'never' | 'starting_year';
 export type RuleType = 'allocation' | 'withdrawal';
 export type DollarMode = 'futureDollars' | 'todaysDollars';
 export type TaxComponentKind = 'taxable' | 'taxDeferred' | 'taxFree';
+export type GoalKind = 'house' | 'retirement' | 'custom';
 
 export type AccountClass =
   | 'cash'
@@ -153,6 +155,13 @@ export interface PriorityRule {
     /** Take only this share of the surplus (allocation rules). */
     percentOfSurplus?: number;
   };
+  /**
+   * Set when this rule was derived from a `Goal` rather than authored by
+   * hand (`goalsToAllocationRules` in `goals.ts`). Lets the store find and
+   * replace a goal's own rule on every edit without disturbing anyone else's
+   * hand-authored rules that happen to target the same account.
+   */
+  sourceGoalId?: string;
 }
 
 export interface Participant {
@@ -161,6 +170,29 @@ export interface Participant {
   birthYear: number;
   lifeExpectancy: number;
   isIncluded: boolean;
+}
+
+/**
+ * A bucket money flows into with an intent -- "$300K for a house by 2031"
+ * (docs/REDESIGN.md §2.2). It is a friendly SURFACE over the allocation
+ * waterfall the engine already runs, not a new mechanic: a goal with a target
+ * and a date derives the annual contribution it needs, that becomes an
+ * allocation rule's `maxAnnual`, and the accounts it is `fundedFromAccountIds`
+ * are the ones a progress reading sums against the target. Earmarking is a
+ * label and an ordering, never a hard partition -- the dollars stay fungible.
+ */
+export interface Goal {
+  id: string;
+  name: string;
+  kind: GoalKind;
+  /** The number to reach, in nominal dollars. */
+  targetAmount?: number;
+  /** The year to reach it by. */
+  byYear?: number;
+  /** Accounts that count toward, and feed, this goal. */
+  fundedFromAccountIds: string[];
+  /** The `buyAHome` / `retirement` event this goal stands for, if any. */
+  linkedEventId?: string;
 }
 
 export interface PlanSettings {
@@ -210,6 +242,12 @@ export interface Plan {
   accounts: Account[];
   events: PlanEvent[];
   rules: PriorityRule[];
+  /**
+   * Buckets money flows into (docs/REDESIGN.md §2.2). Optional so every plan
+   * saved before goals existed stays valid and reads as "no goals yet"; a plan
+   * that has never set one simply omits it. Treat a missing value as `[]`.
+   */
+  goals?: Goal[];
 }
 
 // ---------------------------------------------------------------------------

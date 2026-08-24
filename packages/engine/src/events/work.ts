@@ -1,12 +1,23 @@
 import { z } from 'zod';
 import type { PlanEvent } from '../types.js';
-import { type CompileContext, type EventModule, emptyCompiled, yearRange } from './kit.js';
+import {
+  type CompileContext,
+  type CompiledEvent,
+  type EventModule,
+  emptyCompiled,
+  yearRange,
+} from './kit.js';
 
 // ---------------------------------------------------------------------------
-// New job
+// Employment — the shared arc behind `newJob` (legacy) and `job` (consolidated)
 // ---------------------------------------------------------------------------
 
-export const newJobConfig = z.object({
+/**
+ * The fields both employment kinds share. Kept in one place so `newJob` and
+ * the richer `job` cannot drift apart: `job` is exactly this plus two
+ * schedules (docs/REDESIGN.md §2.1).
+ */
+const employmentFields = {
   salary: z.number().min(0),
   bonusPercent: z.number().min(0).default(0),
   /** Paid once, in the first year. */
@@ -30,8 +41,156 @@ export const newJobConfig = z.object({
   contributionAccountId: z.string().optional(),
   /** Traditional (pretax) vs Roth treatment for the employee contribution. */
   contributionIsPretax: z.boolean().default(true),
-});
+};
+
+export const newJobConfig = z.object(employmentFields);
 export type NewJobConfig = z.infer<typeof newJobConfig>;
+
+/**
+ * `job` grows `newJob` by two schedules (docs/REDESIGN.md §2.1):
+ *
+ *  - `rsuVesting` — RSU vests, each a one-off taxable, non-earned cash flow in
+ *    its year (the shape the old standalone `windfall` produced).
+ *  - `compSteps` — promotions / new roles. The salary curve is PIECEWISE: it
+ *    raises at `annualRaise` each year until a step resets the base salary,
+ *    then raises from the new base. This replaces the standalone "Promotion"
+ *    income events.
+ */
+export const jobConfig = z.object({
+  ...employmentFields,
+  rsuVesting: z
+    .array(z.object({ year: z.number().int(), amount: z.number().min(0) }))
+    .default([]),
+  compSteps: z
+    .array(
+      z.object({
+        year: z.number().int(),
+        newBaseSalary: z.number().min(0),
+        label: z.string().optional(),
+      }),
+    )
+    .default([]),
+});
+export type JobConfig = z.infer<typeof jobConfig>;
+
+/**
+ * The one compiler both kinds run through. `newJob` calls it with empty
+ * schedules, so its output is byte-for-byte what it was before `job` existed;
+ * `job` passes its RSU and comp-step schedules through.
+ */
+function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileContext): CompiledEvent {
+  const out = emptyCompiled(event.id);
+  const end = config.endYear ?? ctx.endYear;
+
+  if (config.replacesEarnedIncome) {
+    out.incomeSuppressions.push({
+      fromYear: event.startYear,
+      toYear: end,
+      replacementPercent: 0,
+      sourceEventId: event.id,
+      // Anything starting this year or later is a separate decision, not the
+      // job being replaced. This is also what stops the rule eating its own
+      // salary, since this event starts in exactly that year.
+      exemptEventsStartingFrom: event.startYear,
+    });
+  }
+
+  if (config.signingBonus > 0 && event.startYear >= ctx.startYear && event.startYear <= ctx.endYear) {
+    out.cashFlows.push({
+      year: event.startYear,
+      kind: 'income',
+      amount: config.signingBonus,
+      label: `${event.name} — signing bonus`,
+      sourceEventId: event.id,
+      taxable: true,
+      // Not marked earned: a suppression should never claw back a bonus that
+      // was already paid out.
+      isEarned: false,
+    });
+  }
+
+  // RSU vests: one-off, taxed as ordinary income (unlike the salary, they are
+  // not earned wages, so a later retirement or career break never claws them
+  // back — exactly the old windfall's treatment).
+  for (const vest of config.rsuVesting) {
+    if (vest.amount <= 0) continue;
+    if (vest.year < ctx.startYear || vest.year > ctx.endYear) continue;
+    out.cashFlows.push({
+      year: vest.year,
+      kind: 'income',
+      amount: vest.amount,
+      label: `${event.name} — RSU vest`,
+      sourceEventId: event.id,
+      taxable: true,
+      isEarned: false,
+    });
+  }
+
+  // The piecewise base-salary curve. Each anchor (the start, then every comp
+  // step) resets the base; the raise compounds from the most recent anchor.
+  const anchors = [
+    { year: event.startYear, base: config.salary },
+    ...config.compSteps.map((s) => ({ year: s.year, base: s.newBaseSalary })),
+  ].sort((a, b) => a.year - b.year);
+
+  const baseSalaryFor = (year: number): number => {
+    let anchor = anchors[0];
+    for (const a of anchors) {
+      if (a.year <= year) anchor = a;
+      else break;
+    }
+    return anchor.base * Math.pow(1 + config.annualRaise / 100, year - anchor.year);
+  };
+
+  for (const year of yearRange(event.startYear, end, ctx)) {
+    const base = baseSalaryFor(year);
+    const total = base * (1 + config.bonusPercent / 100);
+
+    out.cashFlows.push({
+      year,
+      kind: 'income',
+      amount: total,
+      label: event.name,
+      sourceEventId: event.id,
+      taxable: true,
+      isEarned: true,
+      recurring: true,
+    });
+
+    if (!config.contributionAccountId) continue;
+
+    if (config.retirementContributionPercent > 0) {
+      out.contributions.push({
+        year,
+        accountId: config.contributionAccountId,
+        amount: base * (config.retirementContributionPercent / 100),
+        label: `${event.name} — contribution`,
+        sourceEventId: event.id,
+        fromPaycheck: true,
+        pretax: config.contributionIsPretax,
+        recurring: true,
+      });
+    }
+
+    if (config.employerMatchPercent > 0) {
+      out.contributions.push({
+        year,
+        accountId: config.contributionAccountId,
+        amount: base * (config.employerMatchPercent / 100),
+        label: `${event.name} — employer match`,
+        sourceEventId: event.id,
+        fromPaycheck: false,
+        pretax: true,
+        recurring: true,
+      });
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// New job (legacy) — a single salary curve, kept so saved plans still open.
+// ---------------------------------------------------------------------------
 
 export const newJob: EventModule<NewJobConfig> = {
   kind: 'newJob',
@@ -50,80 +209,35 @@ export const newJob: EventModule<NewJobConfig> = {
   }),
 
   compile(event: PlanEvent, config: NewJobConfig, ctx: CompileContext) {
-    const out = emptyCompiled(event.id);
-    const end = config.endYear ?? ctx.endYear;
+    return compileEmployment(event, { ...config, rsuVesting: [], compSteps: [] }, ctx);
+  },
+};
 
-    if (config.replacesEarnedIncome) {
-      out.incomeSuppressions.push({
-        fromYear: event.startYear,
-        toYear: end,
-        replacementPercent: 0,
-        sourceEventId: event.id,
-        // Anything starting this year or later is a separate decision, not the
-        // job being replaced. This is also what stops the rule eating its own
-        // salary, since this event starts in exactly that year.
-        exemptEventsStartingFrom: event.startYear,
-      });
-    }
+// ---------------------------------------------------------------------------
+// Job — one employer's whole arc: salary, raises, bonus, RSU vests, promotions
+// and a 401(k) (docs/REDESIGN.md §2.1).
+// ---------------------------------------------------------------------------
 
-    if (config.signingBonus > 0 && event.startYear >= ctx.startYear && event.startYear <= ctx.endYear) {
-      out.cashFlows.push({
-        year: event.startYear,
-        kind: 'income',
-        amount: config.signingBonus,
-        label: `${event.name} — signing bonus`,
-        sourceEventId: event.id,
-        taxable: true,
-        // Not marked earned: a suppression should never claw back a bonus that
-        // was already paid out.
-        isEarned: false,
-      });
-    }
+export const job: EventModule<JobConfig> = {
+  kind: 'job',
+  label: 'Job',
+  code: 'JOB',
+  schema: jobConfig,
+  defaults: () => ({
+    salary: 150_000,
+    bonusPercent: 10,
+    signingBonus: 0,
+    annualRaise: 3,
+    replacesEarnedIncome: true,
+    retirementContributionPercent: 6,
+    employerMatchPercent: 3,
+    contributionIsPretax: true,
+    rsuVesting: [],
+    compSteps: [],
+  }),
 
-    for (const year of yearRange(event.startYear, end, ctx)) {
-      const base = config.salary * Math.pow(1 + config.annualRaise / 100, year - event.startYear);
-      const total = base * (1 + config.bonusPercent / 100);
-
-      out.cashFlows.push({
-        year,
-        kind: 'income',
-        amount: total,
-        label: event.name,
-        sourceEventId: event.id,
-        taxable: true,
-        isEarned: true,
-        recurring: true,
-      });
-
-      if (!config.contributionAccountId) continue;
-
-      if (config.retirementContributionPercent > 0) {
-        out.contributions.push({
-          year,
-          accountId: config.contributionAccountId,
-          amount: base * (config.retirementContributionPercent / 100),
-          label: `${event.name} — contribution`,
-          sourceEventId: event.id,
-          fromPaycheck: true,
-          pretax: config.contributionIsPretax,
-          recurring: true,
-        });
-      }
-
-      if (config.employerMatchPercent > 0) {
-        out.contributions.push({
-          year,
-          accountId: config.contributionAccountId,
-          amount: base * (config.employerMatchPercent / 100),
-          label: `${event.name} — employer match`,
-          sourceEventId: event.id,
-          fromPaycheck: false,
-          pretax: true,
-          recurring: true,
-        });
-      }
-    }
-    return out;
+  compile(event: PlanEvent, config: JobConfig, ctx: CompileContext) {
+    return compileEmployment(event, config, ctx);
   },
 };
 

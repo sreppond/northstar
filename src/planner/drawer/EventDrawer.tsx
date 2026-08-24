@@ -4,6 +4,7 @@ import { EVENT_MODULES } from '@northstar/engine';
 import { codeFor, labelFor, toneFor } from '../presentation';
 import { describeSchema } from './schemaForm';
 import { ConfigField, Field } from './fields';
+import { CompStepsEditor, RsuVestingEditor } from './JobSchedules';
 
 /**
  * The right-side event editor.
@@ -30,7 +31,12 @@ const COMPOUND_GROUPS: Record<GroupId, { title: string; blurb: string; kinds: Ev
   work: {
     title: 'Work status change',
     blurb: 'Starting a job, stepping back, or retiring — pick which.',
-    kinds: ['newJob', 'careerBreak', 'retirement'],
+    // `newJob` (a single salary curve, no RSUs or comp steps) is not offered
+    // here — `job` is the consolidated, one-employer-one-event replacement
+    // (docs/REDESIGN.md §2.1) and is what every new "starting a job" choice
+    // should create. `newJob` stays registered in the engine purely so a plan
+    // saved before this change still opens; nothing NEW should create one.
+    kinds: ['job', 'careerBreak', 'retirement'],
   },
   expense: {
     title: 'Expense',
@@ -198,6 +204,25 @@ export function EventDrawer({
                 />
               ))}
 
+              {/* The two schedules the generated form cannot render — arrays
+                  of objects, not scalars (docs/REDESIGN.md §2.1). */}
+              {draft.kind === 'job' && (
+                <>
+                  <RsuVestingEditor
+                    value={(config.rsuVesting ?? []) as { year: number; amount: number }[]}
+                    startYear={draft.startYear}
+                    endYear={planEndYear}
+                    onChange={(next) => setConfig('rsuVesting', next)}
+                  />
+                  <CompStepsEditor
+                    value={(config.compSteps ?? []) as { year: number; newBaseSalary: number; label?: string }[]}
+                    startYear={draft.startYear}
+                    endYear={planEndYear}
+                    onChange={(next) => setConfig('compSteps', next)}
+                  />
+                </>
+              )}
+
               {/* The one form the schema cannot generate: a row per income line
                   in the plan, because it depends on the OTHER events. */}
               {draft.kind === 'retirement' && (
@@ -282,13 +307,15 @@ export function retirementTargets(
 
     const c = (e.config ?? {}) as Record<string, unknown>;
     // One-off money is already banked by the time retirement starts.
-    const recurring = e.kind === 'income' || e.kind === 'newJob' || e.kind === 'socialSecurity';
+    const recurring =
+      e.kind === 'income' || e.kind === 'job' || e.kind === 'newJob' || e.kind === 'socialSecurity';
     if (!recurring) return false;
 
     const ends = typeof c.endYear === 'number' ? c.endYear : Infinity;
     if (ends < year) return false;
 
-    const earned = e.kind === 'newJob' || (e.kind === 'income' && c.isEarned === true);
+    const earned =
+      e.kind === 'job' || e.kind === 'newJob' || (e.kind === 'income' && c.isEarned === true);
     return earned || affectsUnearned;
   });
 }

@@ -67,6 +67,13 @@ function milestones(plan: Plan): string[] {
       case 'retirement':
         clauses.push({ year: e.startYear, text: `retirement in ${e.startYear}` });
         break;
+      // A `job` is user-named ("Amazon"), so the reading says the name
+      // itself rather than a generic phrase — "through Amazon", the way a
+      // person would actually say it (docs/REDESIGN.md §2.1). `newJob` has
+      // no such name to lean on, so it keeps the generic phrasing.
+      case 'job':
+        clauses.push({ year: e.startYear, text: e.name });
+        break;
       case 'newJob':
         clauses.push({ year: e.startYear, text: `a new role in ${e.startYear}` });
         break;

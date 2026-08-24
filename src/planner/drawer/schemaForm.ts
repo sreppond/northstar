@@ -94,7 +94,10 @@ interface AnyDef {
  * that would drift out of step with the schemas.
  */
 function unitFor(name: string): FieldUnit {
-  if (/Percent$|Rate$/.test(name)) return 'percent';
+  // `Raise$` catches `annualRaise`, which the currency regex below would
+  // otherwise claim first — its name contains "annual", the same substring
+  // that correctly flags `annualCost` / `annualBenefit` as currency.
+  if (/Percent$|Rate$|Raise$/.test(name)) return 'percent';
   if (/Year$/.test(name)) return 'year';
   if (/Years$|Age$|colaRate/.test(name)) return 'plain';
   if (/amount|cost|price|salary|benefit|payment|annual|monthly|balance/i.test(name)) {
