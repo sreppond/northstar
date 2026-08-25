@@ -45,6 +45,7 @@ import { HeaderMenu } from './planner/HeaderMenu';
 import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
 import { Sidebar } from './planner/Sidebar';
 import { CommandPalette } from './planner/CommandPalette';
+import { Onboarding } from './planner/Onboarding';
 import { ViewTabs, type ViewId } from './planner/ViewTabs';
 import { RetirementForecastView } from './planner/views/RetirementForecastView';
 import { HouseForecastView } from './planner/views/HouseForecastView';
@@ -58,7 +59,32 @@ const TABS: { id: TabId; name: string }[] = [
   { id: 'events', name: 'Events' },
 ];
 
+/**
+ * The gate in front of the planner (docs/REDESIGN.md §6 item 6). A
+ * genuinely empty store (`plans.length === 0`) — nobody has ever saved a
+ * plan in this browser — renders `Onboarding` instead of silently seeding
+ * `samplePlan.ts`'s fabricated "Amazon" scenarios.
+ *
+ * `onboarding` stays reactive to `plans.length` rather than being decided
+ * once: if a backend later hydrates real plans out from under a genuinely
+ * empty local store (`serverSync.ts`'s "the server is the durable copy"),
+ * this falls straight through to the real planner instead of stranding the
+ * user on a stale onboarding form. The one exception is `begun`, set the
+ * moment `Onboarding` creates its own first plan (`startPlan`) — without it,
+ * `plans.length` would flip to 1 immediately and skip the "add a first
+ * job/account" stage before the user ever sees it.
+ */
 export default function App() {
+  const plans = usePlanStore((s) => s.plans);
+  const [begun, setBegun] = useState(false);
+
+  if (plans.length === 0 || begun) {
+    return <Onboarding onBegin={() => setBegun(true)} onFinish={() => setBegun(false)} />;
+  }
+  return <Planner />;
+}
+
+function Planner() {
   const [tab, setTab] = useState<TabId>('accounts');
   const [view, setView] = useState<ViewId>('netWorth');
   const [sidebarOpen, setSidebarOpen] = useState(false);

@@ -158,7 +158,6 @@ export function CommandPalette({
         aria-modal="true"
         aria-label="Command palette"
         ref={root}
-        onKeyDown={onKeyDown}
       >
         <input
           ref={inputRef}
@@ -167,6 +166,7 @@ export function CommandPalette({
           aria-label="Command palette search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
         />
         <div className="ns-palette-list" role="listbox">
           {filtered.length === 0 && <div className="ns-palette-empty">No matching commands.</div>}

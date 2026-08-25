@@ -80,3 +80,35 @@ describe('upsertEvent and the undo stack', () => {
     expect(usePlanStore.getState().past.length).toBe(before + 5);
   });
 });
+
+/**
+ * The first-run authoring flow (docs/REDESIGN.md §6 item 6): a genuinely
+ * empty store no longer seeds the fabricated sample plans. `startPlan` is
+ * what `Onboarding.tsx` calls once a person has actually typed a name and a
+ * birth year, so it has to produce a plan with exactly that -- nothing
+ * financial, one household member, and made active immediately.
+ */
+describe('startPlan (first-run onboarding)', () => {
+  it('creates a plan with the given name and one participant at the given birth year, and no financial data', () => {
+    usePlanStore.setState({ plans: [], activeId: '', past: [], future: [] });
+
+    usePlanStore.getState().startPlan('My plan', 1990);
+
+    const state = usePlanStore.getState();
+    expect(state.plans).toHaveLength(1);
+    const plan = state.plans[0];
+    expect(plan.name).toBe('My plan');
+    expect(plan.participants).toHaveLength(1);
+    expect(plan.participants[0]).toMatchObject({ name: 'You', birthYear: 1990, isIncluded: true });
+    expect(plan.accounts).toHaveLength(0);
+    expect(state.activeId).toBe(plan.id);
+  });
+
+  it('falls back to a default name when given an empty one', () => {
+    usePlanStore.setState({ plans: [], activeId: '', past: [], future: [] });
+
+    usePlanStore.getState().startPlan('   ', 1985);
+
+    expect(usePlanStore.getState().plans[0].name).toBe('My plan');
+  });
+});

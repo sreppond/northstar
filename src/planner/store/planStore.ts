@@ -54,6 +54,13 @@ interface PlanState {
   updateSettings(planId: string, patch: Partial<Plan['settings']>): void;
   replacePlan(plan: Plan): void;
   createPlan(name: string): void;
+  /**
+   * The first-run authoring flow (docs/REDESIGN.md §6 item 6): creates the
+   * user's own first plan, with one participant at the birth year they gave,
+   * and makes it active. `Onboarding.tsx` is the only caller — everywhere
+   * else a plan already exists by the time the UI can reach `createPlan`.
+   */
+  startPlan(name: string, birthYear: number): void;
   duplicatePlan(planId: string): void;
   renamePlan(planId: string, name: string): void;
   deletePlan(planId: string): void;
@@ -65,7 +72,13 @@ interface PlanState {
 
 export const usePlanStore = create<PlanState>((set, get) => ({
   plans: loadPlans(),
-  activeId: loadPlans()[0]?.id ?? SAMPLE_PLANS[0].id,
+  // No `?? SAMPLE_PLANS[0].id` fallback here on purpose (docs/REDESIGN.md §6
+  // item 6): on a genuinely first run `loadPlans()` now returns `[]`, and an
+  // id pointing at a plan that is not in `plans` would be a dangling
+  // reference. An empty string is the correct "nothing active yet" value —
+  // `App.tsx` renders `Onboarding` instead of the planner while `plans` is
+  // empty, so nothing ever reads `activeId` in that state.
+  activeId: loadPlans()[0]?.id ?? '',
   past: [],
   future: [],
 
@@ -182,6 +195,19 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   createPlan(name) {
     const fresh = blankPlan(newId(), name, get().plans[0]);
     set((state) => ({ ...commit(state, (plans) => [...plans, fresh]), activeId: fresh.id }));
+  },
+
+  startPlan(name, birthYear) {
+    const id = newId();
+    // `blankPlan` with no `like` plan already produces exactly the right
+    // shape for a genuine first run — no accounts, no financial data, just
+    // the required end-of-plan event — the one thing missing is a household,
+    // since there is no earlier plan to borrow one from.
+    const plan = blankPlan(id, name.trim() || 'My plan', undefined);
+    plan.participants = [
+      { id: `p-${Math.random().toString(36).slice(2, 8)}`, name: 'You', birthYear, lifeExpectancy: 90, isIncluded: true },
+    ];
+    set((state) => ({ ...commit(state, (plans) => [...plans, plan]), activeId: plan.id }));
   },
 
   duplicatePlan(planId) {
@@ -319,10 +345,23 @@ function blankPlan(id: string, name: string, like: Plan | undefined): Plan {
   };
 }
 
+/**
+ * A genuinely first-run browser (`raw === null`, nothing has EVER been saved
+ * here) now returns no plans at all, rather than silently seeding
+ * `SAMPLE_PLANS` as if two fabricated "Amazon" scenarios were the user's own
+ * money (docs/REDESIGN.md §6 item 6). `App.tsx` renders `Onboarding` instead
+ * of the planner while `plans` is empty; `SAMPLE_PLANS` stays reachable only
+ * through that screen's explicit "Load an example" choice (`reset()`).
+ *
+ * A raw value that fails to parse or no longer matches today's `Plan` shape
+ * is a DIFFERENT situation — someone's real data, corrupted or from an old
+ * build — and still recovers to the sample plans rather than stranding the
+ * app; that recovery path is unchanged.
+ */
 function loadPlans(): Plan[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(SAMPLE_PLANS).map(withAsOfDate);
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as Plan[];
     if (!Array.isArray(parsed) || parsed.length === 0 || !parsed.every(isPlanShape)) {
       return structuredClone(SAMPLE_PLANS).map(withAsOfDate);

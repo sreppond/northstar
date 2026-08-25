@@ -2836,8 +2836,13 @@
   background: transparent;
   color: var(--ink);
 }
+/* No ring, but not invisible either -- the bottom border still carries a
+   real focus signal (var(--rule) -> var(--accent)), same idea as .ns-input's
+   own focus treatment, just fitted to a border-only field instead of a
+   boxed one. */
 .ns-palette-input:focus {
   outline: none;
+  border-bottom-color: var(--accent);
 }
 .ns-palette-input::placeholder {
   color: var(--muted-light);
@@ -4088,6 +4093,41 @@
   font-size: 13px;
   line-height: 1.4;
   color: var(--out-deep);
+}
+
+/* --- first-run onboarding (docs/REDESIGN.md §6 item 6) --------------------
+   Shares .ns-auth-page/.ns-auth-card/.ns-auth-title/.ns-auth-blurb/.ns-auth-form
+   with the login screen on purpose: both are "the one place with no data on
+   it," so both get chrome only, one centred card, no data palette. */
+.ns-onboard-example {
+  font: inherit;
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ns-onboard-example:hover {
+  color: var(--ink);
+  text-decoration-color: var(--muted);
+}
+
+.ns-onboard-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ns-onboard-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 /* --- the freshness banner ------------------------------------------------- */
