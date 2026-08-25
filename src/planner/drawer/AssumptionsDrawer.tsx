@@ -447,7 +447,13 @@ function Waterfall({
           ruleType === 'withdrawal' && account ? !isWithdrawable(account, startYear) : false;
 
         return (
-          <div key={rule.accountId} className="ns-wf-row">
+          // Not just `rule.accountId`: a goal's derived rule (`goals.ts`'s
+          // `goalsToAllocationRules`) and a hand-authored rule can legitimately
+          // target the SAME account at the same time -- e.g. the sample plan
+          // authors an allocation rule on "brokerage" AND the house goal is
+          // funded from "brokerage" too -- so the account id alone is not a
+          // unique row identity here. `sourceGoalId` disambiguates them.
+          <div key={`${rule.accountId}:${rule.sourceGoalId ?? 'authored'}`} className="ns-wf-row">
             <span className="ns-wf-order ns-num">{i + 1}</span>
             <span className="ns-wf-name">
               {spec?.label ?? account?.name ?? rule.accountId}
