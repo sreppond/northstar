@@ -590,6 +590,7 @@ export default function App() {
       {assumptionsDraft && (
         <AssumptionsDrawer
           draft={assumptionsDraft}
+          saved={stored}
           accounts={allAccounts}
           onChange={setAssumptionsDraft}
           onSave={() => {

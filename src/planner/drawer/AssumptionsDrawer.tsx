@@ -1,10 +1,23 @@
-import { useEffect } from 'react';
-import type { Account, Plan, PriorityRule, RuleType } from '@northstar/engine';
-import { ACCOUNT_TYPES, isWithdrawable } from '@northstar/engine';
+import { useEffect, useMemo, useState } from 'react';
+import type { Account, Goal, Plan, PriorityRule, RuleType } from '@northstar/engine';
+import { ACCOUNT_TYPES, isWithdrawable, mergeGoalRules, runPlan } from '@northstar/engine';
+import { signedMoney } from '../format';
 import { Choice, Field, NumberInput } from './fields';
+import { GoalWaterfall } from './GoalWaterfall';
 
 /**
- * Plan-level assumptions, the household, and the two priority waterfalls.
+ * Plan-level assumptions, the household, the Goals waterfall, and — behind a
+ * disclosure — the two raw priority waterfalls (docs/REDESIGN.md §4.5).
+ *
+ * Progressive disclosure: spending, income, inflation, tax and dollar mode
+ * are what nearly every visit here is for, so they stay on the surface.
+ * Per-account priority order is the rarely-touched machinery underneath a
+ * goal ("fund the house, then retirement"), so it moves behind
+ * `.ns-disclosure`, closed by default — same pattern `RetirementForecastView`
+ * already uses for SEPP, reused rather than reinvented. Per-account TAX
+ * treatment (§4.5's other example of "powerful machinery") lives on the
+ * account itself (`AccountDrawer`), not in this drawer, so there is nothing
+ * of that kind to relocate here.
  *
  * The waterfalls are the mechanic behind every shortfall and surplus in the
  * projection: which accounts get drained when a year comes up short, and where
@@ -13,13 +26,20 @@ import { Choice, Field, NumberInput } from './fields';
  */
 interface Props {
   draft: Plan;
+  /** The plan as last saved — the baseline every field's impact preview diffs against. */
+  saved: Plan;
   accounts: Account[];
   onChange(next: Plan): void;
   onSave(): void;
   onCancel(): void;
 }
 
-export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel }: Props) {
+const IMPACT_FIELDS = ['baselineExpenses', 'baselineIncome', 'inflationRate', 'incomeTaxRate'] as const;
+type ImpactField = (typeof IMPACT_FIELDS)[number];
+
+export function AssumptionsDrawer({ draft, saved, accounts, onChange, onSave, onCancel }: Props) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCancel();
@@ -32,6 +52,49 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
     onChange({ ...draft, settings: { ...draft.settings, [key]: value } });
 
   const setRules = (rules: PriorityRule[]) => onChange({ ...draft, rules });
+
+  // Goals stay a friendly surface over the SAME `mergeGoalRules` derivation
+  // the store's own goal actions run (docs/REDESIGN.md §2.2) — but applied
+  // to the DRAFT, not the store, so a reorder previews live and is free to
+  // Cancel exactly like every other field here, instead of committing early
+  // and going stale the moment the draft's own Save later overwrites it.
+  const setGoals = (goals: Goal[]) => {
+    const withGoals = { ...draft, goals };
+    onChange({ ...withGoals, rules: mergeGoalRules(withGoals) });
+  };
+
+  // Inline impact preview (docs/REDESIGN.md §4.5): each field below reruns
+  // the plan with just ITS OWN edit reverted to the saved value, and diffs
+  // that against the draft as it stands — isolating what that one field's
+  // change, specifically, is doing to the horizon net worth, even while
+  // other fields are also mid-edit. `runPlan` is microseconds (the chart's
+  // fan and the retirement sweep already call it many times a render), so up
+  // to five extra calls here — one shared, one per changed field — costs
+  // nothing worth guarding further than this one memo.
+  const impacts = useMemo(() => {
+    const horizon = (p: Plan) => {
+      const years = runPlan(p).years;
+      return years[years.length - 1];
+    };
+    const draftEnd = horizon(draft);
+    const out: Partial<Record<ImpactField, { fieldDelta: number; netWorthDelta: number; year: number }>> = {};
+    if (!draftEnd) return out;
+
+    for (const key of IMPACT_FIELDS) {
+      const draftValue = draft.settings[key];
+      const savedValue = saved.settings[key];
+      if (draftValue === savedValue) continue;
+      const isolated = { ...draft, settings: { ...draft.settings, [key]: savedValue } };
+      const isolatedEnd = horizon(isolated);
+      if (!isolatedEnd) continue;
+      out[key] = {
+        fieldDelta: draftValue - savedValue,
+        netWorthDelta: draftEnd.netWorth - isolatedEnd.netWorth,
+        year: draftEnd.year,
+      };
+    }
+    return out;
+  }, [draft, saved]);
 
   return (
     <>
@@ -60,7 +123,7 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
               />
             </Field>
 
-            <Field label="Yearly living expenses">
+            <Field label="Yearly living expenses" impact={<Impact field={impacts.baselineExpenses} unit="currency" />}>
               <NumberInput
                 value={draft.settings.baselineExpenses}
                 unit="currency"
@@ -73,6 +136,7 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
             <Field
               label="Baseline income"
               hint="Standing income not tied to a job or income event."
+              impact={<Impact field={impacts.baselineIncome} unit="currency" />}
             >
               <NumberInput
                 value={draft.settings.baselineIncome}
@@ -83,7 +147,7 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
               />
             </Field>
 
-            <Field label="Inflation rate">
+            <Field label="Inflation rate" impact={<Impact field={impacts.inflationRate} unit="percent" />}>
               <NumberInput
                 value={draft.settings.inflationRate}
                 unit="percent"
@@ -93,7 +157,11 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
               />
             </Field>
 
-            <Field label="Income tax rate" hint="Flat effective rate on ordinary income.">
+            <Field
+              label="Income tax rate"
+              hint="Flat effective rate on ordinary income."
+              impact={<Impact field={impacts.incomeTaxRate} unit="percent" />}
+            >
               <NumberInput
                 value={draft.settings.incomeTaxRate}
                 unit="percent"
@@ -214,30 +282,54 @@ export function AssumptionsDrawer({ draft, accounts, onChange, onSave, onCancel 
           </Section>
 
           <Section
-            title="Where surplus goes"
-            blurb="In a year with money left over, it fills these in order. Anything left lands in cash."
+            title="Goals"
+            blurb="Every year with money left over, it fills these in order — drag to change the order."
           >
-            <Waterfall
-              ruleType="allocation"
-              rules={draft.rules}
-              accounts={accounts}
-              startYear={draft.settings.startYear}
-              onChange={setRules}
-            />
+            <GoalWaterfall goals={draft.goals ?? []} onReorder={setGoals} />
           </Section>
 
-          <Section
-            title="What gets drained first"
-            blurb="In a year that comes up short, these are tapped in order until the gap is covered."
-          >
-            <Waterfall
-              ruleType="withdrawal"
-              rules={draft.rules}
-              accounts={accounts}
-              startYear={draft.settings.startYear}
-              onChange={setRules}
-            />
-          </Section>
+          <div className="ns-disclosure">
+            <button
+              type="button"
+              className="ns-disclosure-trigger"
+              aria-expanded={advancedOpen}
+              onClick={() => setAdvancedOpen((v) => !v)}
+            >
+              <span>Priority rules by account</span>
+              <span className="ns-disclosure-chevron" aria-hidden="true">
+                {advancedOpen ? '−' : '+'}
+              </span>
+            </button>
+            {advancedOpen && (
+              <div className="ns-disclosure-body">
+                <Section
+                  title="Where surplus goes"
+                  blurb="In a year with money left over, it fills these in order. Anything left lands in cash. Goals above generate entries here automatically — this is the account-level detail underneath them."
+                >
+                  <Waterfall
+                    ruleType="allocation"
+                    rules={draft.rules}
+                    accounts={accounts}
+                    startYear={draft.settings.startYear}
+                    onChange={setRules}
+                  />
+                </Section>
+
+                <Section
+                  title="What gets drained first"
+                  blurb="In a year that comes up short, these are tapped in order until the gap is covered."
+                >
+                  <Waterfall
+                    ruleType="withdrawal"
+                    rules={draft.rules}
+                    accounts={accounts}
+                    startYear={draft.settings.startYear}
+                    onChange={setRules}
+                  />
+                </Section>
+              </div>
+            )}
+          </div>
         </div>
 
         <footer className="ns-drawer-foot">
@@ -273,6 +365,34 @@ function Section({
       {children}
     </div>
   );
+}
+
+/**
+ * One field's live consequence (docs/REDESIGN.md §4.5): "+0.5% → −$180K at
+ * 2046." Colour follows the same in/out convention as the ledger's magnitude
+ * bars — richer at the horizon reuses `--in`, poorer reuses `--out` — rather
+ * than a third hue, per REDESIGN.md §5.1.
+ */
+function Impact({
+  field,
+  unit,
+}: {
+  field: { fieldDelta: number; netWorthDelta: number; year: number } | undefined;
+  unit: 'currency' | 'percent';
+}) {
+  if (!field) return null;
+  const tone = field.netWorthDelta > 0 ? 'in' : field.netWorthDelta < 0 ? 'out' : undefined;
+  const fieldStr = unit === 'percent' ? signedPercent(field.fieldDelta) : signedMoney(field.fieldDelta);
+  return (
+    <span className={`ns-field-impact${tone ? ` ns-field-impact-${tone}` : ''}`}>
+      {fieldStr} → {signedMoney(field.netWorthDelta)} at {field.year}
+    </span>
+  );
+}
+
+function signedPercent(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return rounded > 0 ? `+${rounded}%` : `${rounded}%`;
 }
 
 function Waterfall({

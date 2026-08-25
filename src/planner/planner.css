@@ -2085,6 +2085,23 @@
   color: var(--muted-light);
 }
 
+/* A field's own live consequence (docs/REDESIGN.md §4.5) — the mono data
+   voice, because this is a number the app computed, not chrome. Colour
+   follows the existing money-in/money-out convention rather than adding a
+   third hue: richer at the horizon reads as --in, poorer as --out. */
+.ns-field-impact {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+.ns-field-impact-in {
+  color: var(--in-deep);
+}
+.ns-field-impact-out {
+  color: var(--out-deep);
+}
+
 /* Inputs are wells: pressed into the surface, the inverse of a button. That
    contrast is what makes the form legible at a glance. */
 .ns-input {
@@ -2654,6 +2671,43 @@
   color: #c0392b;
   border-color: #e8b3ac;
   background: #fdf1ef;
+}
+
+/* --- Goals waterfall (docs/REDESIGN.md §2.2, §4.5) ------------------------
+   Reuses .ns-wf-row/.ns-wf-order/.ns-wf-name from the raw waterfall above —
+   same list, friendlier rows — plus a drag handle and a small meta line the
+   raw rows do not have. */
+.ns-goal-row {
+  cursor: grab;
+}
+.ns-goal-row:active {
+  cursor: grabbing;
+}
+.ns-goal-handle {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  color: var(--muted-light);
+  font-size: 13px;
+  line-height: 1;
+}
+.ns-goal-meta {
+  font-size: 11px;
+  color: var(--muted-light);
+}
+.ns-goal-row-dragging {
+  opacity: 0.45;
+}
+.ns-goal-row-over {
+  border-color: var(--accent-line);
+  background: var(--chip);
+}
+/* Savings: the always-present, unremovable tail — no Goal behind it, so no
+   handle, no order controls, and a quieter name to read as structural rather
+   than another row you could reorder or remove. */
+.ns-goal-row-sweep {
+  cursor: default;
+  color: var(--muted);
 }
 
 .ns-legend-line-compare {

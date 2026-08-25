@@ -15,10 +15,17 @@ import { stepFor, type FieldDescriptor } from './schemaForm';
 export function Field({
   label,
   hint,
+  impact,
   children,
 }: {
   label: string;
   hint?: string;
+  /**
+   * A field's own live consequence (docs/REDESIGN.md §4.5) — e.g. "+0.5% →
+   * −$180K at 2046." Optional and rare: only the handful of assumption
+   * fields with a legible one-number effect on the projection pass it.
+   */
+  impact?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -26,6 +33,7 @@ export function Field({
       <span className="ns-field-label">{label}</span>
       {children}
       {hint && <span className="ns-field-hint">{hint}</span>}
+      {impact}
     </label>
   );
 }
