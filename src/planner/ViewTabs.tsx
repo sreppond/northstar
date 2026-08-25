@@ -5,7 +5,9 @@
 // simply unreachable from this row, not deleted.
 export type ViewId = 'netWorth' | 'retirement' | 'house' | 'sepp';
 
-const VIEWS: { id: ViewId; name: string }[] = [
+/** Exported so the ⌘K palette (`CommandPalette.tsx`) lists the same three
+    lenses from the same one list, rather than a second copy that could drift. */
+export const VIEWS: { id: ViewId; name: string }[] = [
   { id: 'netWorth', name: 'Net Worth' },
   { id: 'retirement', name: 'Retirement' },
   { id: 'house', name: 'House' },

@@ -44,6 +44,7 @@ import { ThemeToggle } from './planner/ThemeToggle';
 import { HeaderMenu } from './planner/HeaderMenu';
 import { useBreakpoint, yearColumnsFor } from './planner/useBreakpoint';
 import { Sidebar } from './planner/Sidebar';
+import { CommandPalette } from './planner/CommandPalette';
 import { ViewTabs, type ViewId } from './planner/ViewTabs';
 import { RetirementForecastView } from './planner/views/RetirementForecastView';
 import { HouseForecastView } from './planner/views/HouseForecastView';
@@ -98,6 +99,7 @@ export default function App() {
   // below and NetWorthChart's `onDragCommit`).
   const [scrubYear, setScrubYear] = useState<number | null>(null);
   const [dragDraft, setDragDraft] = useState<PlanEvent | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
 
@@ -115,6 +117,20 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo]);
+
+  // ⌘K, the command palette (docs/REDESIGN.md §3.2). Unlike ⌘Z this fires
+  // regardless of focus — a conventional palette shortcut (Slack, Linear,
+  // VS Code) is meant to reach you wherever you are, and the combo is
+  // distinctive enough that it never collides with ordinary typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k') return;
+      e.preventDefault();
+      setPaletteOpen((v) => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Both drawers preview live: whichever draft is open stands in for the
   // stored plan in the projection, without ever being written to the store.
@@ -279,6 +295,10 @@ export default function App() {
     windowYears.length > 0
       ? `${windowYears[0].year}–${windowYears[windowYears.length - 1].year}`
       : '';
+  // Named so the ⌘K palette (docs/REDESIGN.md §3.2, "absorbs... the year
+  // pager") can fire the exact same page turn the ← / → buttons do below.
+  const pageEarlier = () => setWinStart(Math.max(0, clampedStart - columns));
+  const pageLater = () => setWinStart(Math.min(maxStart, clampedStart + columns));
 
   return (
     <div className="ns">
@@ -287,9 +307,12 @@ export default function App() {
           <div className="ns-wordmark">Northstar</div>
           <ViewTabs view={view} onSelect={setView} />
           <div className="ns-head-actions">
-            {/* Visual stub only — Phase 5 wires the real palette
-                (docs/EXECUTION.md Phase 2). */}
-            <button type="button" className="ns-cmdk-stub" title="Command palette (coming soon)">
+            <button
+              type="button"
+              className="ns-cmdk-stub"
+              title="Command palette"
+              onClick={() => setPaletteOpen(true)}
+            >
               <kbd>⌘K</kbd>
             </button>
             <ThemeToggle />
@@ -488,7 +511,7 @@ export default function App() {
                   className="ns-btn ns-btn-square"
                   aria-label="Earlier years"
                   disabled={clampedStart === 0}
-                  onClick={() => setWinStart(Math.max(0, clampedStart - columns))}
+                  onClick={pageEarlier}
                 >
                   ←
                 </button>
@@ -497,7 +520,7 @@ export default function App() {
                   className="ns-btn ns-btn-square"
                   aria-label="Later years"
                   disabled={clampedStart >= maxStart}
-                  onClick={() => setWinStart(Math.min(maxStart, clampedStart + columns))}
+                  onClick={pageLater}
                 >
                   →
                 </button>
@@ -560,6 +583,24 @@ export default function App() {
           onRenamePlan={renamePlan}
           onDuplicatePlan={duplicatePlan}
           onDeletePlan={deletePlan}
+        />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          view={view}
+          onSelectView={setView}
+          plans={plans}
+          activePlanId={stored.id}
+          compareToPlanId={stored.settings.compareToPlanId}
+          onSetCompare={(id) => updateSettings(stored.id, { compareToPlanId: id })}
+          windowLabel={windowLabel}
+          canPageEarlier={clampedStart > 0}
+          canPageLater={clampedStart < maxStart}
+          onPageEarlier={pageEarlier}
+          onPageLater={pageLater}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          onClose={() => setPaletteOpen(false)}
         />
       )}
 

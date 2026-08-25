@@ -2791,6 +2791,104 @@
   background: #fdf1ef;
 }
 
+/* --- command palette (docs/REDESIGN.md §3.2, §4.5) ------------------------
+   Deliberately carries no animation property anywhere in this block -- the
+   DESIGN-DIRECTION.md motion table marks the palette "None, deliberately":
+   keyboard-initiated and used constantly, so it should appear and vanish
+   exactly on the keystroke, not ease in behind it. Highest z-index in the
+   app: it is meant to sit over any drawer or menu that happens to be open. */
+.ns-palette-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  padding-top: 14vh;
+  background: rgba(18, 48, 76, 0.26);
+  backdrop-filter: blur(3px) saturate(0.92);
+}
+
+.ns-palette {
+  position: relative;
+  z-index: 71;
+  width: 100%;
+  max-width: 560px;
+  max-height: 60vh;
+  height: fit-content;
+  margin: 0 16px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow:
+    0 10px 28px rgba(18, 48, 76, 0.16),
+    0 24px 64px rgba(18, 48, 76, 0.2);
+  overflow: hidden;
+}
+
+.ns-palette-input {
+  font: inherit;
+  font-size: 15px;
+  padding: 16px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+}
+.ns-palette-input:focus {
+  outline: none;
+}
+.ns-palette-input::placeholder {
+  color: var(--muted-light);
+}
+
+.ns-palette-list {
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ns-palette-empty {
+  padding: 14px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ns-palette-item {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+/* The keyboard-active row (both ArrowUp/Down and mouse hover keep the same
+   index in sync, so there is no separate :hover rule to fall out of step).
+   --accent marks it, per REDESIGN.md §5.1 ("the single system accent is for
+   focus, selection, caret") -- exactly that, here. */
+.ns-palette-item-active {
+  background: var(--chip);
+  color: var(--accent);
+  font-weight: 600;
+}
+.ns-palette-hint {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted-light);
+}
+
 /* --- compare picker ------------------------------------------------------ */
 
 .ns-compare {
