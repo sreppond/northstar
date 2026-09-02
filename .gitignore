@@ -14,5 +14,9 @@ packages/server/dist/
 .claude/
 .impeccable/
 
+# Tauri desktop build artifacts
+src-tauri/target/
+src-tauri/gen/
+
 # unrelated content that happens to live in this directory
 Skills/
