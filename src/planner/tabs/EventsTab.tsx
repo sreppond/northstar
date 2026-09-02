@@ -1,8 +1,9 @@
-import type { PlanEvent, PlanResult } from '@northstar/engine';
+import type { Plan, PlanEvent, PlanResult } from '@northstar/engine';
 import { codeFor, summarize, toneFor } from '../presentation';
 import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { GearIcon } from '../icons';
+import { IconBadge } from '../IconBadge';
 import type { ChartSelection } from '../NetWorthChart';
 
 /**
@@ -15,12 +16,15 @@ export function EventsTab({
   selected,
   onSelect,
   onEdit,
+  plan,
 }: {
   events: PlanEvent[];
   result: PlanResult;
   selected: ChartSelection | null;
   onSelect(selection: ChartSelection | null): void;
   onEdit(event: PlanEvent): void;
+  /** Optional — enables the "Referenced by" section on each event's hover card. */
+  plan?: Plan;
 }) {
   const { startYear, endYear } = result;
   const span = Math.max(1, endYear - startYear);
@@ -78,15 +82,15 @@ export function EventsTab({
         return (
           <div key={event.id} className="ns-gantt-row">
             <div className="ns-gantt-label">
-              <HoverCard detail={eventDetail(event)} side="bottom">
-                <span className={`ns-code ns-code-${tone}`}>{code}</span>
+              <HoverCard detail={eventDetail(event, plan)} side="bottom">
+                <IconBadge kind={event.kind} tone={tone} />
               </HoverCard>
               <span className="ns-gantt-name" title={event.name}>
                 {event.name}
               </span>
               {/* Same contract as the balance sheet: hover for the assumptions,
                   click to edit the very same ones. */}
-              <HoverCard detail={eventDetail(event)} side="bottom">
+              <HoverCard detail={eventDetail(event, plan)} side="bottom">
                 <button
                   type="button"
                   className="ns-gear"

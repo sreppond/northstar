@@ -16,7 +16,7 @@
 body {
   background: var(--bg, #edf0f3);
   color: var(--ink, #0f1922);
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

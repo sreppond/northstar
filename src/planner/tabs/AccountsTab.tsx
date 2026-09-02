@@ -5,6 +5,7 @@ import { accountDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { Cell, type CellMagnitude } from './DataTable';
 import { GearIcon } from '../icons';
+import { ACCOUNT_ICON } from '../domainIcons';
 
 /**
  * The balance sheet, one row per ACCOUNT TYPE rather than per linked account.
@@ -97,6 +98,10 @@ export function AccountsTab({
         return (
           <div key={accountClass} className="ns-grid ns-row-child" style={style}>
             <div className="ns-type-cell">
+              {(() => {
+                const Icon = ACCOUNT_ICON[accountClass];
+                return <Icon size={14} strokeWidth={2} className="ns-type-icon" aria-hidden />;
+              })()}
               <span className="ns-type-name" title={spec.label}>
                 {spec.label}
               </span>

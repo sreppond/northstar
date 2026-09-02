@@ -13,6 +13,7 @@ import type { AccountFieldSpec, FieldUnit } from '@northstar/engine';
 import { describeSchema } from './drawer/schemaForm';
 import { toneFor } from './presentation';
 import { detailMoney, roundMoney } from './format';
+import { eventReferences } from './eventReferences';
 
 export interface DetailRow {
   label: string;
@@ -98,7 +99,14 @@ function takeHomeIncome(plan: Plan): number {
 
 // --- event ------------------------------------------------------------------
 
-export function eventDetail(event: PlanEvent): Detail {
+/**
+ * `plan` is optional and additive: passing it appends a "Referenced by"
+ * section (`eventReferences.ts`) for callers that have the whole plan handy
+ * (currently only `EventsTab.tsx`). Callers that only have the one event —
+ * `NetWorthChart.tsx`'s chart-pin hover cards, `CashFlowTab.tsx`'s row hover —
+ * are unaffected; omitting it renders exactly what this always rendered.
+ */
+export function eventDetail(event: PlanEvent, plan?: Plan): Detail {
   const mod = EVENT_MODULES[event.kind];
   const parsed = mod.schema.safeParse(event.config ?? {});
   const config = (parsed.success ? parsed.data : (event.config ?? {})) as Record<string, unknown>;
@@ -116,6 +124,16 @@ export function eventDetail(event: PlanEvent): Detail {
   const sections: DetailSection[] = [{ rows }];
   if (detailRows.length > 0) {
     sections.push({ heading: toneFor(event.kind) === 'income' ? 'Income' : 'Expenses', rows: detailRows });
+  }
+
+  if (plan) {
+    const refs = eventReferences(plan, event.id);
+    if (refs.length > 0) {
+      sections.push({
+        heading: 'Referenced by',
+        rows: refs.map((r) => ({ label: r, value: '' })),
+      });
+    }
   }
 
   return { title: event.name, sections };

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { AccountFieldSpec, RateAnchor } from '@northstar/engine';
+import type { AccountFieldSpec, RateAnchor, SurrenderScheduleEntry } from '@northstar/engine';
 import { RateSchedule } from './RateSchedule';
+import { SurrenderScheduleEditor } from './SurrenderScheduleEditor';
 import { stepFor, type FieldDescriptor } from './schemaForm';
 
 /**
@@ -321,6 +322,16 @@ export function AccountField({
         value={value as RateAnchor[] | undefined}
         startYear={planYears.startYear}
         endYear={planYears.endYear}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (field.kind === 'surrenderSchedule') {
+    return (
+      <SurrenderScheduleEditor
+        label={field.label}
+        value={value as SurrenderScheduleEntry[] | undefined}
         onChange={onChange}
       />
     );

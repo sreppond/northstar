@@ -19,7 +19,13 @@ export interface AccountFieldSpec {
   key: keyof Account;
   label: string;
   unit: FieldUnit;
-  kind?: 'number' | 'boolean' | 'growthMethod' | 'growthSchedule' | 'withdrawalTiming';
+  kind?:
+    | 'number'
+    | 'boolean'
+    | 'growthMethod'
+    | 'growthSchedule'
+    | 'withdrawalTiming'
+    | 'surrenderSchedule';
   min?: number;
   max?: number;
   step?: number;
@@ -230,6 +236,52 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
         min: 0,
         max: 100,
         step: 0.5,
+      },
+      {
+        key: 'isQualifiedAnnuity',
+        label: 'Inside a qualified plan (IRA / 401(k))',
+        unit: 'plain',
+        kind: 'boolean',
+        showWhen: (a) => (a.nonTaxableBase ?? 0) > 0,
+        help:
+          'A qualified annuity’s basis (from after-tax contributions) comes out pro-rata with every dollar withdrawn. A nonqualified annuity’s basis comes out only once all growth has been drawn down first (LIFO). Leave off for a nonqualified contract — money invested outside a retirement wrapper, the more common case.',
+      },
+      {
+        key: 'annuityFlatFeeAnnual',
+        label: 'Flat annual fee',
+        unit: 'currency',
+        min: 0,
+        step: 10,
+        help:
+          'A fixed dollar rider or contract-administration charge taken from the account every year, independent of its balance — a variable annuity’s flat "contract fee", for instance. Leave at $0 outside an annuity.',
+      },
+      {
+        key: 'annuityAssetFeePercent',
+        label: 'Mortality & expense fee',
+        unit: 'percent',
+        min: 0,
+        max: 100,
+        step: 0.05,
+        help:
+          'An asset-based carrier charge (mortality & expense risk, administration, fund platform) taken as a percent of the contract value every year. Keep the underlying funds’ own expense ratio out of this — that belongs in the expected return above instead.',
+      },
+      {
+        key: 'annuityAdvisoryFeePercent',
+        label: 'Advisory fee',
+        unit: 'percent',
+        min: 0,
+        max: 100,
+        step: 0.05,
+        help:
+          'An advisory fee billed against the contract, tracked separately from the carrier’s own charges because it is usually negotiable or waivable in a way those are not.',
+      },
+      {
+        key: 'annuitySurrenderSchedule',
+        label: 'Surrender charge schedule',
+        unit: 'percent',
+        kind: 'surrenderSchedule',
+        help:
+          'Percent of a withdrawal the carrier keeps if it is taken during that contract year — year 1 is the year this account started. Leave a year out once the contract is past its surrender period.',
       },
       withdrawalTiming,
       withdrawalStartingYear,

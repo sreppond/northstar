@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { Account, EventKind, Participant, PlanEvent } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
-import { codeFor, labelFor, toneFor } from '../presentation';
+import { labelFor } from '../presentation';
+import { IconBadge } from '../IconBadge';
 import { describeSchema } from './schemaForm';
 import { ConfigField, Field } from './fields';
 import { CompStepsEditor, RsuVestingEditor } from './JobSchedules';
@@ -354,7 +355,7 @@ function IncomeRetention({
         const explicit = retention[event.id];
         return (
           <div key={event.id} className="ns-retain-row">
-            <span className={`ns-code ns-code-${toneFor(event.kind)}`}>{codeFor(event.kind)}</span>
+            <IconBadge kind={event.kind} />
             <span className="ns-retain-name" title={event.name}>
               {event.name}
             </span>
@@ -395,9 +396,7 @@ function CompoundKindGroup({ id, onOpen }: { id: GroupId; onOpen(): void }) {
         <button type="button" className="ns-kind ns-kind-compound" onClick={onOpen}>
           <span className="ns-kind-compound-codes">
             {def.kinds.map((kind) => (
-              <span key={kind} className={`ns-code ns-code-${toneFor(kind)}`}>
-                {codeFor(kind)}
-              </span>
+              <IconBadge key={kind} kind={kind} />
             ))}
           </span>
           <span className="ns-kind-compound-label">
@@ -433,7 +432,7 @@ function KindGroup({
             style={{ '--i': i } as CSSProperties}
             onClick={() => onPick(kind)}
           >
-            <span className={`ns-code ns-code-${toneFor(kind)}`}>{codeFor(kind)}</span>
+            <IconBadge kind={kind} />
             <span>{labelFor(kind)}</span>
           </button>
         ))}

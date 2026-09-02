@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Plan } from '@northstar/engine';
-import { VIEWS, type ViewId } from './ViewTabs';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { NAV_ITEMS } from './Sidebar';
+import { usePlanner } from './PlannerContext';
 
 /**
  * The ⌘K command palette (docs/REDESIGN.md §3.2, §4.5;
- * docs/DESIGN-DIRECTION.md "Dark mode and ⌘K"). Absorbs four bits of chrome
- * that otherwise each need their own header real estate: the three lens
- * switches, the Compare-plan `<select>`, the year-window pager, and the
- * scenario switcher (which it reopens as the existing `Sidebar` rather than
- * reimplementing a plan list inline).
+ * docs/DESIGN-DIRECTION.md "Dark mode and ⌘K"). Absorbs bits of chrome that
+ * otherwise each need their own real estate: page navigation (now real
+ * routes, pushed via `useNavigate` — `NAV_ITEMS` is the same list
+ * `Sidebar.tsx` renders, so the two can never drift), the Compare-plan
+ * picker, the year-window pager, and the scenario switcher (which it reopens
+ * as the existing `PlanSwitcher` overlay rather than reimplementing a plan
+ * list inline).
  *
  * Deliberately has NO open/close animation — the one motion-table row marked
  * "None, deliberately" in DESIGN-DIRECTION.md, because it is
  * keyboard-initiated and used constantly, so instant is what feels right, not
  * a missed opportunity for delight. Escape and an outside click both close
- * it, the same disclosure idiom `HeaderMenu.tsx`/`Sidebar.tsx` already use.
+ * it, the same disclosure idiom `HeaderMenu.tsx`/`PlanSwitcher.tsx` already use.
  */
 
 interface Command {
@@ -24,85 +27,74 @@ interface Command {
   run(): void;
 }
 
-interface Props {
-  view: ViewId;
-  onSelectView(view: ViewId): void;
-  plans: Plan[];
-  activePlanId: string;
-  compareToPlanId: string | undefined;
-  onSetCompare(id: string | undefined): void;
-  windowLabel: string;
-  canPageEarlier: boolean;
-  canPageLater: boolean;
-  onPageEarlier(): void;
-  onPageLater(): void;
-  onOpenSidebar(): void;
-  onClose(): void;
-}
+export function CommandPalette({ onClose }: { onClose(): void }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const {
+    plans,
+    stored,
+    plan,
+    updateSettings,
+    windowLabel,
+    clampedStart,
+    maxStart,
+    pageEarlier,
+    pageLater,
+    setSidebarOpen,
+  } = usePlanner();
 
-export function CommandPalette({
-  view,
-  onSelectView,
-  plans,
-  activePlanId,
-  compareToPlanId,
-  onSetCompare,
-  windowLabel,
-  canPageEarlier,
-  canPageLater,
-  onPageEarlier,
-  onPageLater,
-  onOpenSidebar,
-  onClose,
-}: Props) {
+  const compareToPlanId = plan.settings.compareToPlanId;
+  const canPageEarlier = clampedStart > 0;
+  const canPageLater = clampedStart < maxStart;
+
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands = useMemo<Command[]>(() => {
-    const out: Command[] = VIEWS.map((v) => ({
-      id: `view-${v.id}`,
-      label: `Go to ${v.name}`,
-      hint: view === v.id ? 'Current' : undefined,
-      run: () => onSelectView(v.id),
+    const out: Command[] = NAV_ITEMS.map((item) => ({
+      id: `page-${item.to}`,
+      label: `Go to ${item.label}`,
+      hint: location.pathname === item.to ? 'Current' : undefined,
+      run: () => navigate(item.to),
     }));
 
     out.push({
       id: 'compare-none',
       label: 'Compare: None',
       hint: compareToPlanId === undefined ? 'Current' : undefined,
-      run: () => onSetCompare(undefined),
+      run: () => updateSettings(stored.id, { compareToPlanId: undefined }),
     });
     for (const p of plans) {
-      if (p.id === activePlanId) continue;
+      if (p.id === stored.id) continue;
       out.push({
         id: `compare-${p.id}`,
         label: `Compare with ${p.name}`,
         hint: compareToPlanId === p.id ? 'Current' : undefined,
-        run: () => onSetCompare(p.id),
+        run: () => updateSettings(stored.id, { compareToPlanId: p.id }),
       });
     }
 
-    if (canPageEarlier) out.push({ id: 'page-earlier', label: `Earlier years (before ${windowLabel})`, run: onPageEarlier });
-    if (canPageLater) out.push({ id: 'page-later', label: `Later years (after ${windowLabel})`, run: onPageLater });
+    if (canPageEarlier) out.push({ id: 'page-earlier', label: `Earlier years (before ${windowLabel})`, run: pageEarlier });
+    if (canPageLater) out.push({ id: 'page-later', label: `Later years (after ${windowLabel})`, run: pageLater });
 
-    out.push({ id: 'switch-plan', label: 'Switch or manage plans…', run: onOpenSidebar });
+    out.push({ id: 'switch-plan', label: 'Switch or manage plans…', run: () => setSidebarOpen(true) });
 
     return out;
   }, [
-    view,
-    onSelectView,
+    location.pathname,
+    navigate,
     plans,
-    activePlanId,
+    stored.id,
     compareToPlanId,
-    onSetCompare,
+    updateSettings,
     windowLabel,
     canPageEarlier,
     canPageLater,
-    onPageEarlier,
-    onPageLater,
-    onOpenSidebar,
+    pageEarlier,
+    pageLater,
+    setSidebarOpen,
   ]);
 
   const filtered = useMemo(() => {
@@ -114,7 +106,7 @@ export function CommandPalette({
   useEffect(() => setActiveIndex(0), [query]);
   useEffect(() => inputRef.current?.focus(), []);
 
-  // Same idiom as HeaderMenu.tsx / Sidebar.tsx: Escape and a mousedown
+  // Same idiom as HeaderMenu.tsx / PlanSwitcher.tsx: Escape and a mousedown
   // outside the panel both close it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -162,7 +154,7 @@ export function CommandPalette({
         <input
           ref={inputRef}
           className="ns-palette-input"
-          placeholder="Jump to a lens, compare a plan, page years…"
+          placeholder="Jump to a page, compare a plan, page years…"
           aria-label="Command palette search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

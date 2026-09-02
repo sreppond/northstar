@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Plan, PlanResult } from '@northstar/engine';
+import type { Plan, PlanResult, SeppMethod } from '@northstar/engine';
 import {
   DEFAULT_SEPP_RATE_PERCENT,
   MANDATORY_AGE,
@@ -8,9 +8,15 @@ import {
   seppStartAgeSweep,
 } from '@northstar/engine';
 import { detailMoney } from '../format';
-import { Field, NumberInput } from '../drawer/fields';
+import { Choice, Field, NumberInput } from '../drawer/fields';
 import { AnimatedFigure } from '../AnimatedFigure';
 import { ChartLegend, MiniChart } from './MiniChart';
+
+const METHOD_OPTIONS = [
+  { value: 'amortization', label: 'Fixed amortization' },
+  { value: 'annuitization', label: 'Fixed annuitization' },
+  { value: 'rmd', label: 'RMD' },
+] as const;
 
 /**
  * The SEPP tool's content, without a card of its own (docs/REDESIGN.md §3.1,
@@ -45,6 +51,7 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
   );
   const [seppRate, setSeppRate] = useState<number>(DEFAULT_SEPP_RATE_PERCENT);
   const [startYear, setStartYear] = useState<number>(asOfYear);
+  const [method, setMethod] = useState<SeppMethod>('amortization');
 
   const mandatoryYear = owner ? owner.birthYear + MANDATORY_AGE : undefined;
 
@@ -60,8 +67,9 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
       growthRatePercent: growthRate,
       seppRatePercent: seppRate,
       referenceYear: mandatoryYear,
+      method,
     });
-  }, [owner, mandatoryYear, asOfYear, currentBalance, growthRate, seppRate]);
+  }, [owner, mandatoryYear, asOfYear, currentBalance, growthRate, seppRate, method]);
 
   const maxSweepBalance = Math.max(1, ...sweep.map((s) => s.balanceAtReference));
 
@@ -77,8 +85,19 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
       seppRatePercent: seppRate,
       incomeTaxRatePercent: plan.settings.incomeTaxRate,
       horizonYear: Math.max(startYear + 4, (mandatoryYear ?? startYear) + 3),
+      method,
     });
-  }, [owner, startYear, asOfYear, currentBalance, growthRate, seppRate, plan.settings.incomeTaxRate, mandatoryYear]);
+  }, [
+    owner,
+    startYear,
+    asOfYear,
+    currentBalance,
+    growthRate,
+    seppRate,
+    plan.settings.incomeTaxRate,
+    mandatoryYear,
+    method,
+  ]);
 
   if (!account || !owner) {
     return (
@@ -102,6 +121,14 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
             </select>
           </Field>
         )}
+        <Choice<SeppMethod>
+          label="Method"
+          value={method}
+          options={METHOD_OPTIONS}
+          hint="All three are IRS-approved (§72(t)(2)(A)(iv)); amortization and annuitization lock in one payment for the life of the schedule, RMD recalculates it every year."
+          onChange={setMethod}
+        />
+
         <div className="ns-sepp-form-group">
           <div className="ns-sepp-form-group-label">Assumptions</div>
           <div className="ns-sepp-form-row">
@@ -122,8 +149,16 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
         <>
           <div className="ns-stat-row">
             <Stat label="Start age" value={String(selected.startAge)} />
-            <Stat label="Life expectancy factor" value={String(selected.lifeExpectancyFactor)} note="IRS Single Life Table" />
-            <Stat label="Annual payment" value={detailMoney(selected.annualPayment)} />
+            <Stat
+              label={method === 'annuitization' ? 'Annuity factor' : 'Life expectancy factor'}
+              value={String(selected.lifeExpectancyFactor)}
+              note={method === 'annuitization' ? 'Mortality-weighted, IRS §1.401(a)(9)-9(e)' : 'IRS Single Life Table'}
+            />
+            <Stat
+              label={method === 'rmd' ? 'First year’s payment' : 'Annual payment'}
+              value={detailMoney(selected.annualPayment)}
+              note={method === 'rmd' ? 'Recalculated every year — see the chart' : undefined}
+            />
             <Stat label="Runs through" value={String(selected.mandatoryEndYear)} />
           </div>
 
@@ -184,12 +219,15 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
       )}
 
       <div className="ns-sepp-disclaimer">
-        <strong>Not tax advice.</strong> The life-expectancy factor reproduces the IRS Single
-        Life Expectancy Table used for 72(t) calculations, and the assumed rate above stands in
-        for the actual cap — 120% of the federal mid-term rate for either of the two months
-        before the first payment, published monthly at irs.gov/apr. Verify both against current
-        IRS guidance before relying on a real SEPP election: breaking the schedule early
-        retroactively applies the 10% penalty, with interest, to every payment already taken.
+        <strong>Not tax advice.</strong> The factor above reproduces{' '}
+        {method === 'annuitization'
+          ? 'a mortality-weighted annuity table (IRS §1.401(a)(9)-9(e))'
+          : 'the IRS Single Life Expectancy Table used for 72(t) calculations'}
+        , and the assumed rate stands in for the actual cap — 120% of the federal mid-term rate
+        for either of the two months before the first payment, published monthly at irs.gov/apr.
+        Verify both against current IRS guidance before relying on a real SEPP election: breaking
+        the schedule early retroactively applies the 10% penalty, with interest, to every payment
+        already taken.
         {lifeExpectancyFactor(selected?.startAge ?? 0) === lifeExpectancyFactor(20) &&
           (selected?.startAge ?? 0) < 20 &&
           ' The selected age falls outside the modelled table range and has been clamped.'}

@@ -19,6 +19,7 @@ import type {
   YearSnapshot,
 } from './types.js';
 import { accountExistsIn, amortizeYear, growthRateFor, scheduledAnnualPayment } from './accounts.js';
+import { annuityFeeForYear } from './annuity.js';
 import { sweepAllocationLabel } from './goals.js';
 import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
@@ -377,6 +378,7 @@ export function runPlan(plan: Plan): PlanResult {
       balances,
       remainingBasis,
       ageForAccount: (id) => ageForAccount(id, year),
+      planStartYear: startYear,
     };
 
     const contributionsByAccount = new Map<string, number>();
@@ -445,6 +447,19 @@ export function runPlan(plan: Plan): PlanResult {
             category: 'tax',
           });
         }
+        // A contract cost, not a tax (annuity.ts's `surrenderCharge`) — its
+        // own line, its own category, so it never gets summed into "taxes
+        // paid". Pushed after step 8's NET was already computed, the same
+        // way the withdrawal tax line above is: it cannot affect how big
+        // this year's shortfall was, only what covering it actually cost.
+        if (draw.surrenderCharge > EPSILON) {
+          expenses.push({
+            label: `Surrender charge — ${account?.name ?? draw.accountId}`,
+            amount: draw.surrenderCharge,
+            accountId: draw.accountId,
+            category: 'annuityCharge',
+          });
+        }
       }
 
       // A dry waterfall means the plan FAILS this year. Surface it loudly
@@ -505,7 +520,19 @@ export function runPlan(plan: Plan): PlanResult {
       const rate = closed.has(account.id) ? 0 : growthRateFor(account, year) / 100;
       // A partial `startYear` only has `yearFraction` of the year left to
       // compound (docs/PLAN.md §4.3) — full years elsewhere leave this at 1.
-      const growth = growthBase * rate * yearFraction;
+      const grossGrowth = growthBase * rate * yearFraction;
+      // Contract fee drag (annuity.ts): 0 for any account that never sets
+      // annuityFlatFeeAnnual/annuityAssetFeePercent/annuityAdvisoryFeePercent,
+      // so this is a no-op for every account type that predates the feature.
+      // Deducted from THIS SAME grossGrowth, before contributions land, so
+      // it composes with the opening-balance growth rule above rather than
+      // fighting it: a partial first year already scaled grossGrowth by
+      // yearFraction, and annuityFeeForYear scales its own flat/asset-based
+      // charges by the same fraction for the same reason.
+      const annuityFees = closed.has(account.id)
+        ? 0
+        : annuityFeeForYear(account, growthBase, grossGrowth, yearFraction);
+      const growth = grossGrowth - annuityFees;
       const close = growthBase + contributions + growth;
 
       balances.set(account.id, close);
@@ -525,6 +552,7 @@ export function runPlan(plan: Plan): PlanResult {
         ...(account.nonTaxableBase !== undefined
           ? { nonTaxableBaseRemaining: remainingBasis.get(account.id) ?? account.nonTaxableBase }
           : {}),
+        ...(annuityFees > EPSILON ? { annuityFeesDeducted: annuityFees } : {}),
       });
     }
 

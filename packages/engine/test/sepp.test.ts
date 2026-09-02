@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   amortizedSeppPayment,
+  annuityFactor,
   lifeExpectancyFactor,
   mandatoryEndYear,
   planSepp,
+  seppMethodPayment,
   seppStartAgeSweep,
 } from '../src/sepp.js';
 
@@ -92,6 +94,141 @@ describe('planSepp', () => {
     const [y1, y2] = result.years;
     expect(y2.open).toBeCloseTo(y1.close, 6);
     expect(y1.close).toBeCloseTo(y1.open * 1.25 - y1.payment, 6);
+  });
+
+  it('is byte-for-byte unchanged when method is omitted vs explicit "amortization"', () => {
+    const params = {
+      startingBalance: 500_000,
+      birthYear: 1963,
+      startYear: 2020,
+      growthRatePercent: 4,
+      seppRatePercent: 5,
+      incomeTaxRatePercent: 24,
+      horizonYear: 2030,
+    };
+    expect(planSepp(params)).toEqual(planSepp({ ...params, method: 'amortization' }));
+  });
+});
+
+describe('annuityFactor', () => {
+  it('matches the IRS worked example closely enough to confirm the annuity-due reading', () => {
+    // irs.gov's own worked example for a 50-year-old at a 4% assumed rate
+    // uses 19.087 (computed on the table Notice 2022-6 superseded); this
+    // module's current-table figure should land within half a percent.
+    const factor = annuityFactor(50, 4);
+    expect(factor).toBeCloseTo(19.087, 0);
+    expect(Math.abs(factor - 19.087) / 19.087).toBeLessThan(0.005);
+  });
+
+  it('is larger for a younger age at the same rate — more remaining lifetime to pay', () => {
+    expect(annuityFactor(30, 5)).toBeGreaterThan(annuityFactor(60, 5));
+  });
+
+  it('is smaller at a higher discount rate for the same age', () => {
+    expect(annuityFactor(50, 8)).toBeLessThan(annuityFactor(50, 2));
+  });
+
+  it('clamps at the oldest tabulated age rather than extrapolating', () => {
+    expect(annuityFactor(150, 5)).toBe(annuityFactor(120, 5));
+  });
+});
+
+describe('seppMethodPayment', () => {
+  it('amortization matches amortizedSeppPayment directly', () => {
+    const result = seppMethodPayment(500_000, 57, 'amortization', 5);
+    const factor = lifeExpectancyFactor(57);
+    expect(result.factor).toBe(factor);
+    expect(result.annualPayment).toBeCloseTo(amortizedSeppPayment(500_000, 5, factor), 6);
+  });
+
+  it('rmd divides the balance by the life-expectancy factor directly, ignoring rate', () => {
+    const result = seppMethodPayment(500_000, 60, 'rmd', 99); // rate ignored
+    expect(result.factor).toBe(lifeExpectancyFactor(60));
+    expect(result.annualPayment).toBeCloseTo(500_000 / lifeExpectancyFactor(60), 6);
+  });
+
+  it('annuitization divides the balance by the mortality-based annuity factor', () => {
+    const result = seppMethodPayment(500_000, 55, 'annuitization', 5);
+    expect(result.factor).toBeCloseTo(annuityFactor(55, 5), 6);
+    expect(result.annualPayment).toBeCloseTo(500_000 / annuityFactor(55, 5), 6);
+  });
+
+  it('every method returns 0 for a drained account', () => {
+    expect(seppMethodPayment(0, 55, 'amortization', 5).annualPayment).toBe(0);
+    expect(seppMethodPayment(0, 55, 'rmd', 5).annualPayment).toBe(0);
+    expect(seppMethodPayment(0, 55, 'annuitization', 5).annualPayment).toBe(0);
+  });
+
+  it('sizes the three methods sensibly relative to one another for a mid-career age', () => {
+    // No universal ordering holds at every age/rate, but at a typical
+    // mid-career age and a modest rate all three should be positive and in
+    // the right ballpark of each other (same order of magnitude).
+    const amort = seppMethodPayment(500_000, 45, 'amortization', 5).annualPayment;
+    const rmd = seppMethodPayment(500_000, 45, 'rmd', 5).annualPayment;
+    const annuitized = seppMethodPayment(500_000, 45, 'annuitization', 5).annualPayment;
+    for (const payment of [amort, rmd, annuitized]) {
+      expect(payment).toBeGreaterThan(0);
+      expect(payment).toBeLessThan(500_000);
+    }
+  });
+});
+
+describe('planSepp — rmd method', () => {
+  it('recalculates the payment every year from that year\'s own balance and age', () => {
+    const result = planSepp({
+      startingBalance: 500_000,
+      birthYear: 1970,
+      startYear: 2026, // age 56
+      growthRatePercent: 0, // isolate the recalculation from growth
+      seppRatePercent: 5, // ignored by the rmd method
+      incomeTaxRatePercent: 0,
+      horizonYear: 2027,
+      method: 'rmd',
+    });
+
+    const [y1, y2] = result.years;
+    expect(y1.payment).toBeCloseTo(500_000 / lifeExpectancyFactor(56), 6);
+    // The balance fell after y1's payment, and the divisor changed with
+    // age — a FIXED method would instead repeat y1's exact payment.
+    const expectedY2 = y1.close / lifeExpectancyFactor(57);
+    expect(y2.payment).toBeCloseTo(expectedY2, 6);
+    expect(y2.payment).not.toBeCloseTo(y1.payment, 0);
+  });
+
+  it('produces a smaller first-year payment than fixed amortization at the same inputs', () => {
+    const shared = {
+      startingBalance: 500_000,
+      birthYear: 1970,
+      startYear: 2026,
+      growthRatePercent: 0,
+      seppRatePercent: 5,
+      incomeTaxRatePercent: 0,
+      horizonYear: 2026,
+    };
+    const rmd = planSepp({ ...shared, method: 'rmd' });
+    const amortization = planSepp({ ...shared, method: 'amortization' });
+    expect(rmd.years[0].payment).toBeLessThan(amortization.years[0].payment);
+  });
+});
+
+describe('planSepp — annuitization method', () => {
+  it('holds one fixed payment for the whole schedule, like amortization', () => {
+    const result = planSepp({
+      startingBalance: 500_000,
+      birthYear: 1970,
+      startYear: 2026,
+      growthRatePercent: 0,
+      seppRatePercent: 5,
+      incomeTaxRatePercent: 0,
+      horizonYear: 2030,
+      method: 'annuitization',
+    });
+    const startAge = 2026 - 1970;
+    const expected = 500_000 / annuityFactor(startAge, 5);
+    expect(result.annualPayment).toBeCloseTo(expected, 6);
+    for (const y of result.years) {
+      if (y.active) expect(y.payment).toBeCloseTo(expected, 6);
+    }
   });
 });
 

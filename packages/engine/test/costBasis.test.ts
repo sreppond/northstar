@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costBasisGrossUp, costBasisTax, effectiveGainRate } from '../src/tax.js';
+import { costBasisGrossUp, costBasisTax, effectiveGainRate, proRataGrossUp, proRataTax } from '../src/tax.js';
 import { runPlan } from '../src/run.js';
 import { asset, plan, rule } from './fixtures.js';
 
@@ -64,6 +64,59 @@ describe('costBasisGrossUp', () => {
 
   it('is the identity when there is no gain left at all', () => {
     expect(costBasisGrossUp(10_000, 80_000, 80_000, 0.24)).toBe(10_000);
+  });
+});
+
+describe('proRataTax', () => {
+  it('applies the SAME basis fraction to every dollar out, unlike LIFO', () => {
+    // $80k basis / $100k balance = 80% of every dollar is tax-free basis,
+    // regardless of how large the withdrawal is.
+    const result = proRataTax(30_000, 100_000, 80_000, 0.24);
+    expect(result.basisUsed).toBeCloseTo(30_000 * 0.8, 6);
+    expect(result.tax).toBeCloseTo(30_000 * 0.2 * 0.24, 6);
+  });
+
+  it('differs from costBasisTax on the identical inputs — the whole point of a second model', () => {
+    // Same $100k balance, $80k basis, $30k withdrawal, 24% gain rate as
+    // costBasis.test.ts's LIFO case, which taxes the full $20k of gain.
+    // Pro-rata instead taxes only 20% of the withdrawal.
+    const lifo = costBasisTax(30_000, 100_000, 80_000, 0.24);
+    const proRata = proRataTax(30_000, 100_000, 80_000, 0.24);
+    expect(lifo.tax).toBeCloseTo(20_000 * 0.24, 6);
+    expect(proRata.tax).toBeCloseTo(6_000 * 0.24, 6);
+    expect(proRata.tax).toBeLessThan(lifo.tax);
+    expect(proRata.basisUsed).toBeGreaterThan(lifo.basisUsed);
+  });
+
+  it('is fully taxable once the basis is exhausted', () => {
+    expect(proRataTax(10_000, 100_000, 0, 0.24)).toEqual({ tax: 2_400, basisUsed: 0 });
+  });
+
+  it('returns zero for a non-positive withdrawal', () => {
+    expect(proRataTax(0, 100_000, 80_000, 0.24)).toEqual({ tax: 0, basisUsed: 0 });
+  });
+});
+
+describe('proRataGrossUp', () => {
+  it('uses a single constant effective rate, unlike costBasisGrossUp\'s two branches', () => {
+    // 80% basis fraction means only 20% of every dollar is taxable, so the
+    // effective rate is 0.2 * 0.24 = 0.048 for a withdrawal of any size.
+    const gross = proRataGrossUp(19_040, 100_000, 80_000, 0.24);
+    expect(gross).toBeCloseTo(19_040 / (1 - 0.2 * 0.24), 6);
+  });
+
+  it('nets back out to the requested amount once taxed', () => {
+    const gross = proRataGrossUp(25_000, 100_000, 80_000, 0.24);
+    const { tax } = proRataTax(gross, 100_000, 80_000, 0.24);
+    expect(gross - tax).toBeCloseTo(25_000, 6);
+  });
+
+  it('is the identity when there is no basis at all', () => {
+    expect(proRataGrossUp(10_000, 100_000, 0, 0.24)).toBeCloseTo(10_000 / 0.76, 6);
+  });
+
+  it('returns zero for a non-positive need', () => {
+    expect(proRataGrossUp(0, 100_000, 80_000, 0.24)).toBe(0);
   });
 });
 
@@ -136,5 +189,71 @@ describe('runPlan — cost-basis withdrawals', () => {
     const tax = result.years[0].taxes.find((t) => t.accountId === 'ira');
     expect(tax?.amount).toBeCloseTo(15_000 * (0.24 / 0.76), 2);
     expect(result.years[0].accounts[0].nonTaxableBaseRemaining).toBeUndefined();
+  });
+
+  it('taxes a qualified annuity with basis pro-rata instead of LIFO', () => {
+    // Same $100k balance / $80k basis / 24% rate as the LIFO test above, so
+    // the two tests are directly comparable: LIFO taxed the full $20k of
+    // gain on a $15k net need; pro-rata instead applies the fixed 20% gain
+    // fraction to the withdrawal itself.
+    const account = asset({
+      id: 'qa',
+      name: 'Qualified annuity',
+      accountClass: 'taxDeferredInvestment',
+      initialBalance: 100_000,
+      growthRateMethod: 'fixed',
+      growthRate: 0,
+      nonTaxableBase: 80_000,
+      isQualifiedAnnuity: true,
+      withdrawalTaxRate: 24,
+      penaltyRate: 0,
+      withdrawalTiming: 'always',
+    });
+
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1, baselineExpenses: 15_000 } as never,
+        accounts: [account],
+        rules: [rule('qa', 'withdrawal', 1)],
+      }),
+    );
+
+    const y = result.years[0];
+    const gross = 15_000 / (1 - 0.2 * 0.24); // 20% of every dollar is taxable gain
+    const tax = y.taxes.find((t) => t.accountId === 'qa');
+    expect(tax?.amount).toBeCloseTo(gross * 0.2 * 0.24, 2);
+    // Pro-rata's tax is far smaller than LIFO's would be on the same
+    // balance/basis/need — LIFO taxed the withdrawal at the full 24% since
+    // it stayed entirely inside the $20k of gain.
+    expect(tax!.amount).toBeLessThan(15_000 * 0.24);
+    expect(y.accounts[0].nonTaxableBaseRemaining).toBeLessThan(80_000);
+  });
+
+  it('leaves isQualifiedAnnuity with no effect when nonTaxableBase is unset', () => {
+    // isQualifiedAnnuity only matters alongside nonTaxableBase — the
+    // additive constraint means setting it alone must not change anything.
+    const account = asset({
+      id: 'ira2',
+      name: 'Traditional IRA',
+      accountClass: 'taxDeferredInvestment',
+      initialBalance: 100_000,
+      growthRateMethod: 'noChange',
+      isQualifiedAnnuity: true,
+      withdrawalTaxRate: 24,
+      taxableWithdrawalPercent: 100,
+      penaltyRate: 0,
+      withdrawalTiming: 'always',
+    });
+
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1, baselineExpenses: 15_000 } as never,
+        accounts: [account],
+        rules: [rule('ira2', 'withdrawal', 1)],
+      }),
+    );
+
+    const tax = result.years[0].taxes.find((t) => t.accountId === 'ira2');
+    expect(tax?.amount).toBeCloseTo(15_000 * (0.24 / 0.76), 2);
   });
 });

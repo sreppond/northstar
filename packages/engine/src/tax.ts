@@ -110,6 +110,74 @@ export function costBasisGrossUp(
   return gain + (netNeeded - netFromAllGain);
 }
 
+/**
+ * How a QUALIFIED annuity that still carries a basis is actually taxed on
+ * the way out: PRO-RATA, not LIFO. A qualified contract (an IRA annuity, or
+ * one held inside a 401(k)) normally has zero basis — every dollar out is
+ * ordinary income — but a non-deductible IRA contribution, or after-tax
+ * 401(k) money rolled into the contract, can leave some. Where that
+ * happens, §72 pulls it back out with the SAME fraction applying to every
+ * dollar withdrawn, all the way through, rather than `costBasisTax`'s
+ * gain-first ordering.
+ *
+ * That difference is the entire reason this is a second pair of functions
+ * and not a flag on `costBasisTax`: the two are mutually exclusive tax
+ * regimes reading the exact same three numbers (gross, balance, basis)
+ * completely differently. Concretely, an account with $80k of basis and
+ * $20k of gain, withdrawing $30k:
+ *   - LIFO (`costBasisTax`, a nonqualified contract): the $20k of gain comes
+ *     out FIRST, fully taxed; only the remaining $10k is basis.
+ *   - Pro-rata (this function, a qualified contract): 80% of EVERY dollar
+ *     is basis, so $24k is tax-free and only $6k is taxable — a much
+ *     smaller tax bill on the same withdrawal, because the ordering rule,
+ *     not just the numbers, is different.
+ *
+ * `basisFraction` is fixed for the year at `remainingBasis / currentBalance`
+ * — unlike LIFO, it does not depend on how big `gross` is, because pro-rata
+ * means every dollar carries the same blend regardless of how many dollars
+ * come out. That is also why `proRataGrossUp` below needs none of
+ * `costBasisGrossUp`'s two-branch logic: the effective rate is constant for
+ * the year, so it is just `grossUp` with a rate derived from the basis
+ * fraction instead of a flat input.
+ */
+export function proRataTax(
+  gross: number,
+  currentBalance: number,
+  remainingBasis: number,
+  gainRate: number,
+): { tax: number; basisUsed: number } {
+  if (gross <= 0) return { tax: 0, basisUsed: 0 };
+  if (currentBalance <= 0 || remainingBasis <= 0) return { tax: gross * gainRate, basisUsed: 0 };
+
+  const basisFraction = Math.min(1, remainingBasis / currentBalance);
+  const basisUsed = gross * basisFraction;
+  const taxable = gross - basisUsed;
+  return { tax: taxable * gainRate, basisUsed };
+}
+
+/**
+ * Gross withdrawal that nets `netNeeded` under the pro-rata model. Because
+ * the taxable share is a CONSTANT fraction of the year's balance (see
+ * `proRataTax`), not something that shrinks as gain is drawn down, the
+ * effective rate for the whole withdrawal is fixed up front —
+ * `(1 - basisFraction) * gainRate` — and grossing up is exactly `grossUp`
+ * with that rate. No basis-exhaustion branch is needed the way
+ * `costBasisGrossUp` needs one, because pro-rata never exhausts the basis
+ * fraction mid-withdrawal the way LIFO exhausts the gain.
+ */
+export function proRataGrossUp(
+  netNeeded: number,
+  currentBalance: number,
+  remainingBasis: number,
+  gainRate: number,
+): number {
+  if (netNeeded <= 0) return 0;
+  const basisFraction =
+    currentBalance <= 0 ? 0 : Math.min(1, Math.max(0, remainingBasis) / currentBalance);
+  const effectiveRate = (1 - basisFraction) * gainRate;
+  return grossUp(netNeeded, effectiveRate);
+}
+
 function clampPercent(value: number | undefined): number {
   if (value === undefined || Number.isNaN(value)) return 0;
   return Math.max(0, Math.min(100, value));

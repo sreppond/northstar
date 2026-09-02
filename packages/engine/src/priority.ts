@@ -8,7 +8,16 @@
  * Roth portion before the traditional portion of the same 401(k)".
  */
 import type { Account, PriorityRule, TaxComponentKind } from './types.js';
-import { costBasisGrossUp, costBasisTax, effectiveGainRate, effectiveWithdrawalRate, grossUp } from './tax.js';
+import { contractYearFor, surrenderCharge } from './annuity.js';
+import {
+  costBasisGrossUp,
+  costBasisTax,
+  effectiveGainRate,
+  effectiveWithdrawalRate,
+  grossUp,
+  proRataGrossUp,
+  proRataTax,
+} from './tax.js';
 
 const EPSILON = 0.005;
 
@@ -19,7 +28,15 @@ export interface WithdrawalDraw {
   gross: number;
   /** Lost to tax and penalty. */
   tax: number;
-  /** Reaches the shortfall. */
+  /**
+   * Lost to an annuity surrender charge, if the account has an active one
+   * for the current contract year (`annuity.ts`'s `surrenderCharge`). This
+   * is a contract cost, not a tax — kept in its own field rather than folded
+   * into `tax` so the two never blur into one number. Always 0 for an
+   * account without `annuitySurrenderSchedule`.
+   */
+  surrenderCharge: number;
+  /** Reaches the shortfall: `gross - tax - surrenderCharge`. */
   net: number;
 }
 
@@ -52,6 +69,9 @@ export interface WaterfallContext {
   remainingBasis: Map<string, number>;
   /** Owner age per account, for early-withdrawal penalties. */
   ageForAccount(accountId: string): number | undefined;
+  /** The plan's start year — an account without its own `startYear` is
+   * treated as issued then, for `contractYearFor`. */
+  planStartYear: number;
 }
 
 /** Withdrawal gating: `withdrawalTiming` plus `withdrawalStartingYear`. */
@@ -97,14 +117,23 @@ export function planWithdrawals(
     let tax: number;
 
     if (account.nonTaxableBase !== undefined) {
+      // A qualified contract with basis is pro-rata (§72's rule for an IRA
+      // or plan annuity that still carries after-tax money); everything
+      // else — the common nonqualified case, and any traditional
+      // tax-deferred account whose basis is simply the same field reused —
+      // is LIFO via the existing cost-basis functions. Same call shape
+      // either way, so this is the one place that branches on it.
+      const grossUpFn = account.isQualifiedAnnuity ? proRataGrossUp : costBasisGrossUp;
+      const taxFn = account.isQualifiedAnnuity ? proRataTax : costBasisTax;
+
       const gainRate = effectiveGainRate(account, age);
       const basis = ctx.remainingBasis.get(rule.accountId) ?? account.nonTaxableBase;
-      gross = costBasisGrossUp(remaining, available, basis, gainRate);
+      gross = grossUpFn(remaining, available, basis, gainRate);
       if (rule.config?.maxAnnual !== undefined) gross = Math.min(gross, rule.config.maxAnnual);
       gross = Math.min(gross, available);
       if (gross <= EPSILON) continue;
 
-      const applied = costBasisTax(gross, available, basis, gainRate);
+      const applied = taxFn(gross, available, basis, gainRate);
       tax = applied.tax;
       ctx.remainingBasis.set(rule.accountId, Math.max(0, basis - applied.basisUsed));
     } else {
@@ -116,9 +145,21 @@ export function planWithdrawals(
       tax = gross * rate;
     }
 
-    const net = gross - tax;
+    // A surrender charge applies regardless of which tax branch ran above —
+    // it is orthogonal to whether the account is on the flat-rate, LIFO, or
+    // pro-rata model. 0 for any account without `annuitySurrenderSchedule`.
+    const contractYear = contractYearFor(account.startYear, ctx.planStartYear, ctx.year);
+    const surrender = surrenderCharge(gross, contractYear, account.annuitySurrenderSchedule);
+    const net = gross - tax - surrender;
 
-    draws.push({ accountId: rule.accountId, componentKind: rule.componentKind, gross, tax, net });
+    draws.push({
+      accountId: rule.accountId,
+      componentKind: rule.componentKind,
+      gross,
+      tax,
+      surrenderCharge: surrender,
+      net,
+    });
     ctx.balances.set(rule.accountId, available - gross);
     remaining -= net;
   }

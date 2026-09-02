@@ -52,33 +52,47 @@
 :root {
   color-scheme: light;
 
-  /* -- typography: DM Sans is the UI/body voice; IBM Plex Mono is the data
-     voice — axis labels, small metadata, timestamps (docs/REDESIGN.md §5.3).
-     Never the hero figure: that stays proportional DM Sans on purpose, so a
+  /* -- typography: IBM Plex Sans is the UI/body voice (borrowed from
+     Northstar v2 — docs/BORROW.md-style port, see git history); IBM Plex
+     Mono is the data voice — axis labels, small metadata, timestamps
+     (docs/REDESIGN.md §5.3), an even tighter pairing now that both are IBM
+     Plex. Never the hero figure: that stays proportional sans on purpose, so a
      display number reads as a number rather than a printout. -- */
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* -- chrome: ground & surface -- */
-  --bg: #edf0f3;
+  /* -- the persistent nav rail: a fixed dark surface in EITHER theme,
+     borrowed whole from Northstar v2's "genuine desktop IA" (design decision
+     #8 there) — real app chrome doesn't reskin with the content, so this is
+     deliberately NOT redefined in the dark-mode blocks below. -- */
+  --rail-bg: #14161f;
+  --rail-ink: rgba(255, 255, 255, 0.62);
+  --rail-ink-active: #ffffff;
+  --rail-accent: #345fd8;
+
+  /* -- chrome: ground & surface. Values borrowed from Northstar v2's
+     neutral ramp (Northstar-v2/src/index.css) — same slots, new tint. The
+     four data hues below are NOT part of this port: they are validated as a
+     set (docs/DESIGN-DIRECTION.md) and stay exactly as they were. -- */
+  --bg: #f5f6f8;
   --surface: #ffffff;
   --surface-sub: #fafbfc;
-  --tint-row: #f4f7fa;
-  --track: #e7ecf1;
-  --chip: #eef1f4;
+  --tint-row: #f6f7f9;
+  --track: #e9eaef;
+  --chip: #eef0f3;
 
   /* -- chrome: ink -- */
-  --ink: #0f1922;
-  --ink-deep: #0b1d2e;
-  --muted: #62727f;
-  --muted-light: #8695a2;
-  --child-ink: #3d4d5a;
+  --ink: #14161a;
+  --ink-deep: #0d0f13;
+  --muted: #5b616e;
+  --muted-light: #6c7286;
+  --child-ink: #33363d;
 
   /* -- chrome: lines -- */
-  --border: #e1e7ed;
-  --border-strong: #d7dfe7;
-  --rule: #ecf0f4;
-  --rule-light: #f2f5f8;
-  --pill-border: #c8d5e1;
+  --border: #e2e4e9;
+  --border-strong: #d2d5dc;
+  --rule: #ececef;
+  --rule-light: #f1f2f4;
+  --pill-border: #c9ccd3;
 
   /* -- the one system accent: focus, selection, caret -- */
   --accent: #2a78d6;
@@ -204,7 +218,7 @@
     var(--bg);
   background-attachment: fixed;
   color: var(--ink);
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -223,24 +237,24 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --bg: #0a0f15;
-    --surface: #131a22;
-    --surface-sub: #171f28;
-    --tint-row: #182029;
-    --track: #1d262f;
-    --chip: #1d262f;
+    --bg: #0f1115;
+    --surface: #181b22;
+    --surface-sub: #14171d;
+    --tint-row: #1b1e26;
+    --track: #20242c;
+    --chip: #20242c;
 
-    --ink: #e8eef3;
-    --ink-deep: #f2f6f9;
-    --muted: #93a5b3;
-    --muted-light: #6f8090;
-    --child-ink: #bcc9d3;
+    --ink: #eef0f4;
+    --ink-deep: #f7f8fb;
+    --muted: #a3a9b8;
+    --muted-light: #848ba8;
+    --child-ink: #c4c9d2;
 
-    --border: #242e39;
-    --border-strong: #2e3a47;
-    --rule: #1e2730;
-    --rule-light: #1a222a;
-    --pill-border: #35424f;
+    --border: #2b303b;
+    --border-strong: #363c48;
+    --rule: #23272f;
+    --rule-light: #1e2229;
+    --pill-border: #3a4048;
 
     --accent: #3987e5;
     --accent-press: #4e97ed;
@@ -285,24 +299,24 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #0a0f15;
-  --surface: #131a22;
-  --surface-sub: #171f28;
-  --tint-row: #182029;
-  --track: #1d262f;
-  --chip: #1d262f;
+  --bg: #0f1115;
+  --surface: #181b22;
+  --surface-sub: #14171d;
+  --tint-row: #1b1e26;
+  --track: #20242c;
+  --chip: #20242c;
 
-  --ink: #e8eef3;
-  --ink-deep: #f2f6f9;
-  --muted: #93a5b3;
-  --muted-light: #6f8090;
-  --child-ink: #bcc9d3;
+  --ink: #eef0f4;
+  --ink-deep: #f7f8fb;
+  --muted: #a3a9b8;
+  --muted-light: #848ba8;
+  --child-ink: #c4c9d2;
 
-  --border: #242e39;
-  --border-strong: #2e3a47;
-  --rule: #1e2730;
-  --rule-light: #1a222a;
-  --pill-border: #35424f;
+  --border: #2b303b;
+  --border-strong: #363c48;
+  --rule: #23272f;
+  --rule-light: #1e2229;
+  --pill-border: #3a4048;
 
   --accent: #3987e5;
   --accent-press: #4e97ed;
@@ -495,99 +509,142 @@
   }
 }
 
-/* --- page frame ---------------------------------------------------------- */
+/* --- page frame -----------------------------------------------------------
+ * A persistent left nav rail (Northstar v2's information architecture,
+ * borrowed whole — docs/BORROW.md-style port) replaces the old floating
+ * header: primary navigation, the plan switcher and the utility cluster
+ * (⌘K, theme, overflow) all live in one fixed-width column; the routed page
+ * fills the rest. Below the `tablet` breakpoint (`useBreakpoint.ts`) the
+ * rail collapses into a horizontal scroll strip pinned to the top instead —
+ * matches v2's own mobile treatment rather than a drawer/hamburger. */
+.ns {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  align-items: start;
+}
 
-/* A translucent full-width bar rather than a floating pill (docs/REDESIGN.md
-   §3.2): content scrolls underneath it, so `backdrop-filter` is what keeps
-   the wordmark and lenses legible over a moving chart rather than a solid
-   fill. `.ns-main` carries matching top padding so page content clears it.
-   Two rows, both centred: the wordmark/lenses/utilities row, then the
-   scenario name acting as the document title underneath it. */
-.ns-head {
-  position: fixed;
+.ns-rail {
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  z-index: 30;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 14px 34px 10px;
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
-  backdrop-filter: blur(16px) saturate(1.1);
-  -webkit-backdrop-filter: blur(16px) saturate(1.1);
-}
-/* A scroll-edge fade in place of a hard `border-bottom` — chrome that thins
-   into the page rather than a card edge sitting on top of it. */
-.ns-head::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  height: 18px;
-  background: linear-gradient(to bottom, rgb(var(--sh) / calc(7% * var(--sh-k))), transparent);
-  pointer-events: none;
+  background: var(--rail-bg);
+  color: var(--rail-ink);
+  padding: 18px 14px;
+  gap: 4px;
+  overflow-y: auto;
 }
 
-/* Grid rather than flex: the lenses are the primary nav and have to land in
-   the true visual centre regardless of how wide the wordmark or the utility
-   cluster on either side happen to be — `space-between` centres nothing once
-   its two ends differ in width. */
-.ns-head-row {
-  width: 100%;
-  max-width: 1320px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 16px;
-}
-.ns-head-row .ns-view-switch {
-  justify-self: center;
-}
-.ns-head-actions {
-  justify-self: end;
+.ns-rail-brand {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 6px 8px 14px;
+  color: var(--rail-ink-active);
+  text-decoration: none;
 }
-
-.ns-wordmark {
-  justify-self: start;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.022em;
-  color: var(--ink);
+.ns-rail-brand img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   flex: none;
 }
+.ns-rail-brand-word {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
 
-/* The scenario name — the single place the plan name lives now (fixes the
-   "shown twice" redundancy the old card title + header badge had). Reads as
-   a document title, not a chip: quiet ink, no pill chrome, until touched. */
-.ns-scenario-title {
+/* The plan switcher — the single place the plan name lives (fixes the "shown
+   twice" redundancy the old card title + header badge had). Opens the
+   existing plan-management overlay (`PlanSwitcher.tsx`), unchanged. */
+.ns-rail-plan {
   font: inherit;
-  font-size: 14px;
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--muted);
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  padding: 2px 10px;
+  color: var(--rail-ink);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 14px;
   cursor: pointer;
-  max-width: calc(100vw - 40px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 140ms var(--ease-soft), background-color 140ms var(--ease-soft);
+  transition: background-color 140ms var(--ease-soft), color 140ms var(--ease-soft);
 }
-.ns-scenario-title:hover {
-  color: var(--ink);
-  background: var(--chip);
+.ns-rail-plan:hover {
+  color: var(--rail-ink-active);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ns-rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ns-rail-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--rail-ink);
+  text-decoration: none;
+  transition: background-color 140ms var(--ease-soft), color 140ms var(--ease-soft);
+}
+.ns-rail-link svg {
+  flex: none;
+  opacity: 0.85;
+}
+.ns-rail-link:hover {
+  color: var(--rail-ink-active);
+  background: rgba(255, 255, 255, 0.06);
+}
+.ns-rail-link.active {
+  color: var(--rail-ink-active);
+  background: var(--rail-accent);
+}
+.ns-rail-link.active svg {
+  opacity: 1;
+}
+
+.ns-rail-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ns-rail-footer .ns-theme,
+.ns-rail-footer .ns-head-icon-btn,
+.ns-rail-footer .ns-cmdk-stub {
+  color: var(--rail-ink);
+}
+.ns-rail-footer .ns-theme:hover,
+.ns-rail-footer .ns-head-icon-btn:hover,
+.ns-rail-footer .ns-cmdk-stub:hover {
+  color: var(--rail-ink-active);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: transparent;
+}
+.ns-rail-footer .ns-cmdk-stub {
+  flex: 1;
+  justify-content: center;
 }
 
 /* ⌘K, the theme toggle and the overflow menu read as one quiet utility
-   cluster: same footprint, same hover treatment, neutral until touched. */
+   cluster: same footprint, same hover treatment, neutral until touched. Reused
+   verbatim from the old header — just re-parented into the rail footer. */
 .ns-cmdk-stub {
   font: inherit;
   display: inline-flex;
@@ -664,20 +721,10 @@
   color: var(--muted-light);
 }
 
-/* Compact rider on `.ns-segmented`/`.ns-tab` so the lens switcher fits the
-   header bar instead of the full card tab bar. */
-.ns-view-switch {
-  padding: 3px;
-}
-.ns-view-switch .ns-tab {
-  font-size: 13px;
-  padding: 6px 14px;
-}
-
 .ns-main {
-  max-width: 1320px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 96px 34px 0;
+  padding: 32px 34px 88px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -2338,6 +2385,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ns-type-icon {
+  flex: none;
+  color: var(--muted-light);
+}
 
 .ns-gear {
   display: inline-flex;
@@ -3038,13 +3089,52 @@
 }
 
 @media (max-width: 1024px) {
-  .ns-head,
+  /* The rail collapses to a horizontal scroll strip pinned to the top,
+     matching Northstar v2's own mobile treatment — no drawer, no
+     hamburger. */
+  .ns {
+    grid-template-columns: 1fr;
+  }
+  .ns-rail {
+    position: sticky;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 12px;
+    gap: 10px;
+  }
+  .ns-rail-brand {
+    padding: 4px 6px;
+    flex: none;
+  }
+  .ns-rail-plan {
+    flex: none;
+    width: auto;
+    max-width: 220px;
+    margin-bottom: 0;
+  }
+  .ns-rail-nav {
+    flex-direction: row;
+    flex: none;
+  }
+  .ns-rail-link {
+    white-space: nowrap;
+  }
+  .ns-rail-footer {
+    margin-top: 0;
+    margin-left: auto;
+    flex: none;
+    padding-top: 0;
+    padding-left: 14px;
+    border-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
   .ns-main {
     padding-left: 20px;
     padding-right: 20px;
-  }
-  .ns-head-row {
-    gap: 10px;
   }
 
   .ns-hero-actions {
@@ -3098,44 +3188,25 @@
 }
 
 @media (max-width: 640px) {
-  .ns-head {
-    padding: 10px 12px 8px;
+  /* Icons only past this width — the rail strip has no room for both a
+     glyph and a label on every destination. */
+  .ns-rail {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .ns-rail-brand-word {
+    display: none;
+  }
+  .ns-rail-plan {
+    max-width: 130px;
+    font-size: 12px;
+  }
+  .ns-rail-link span {
+    display: none;
   }
   .ns-main {
     padding-left: 12px;
     padding-right: 12px;
-  }
-  .ns-wordmark {
-    font-size: 17px;
-  }
-  .ns-scenario-title {
-    font-size: 13px;
-  }
-
-  /* The lenses get their own full-width row under the wordmark/utilities row
-     rather than squeezing onto it and wrapping mid-label. Grid areas rather
-     than `order`, so it works from a two-column row instead of assuming a
-     wrap. */
-  .ns-head-row {
-    grid-template-columns: auto 1fr;
-    grid-template-areas: 'word actions' 'lenses lenses';
-    row-gap: 8px;
-  }
-  .ns-wordmark {
-    grid-area: word;
-  }
-  .ns-head-actions {
-    grid-area: actions;
-  }
-  .ns-head-row .ns-view-switch {
-    grid-area: lenses;
-    justify-self: stretch;
-    justify-content: stretch;
-  }
-  .ns-view-switch .ns-tab {
-    flex: 1;
-    padding: 7px 4px;
-    font-size: 12.5px;
   }
 
   .ns-card {
@@ -3585,6 +3656,69 @@
   margin-top: 2px;
 }
 
+/* The basis/gain split bar — two segments summing to exactly 100% width, one
+   "two-part magnitude" pattern (docs/BORROW.md-style port of Northstar v2's
+   `.ns-split-bar`). Flex percentages rather than CSS-var scaleX/translateX:
+   v2 used custom properties to avoid flex-reflow jank on an ANIMATED split;
+   ours never animates mid-render, so plain flex-basis is the simpler
+   equivalent with nothing lost. */
+.ns-split-bar {
+  display: flex;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+}
+.ns-split-bar-basis,
+.ns-split-bar-gain {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--on-inverse);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ns-split-bar-basis {
+  background: var(--muted-light);
+}
+.ns-split-bar-gain {
+  background: var(--data-nw);
+}
+.ns-split-bar-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ns-split-bar-legend b {
+  color: var(--ink);
+}
+
+.ns-surrender-list {
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ns-surrender-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-surrender-row + .ns-surrender-row {
+  border-top: 1px solid var(--rule);
+}
+.ns-surrender-row-current {
+  color: var(--ink);
+  font-weight: 700;
+  background: var(--tint-row);
+}
+
 .ns-mini-chart {
   display: block;
   overflow: visible;
@@ -3621,6 +3755,56 @@
   height: 10px;
   border-radius: 3px;
   display: inline-block;
+}
+
+/* The cash-flow Sankey (docs/BORROW.md-style port of Northstar v2's
+   Sankey.tsx) — hand-rolled SVG, same tone convention as everywhere else:
+   income green, expense orange, the savings/shortfall balancing flow in the
+   net-worth blue since it is a transfer, not new money either way. */
+.ns-sankey-wrap {
+  padding: 16px 20px 4px;
+  border-bottom: 1px solid var(--rule);
+}
+.ns-sankey {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.ns-sankey-label {
+  font-size: 11px;
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ns-sankey-hub-label {
+  fill: var(--muted-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+}
+.ns-sankey-hub {
+  fill: var(--border-strong);
+}
+.ns-sankey-node-in {
+  fill: var(--in);
+}
+.ns-sankey-node-out {
+  fill: var(--out);
+}
+.ns-sankey-node-accent {
+  fill: var(--data-nw);
+}
+.ns-sankey-ribbon {
+  opacity: 0.16;
+}
+.ns-sankey-ribbon-in {
+  fill: var(--in);
+}
+.ns-sankey-ribbon-out {
+  fill: var(--out);
+}
+.ns-sankey-ribbon-accent {
+  fill: var(--data-nw);
 }
 
 /* --- House lens: one card per home, three stages (docs/REDESIGN.md §4.3) - */

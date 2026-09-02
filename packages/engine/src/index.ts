@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './accounts.js';
+export * from './annuity.js';
 export * from './tax.js';
 export * from './priority.js';
 export * from './events/index.js';

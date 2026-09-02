@@ -48,6 +48,26 @@ export interface RateAnchor {
   rate: number;
 }
 
+/**
+ * One entry of an annuity's surrender-charge schedule (`annuity.ts`,
+ * `Account.annuitySurrenderSchedule`).
+ *
+ * Unlike `RateAnchor.year`, which is a calendar year, `year` here is a
+ * CONTRACT year — 1 for the year the account came into existence
+ * (`Account.startYear`, or the plan's start year if unset), 2 for the next,
+ * and so on. A surrender schedule is sold as "7% in year 1, 6% in year 2, …
+ * 0% from year 8 on", not by calendar year, and contracts move with the
+ * household from plan to plan while their issue date does not. Unlike a rate
+ * schedule the entries are also not held forward: a contract year with no
+ * entry charges nothing, which is what "the contract is past its surrender
+ * period" actually means (see `annuity.ts`'s `surrenderCharge`).
+ */
+export interface SurrenderScheduleEntry {
+  year: number;
+  /** Percent of the gross withdrawal the carrier keeps, in this contract year. */
+  percent: number;
+}
+
 export interface TaxComponent {
   kind: TaxComponentKind;
   balance: number;
@@ -115,6 +135,50 @@ export interface Account {
   penaltyRate: number;
   /** Age at which `penaltyRate` stops applying. */
   penaltyFreeAge?: number;
+
+  // --- annuity contract features (opt-in; see annuity.ts) -----------------
+  /**
+   * A flat, fixed-dollar rider or contract-administration charge deducted
+   * from the account's value every year, independent of its balance — a
+   * variable annuity's "$240/year" contract fee, say. Unset (or 0) means no
+   * such charge, which is exactly right for a plain 401(k) or IRA that isn't
+   * an annuity at all. See `annuity.ts`'s `annuityFeeForYear`.
+   */
+  annuityFlatFeeAnnual?: number;
+  /**
+   * A mortality-and-expense / administrative / fund-platform charge,
+   * assessed as a percent of the contract's value each year. Keep the
+   * underlying funds' own expense ratio out of this and out of the growth
+   * rate net of it instead — this field is only the CONTRACT-level charge on
+   * top of that.
+   */
+  annuityAssetFeePercent?: number;
+  /**
+   * An advisory fee billed against the contract, tracked separately from
+   * `annuityAssetFeePercent` because it is usually negotiable or waivable in
+   * a way a carrier's own charges are not — the same economic shape, a
+   * different owner of the decision to charge it at all.
+   */
+  annuityAdvisoryFeePercent?: number;
+  /**
+   * Surrender-charge schedule: what a withdrawal loses, on top of tax and
+   * penalty, in each CONTRACT year (see `SurrenderScheduleEntry`). Leave
+   * unset for a contract already past its surrender period, or one that
+   * never had one (a flat-fee, no-load product).
+   */
+  annuitySurrenderSchedule?: SurrenderScheduleEntry[];
+  /**
+   * Whether this account sits inside a qualified retirement wrapper (an IRA
+   * annuity or a qualified-plan annuity) rather than being bought with
+   * after-tax money outside one. Only changes anything when `nonTaxableBase`
+   * is ALSO set — a qualified contract's basis is normally zero, but an
+   * after-tax contribution can leave some, and §72 taxes that basis PRO-RATA
+   * with every dollar withdrawn rather than LIFO (gain-first). Leave unset
+   * (or false) for the far more common nonqualified case, which is what
+   * `nonTaxableBase` alone has always meant here. See `tax.ts`'s
+   * `proRataTax`/`proRataGrossUp` versus `costBasisTax`/`costBasisGrossUp`.
+   */
+  isQualifiedAnnuity?: boolean;
 
   // --- contributions ------------------------------------------------------
   /** Standing annual contribution out of pay. */
@@ -283,6 +347,15 @@ export interface AccountYear {
   close: number;
   /** Set only for accounts using the cost-basis model (`nonTaxableBase`). */
   nonTaxableBaseRemaining?: number;
+  /**
+   * Contract fees (flat + asset-based + advisory) deducted from `growth`
+   * this year — set only when at least one of `annuityFlatFeeAnnual`,
+   * `annuityAssetFeePercent`, or `annuityAdvisoryFeePercent` is in effect.
+   * `growth` already nets this out, so `close` reconciles the same way for
+   * every account; this field exists purely so the fee drag itself is
+   * traceable rather than invisibly baked into a smaller growth number.
+   */
+  annuityFeesDeducted?: number;
 }
 
 export interface YearSnapshot {

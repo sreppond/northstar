@@ -1,193 +1,112 @@
-import { useEffect, useRef, useState } from 'react';
-import type { Plan } from '@northstar/engine';
+import { Link, NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Wallet,
+  ArrowLeftRight,
+  CalendarRange,
+  Sunrise,
+  Home,
+  Umbrella,
+  Settings as SettingsIcon,
+} from 'lucide-react';
+import { usePlanner } from './PlannerContext';
+import { ThemeToggle } from './ThemeToggle';
+import { HeaderMenu } from './HeaderMenu';
 
-// View switching lives in the header now (see ViewTabs) — this drawer's one
-// job is the thing that doesn't fit in a header pill: managing plans.
-export function Sidebar({
-  onClose,
-  plans,
-  activePlanId,
-  onSelectPlan,
-  onCreatePlan,
-  onRenamePlan,
-  onDuplicatePlan,
-  onDeletePlan,
-}: {
-  onClose(): void;
-  plans: Plan[];
-  activePlanId: string;
-  onSelectPlan(id: string): void;
-  onCreatePlan(): void;
-  onRenamePlan(id: string, name: string): void;
-  onDuplicatePlan(id: string): void;
-  onDeletePlan(id: string): void;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+/**
+ * The persistent nav rail — Northstar v2's information architecture, ported
+ * whole (docs/BORROW.md-style port): a fixed dark surface at every theme
+ * (planner.css's `--rail-*` tokens, deliberately not redefined in the dark
+ * blocks), real routes instead of the old header's `view` state, and the
+ * plan switcher living directly under the brand mark rather than behind a
+ * header badge. Collapses to a horizontal scroll strip below the `tablet`
+ * breakpoint (planner.css's `@media (max-width: 1024px)`), matching v2's own
+ * mobile treatment rather than a drawer/hamburger.
+ *
+ * Exported so `CommandPalette.tsx` can list the exact same destinations
+ * rather than a second copy that could drift.
+ */
+export const NAV_ITEMS = [
+  { to: '/overview', label: 'Overview', Icon: LayoutDashboard },
+  { to: '/accounts', label: 'Accounts', Icon: Wallet },
+  { to: '/cashflow', label: 'Cash Flow', Icon: ArrowLeftRight },
+  { to: '/events', label: 'Events', Icon: CalendarRange },
+  { to: '/retirement', label: 'Retirement', Icon: Sunrise },
+  { to: '/house', label: 'House', Icon: Home },
+  { to: '/annuity', label: 'Annuity', Icon: Umbrella },
+] as const;
 
-  return (
-    <>
-      <div className="ns-scrim" onClick={onClose} />
-      <aside className="ns-sidebar" role="dialog" aria-modal="true" aria-label="Plans">
-        <div className="ns-sidebar-head">
-          <div className="ns-drawer-title">Plans</div>
-          <button type="button" className="ns-btn-ghost" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-
-        <nav className="ns-sidebar-list">
-          {plans.map((p) => (
-            <PlanRow
-              key={p.id}
-              plan={p}
-              active={p.id === activePlanId}
-              canDelete={plans.length > 1}
-              onSelect={() => {
-                onSelectPlan(p.id);
-                onClose();
-              }}
-              onRename={(name) => onRenamePlan(p.id, name)}
-              onDuplicate={() => onDuplicatePlan(p.id)}
-              onDelete={() => onDeletePlan(p.id)}
-            />
-          ))}
-          <button type="button" className="ns-sidebar-item ns-sidebar-item-new" onClick={onCreatePlan}>
-            <span className="ns-sidebar-item-name">+ New plan</span>
-          </button>
-        </nav>
-      </aside>
-    </>
-  );
-}
-
-function PlanRow({
-  plan,
-  active,
-  canDelete,
-  onSelect,
-  onRename,
-  onDuplicate,
-  onDelete,
-}: {
-  plan: Plan;
-  active: boolean;
-  canDelete: boolean;
-  onSelect(): void;
-  onRename(name: string): void;
-  onDuplicate(): void;
-  onDelete(): void;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const row = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (!row.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    window.addEventListener('mousedown', close);
-    return () => window.removeEventListener('mousedown', close);
-  }, [menuOpen]);
-
-  useEffect(() => setConfirmDelete(false), [menuOpen]);
-
-  if (renaming) {
-    return (
-      <input
-        className="ns-scenario-rename"
-        autoFocus
-        defaultValue={plan.name}
-        onBlur={(e) => {
-          onRename(e.target.value);
-          setRenaming(false);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          if (e.key === 'Escape') setRenaming(false);
-        }}
-      />
-    );
-  }
+export function Sidebar() {
+  const {
+    stored,
+    setSidebarOpen,
+    setPaletteOpen,
+    setAssumptionsDraft,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    setImporting,
+    monarch,
+  } = usePlanner();
 
   return (
-    <div className="ns-sidebar-item ns-plan-row" ref={row}>
-      <button type="button" className="ns-plan-row-select" aria-current={active} onClick={onSelect}>
-        <span className="ns-dot" />
-        <span className="ns-sidebar-item-name">{plan.name}</span>
-      </button>
-      <span
-        role="button"
-        tabIndex={0}
-        className="ns-scenario-more"
-        aria-label="Plan actions"
-        onClick={(e) => {
-          e.stopPropagation();
-          setMenuOpen((v) => !v);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            e.stopPropagation();
-            setMenuOpen((v) => !v);
-          }
-        }}
+    <nav className="ns-rail" aria-label="Primary">
+      <Link to="/overview" className="ns-rail-brand">
+        <img src="/favicon.png" alt="" width={22} height={22} />
+        <span className="ns-rail-brand-word">Northstar</span>
+      </Link>
+
+      <button
+        type="button"
+        className="ns-rail-plan"
+        onClick={() => setSidebarOpen(true)}
+        title="Switch or manage plans"
       >
-        ⋯
-      </span>
+        {stored.name}
+      </button>
 
-      {menuOpen && (
-        <div className="ns-menu" role="menu">
-          <button
-            type="button"
-            className="ns-menu-item"
-            onClick={() => {
-              setRenaming(true);
-              setMenuOpen(false);
-            }}
+      <div className="ns-rail-nav">
+        {NAV_ITEMS.map(({ to, label, Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) => `ns-rail-link${isActive ? ' active' : ''}`}
           >
-            Rename
-          </button>
-          <button
-            type="button"
-            className="ns-menu-item"
-            onClick={() => {
-              onDuplicate();
-              setMenuOpen(false);
-            }}
-          >
-            Duplicate
-          </button>
-          {canDelete &&
-            (confirmDelete ? (
-              <button
-                type="button"
-                className="ns-menu-item ns-menu-danger"
-                onClick={() => {
-                  onDelete();
-                  setMenuOpen(false);
-                }}
-              >
-                Delete — are you sure?
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="ns-menu-item ns-menu-danger"
-                onClick={() => setConfirmDelete(true)}
-              >
-                Delete
-              </button>
-            ))}
-        </div>
-      )}
-    </div>
+            <Icon size={17} strokeWidth={1.75} aria-hidden />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </div>
+
+      <div className="ns-rail-footer">
+        <button
+          type="button"
+          className="ns-cmdk-stub"
+          title="Command palette"
+          onClick={() => setPaletteOpen(true)}
+        >
+          <kbd>⌘K</kbd>
+        </button>
+        <button
+          type="button"
+          className="ns-head-icon-btn"
+          title="Settings"
+          aria-label="Settings"
+          onClick={() => setAssumptionsDraft(structuredClone(stored))}
+        >
+          <SettingsIcon size={17} strokeWidth={1.75} aria-hidden />
+        </button>
+        <ThemeToggle />
+        <HeaderMenu
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={undo}
+          onRedo={redo}
+          onImport={() => setImporting(true)}
+          onSignOut={() => void monarch.signOut()}
+        />
+      </div>
+    </nav>
   );
 }
