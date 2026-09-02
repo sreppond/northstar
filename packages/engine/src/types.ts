@@ -36,6 +36,7 @@ export type AccountClass =
   | 'cash'
   | 'taxableInvestment'
   | 'taxDeferredInvestment'
+  | 'variableAnnuity'
   | 'taxFreeInvestment'
   | 'realEstate'
   | 'otherAsset'

@@ -18,6 +18,7 @@ import {
   CreditCard,
   HandCoins,
   Building2,
+  Umbrella,
   type LucideProps,
 } from 'lucide-react';
 
@@ -56,6 +57,7 @@ export const ACCOUNT_ICON: Record<AccountClass, ComponentType<LucideProps>> = {
   cash: Wallet,
   taxableInvestment: TrendingUp,
   taxDeferredInvestment: ShieldCheck,
+  variableAnnuity: Umbrella,
   taxFreeInvestment: Sparkles,
   realEstate: Home,
   otherAsset: Box,

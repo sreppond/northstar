@@ -292,7 +292,13 @@ export function runPlan(plan: Plan): PlanResult {
           label: `${account.name} — contribution`,
           sourceEventId: '',
           fromPaycheck: true,
-          pretax: account.accountClass === 'taxDeferredInvestment',
+          // A 401(k)/IRA contribution is always pretax. A variable annuity's
+          // "purchase payment" is only pretax when the contract sits inside a
+          // qualified wrapper -- the same distinction `isQualifiedAnnuity`
+          // already draws for how its withdrawals are taxed on the way out.
+          pretax:
+            account.accountClass === 'taxDeferredInvestment' ||
+            (account.accountClass === 'variableAnnuity' && account.isQualifiedAnnuity === true),
         });
       }
       for (const c of contributionsByYear.get(year) ?? []) {
@@ -335,7 +341,13 @@ export function runPlan(plan: Plan): PlanResult {
     const withdrawalsByAccount = new Map<string, number>();
     for (const account of accounts) {
       if (account.isLiability || closed.has(account.id)) continue;
-      if (account.accountClass !== 'taxDeferredInvestment') continue;
+      // RMDs reach a 401(k)/IRA unconditionally, and a variable annuity only
+      // when it sits inside a qualified wrapper -- a nonqualified annuity
+      // has no IRS-mandated distribution age at all.
+      const rmdApplies =
+        account.accountClass === 'taxDeferredInvestment' ||
+        (account.accountClass === 'variableAnnuity' && account.isQualifiedAnnuity === true);
+      if (!rmdApplies) continue;
       if (!accountExistsIn(account, year)) continue;
 
       const age = ageForAccount(account.id, year);

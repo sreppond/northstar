@@ -190,7 +190,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
     label: 'Tax-deferred investments',
     isLiability: false,
     blurb:
-      '401(k), traditional IRA, deferred annuity. Every dollar out is ordinary income, and there is a penalty for going early.',
+      '401(k), traditional IRA. Every dollar out is ordinary income, and there is a penalty for going early. For an insurance-wrapped deferred annuity, use Variable annuity instead — it carries the same tax treatment plus contract fees and a surrender schedule.',
     fields: [
       balance(),
       growthMethod,
@@ -219,7 +219,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
         min: 0,
         step: 1000,
         help:
-          'After-tax principal already in the account — the basis of a nonqualified annuity, in today’s dollars. Leave at $0 for a traditional account funded entirely pre-tax. Withdrawals draw down growth first, fully taxed; only once the balance is drawn back down to this base does the rest come out tax-free.',
+          'After-tax principal already in the account, in today’s dollars — rare for a plain 401(k)/IRA, but some carry one from a rollover. Leave at $0 for an account funded entirely pre-tax. Withdrawals draw down growth first, fully taxed; only once the balance is drawn back down to this base does the rest come out tax-free.',
       },
       {
         key: 'penaltyRate',
@@ -237,14 +237,64 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
         max: 100,
         step: 0.5,
       },
+      withdrawalTiming,
+      withdrawalStartingYear,
+    ],
+    defaults: base({
+      accountClass: 'taxDeferredInvestment',
+      growthRate: 6.5,
+      withdrawalTaxRate: 24,
+      taxableWithdrawalPercent: 100,
+      nonTaxableBase: 0,
+      penaltyRate: 10,
+      penaltyFreeAge: 59.5,
+      withdrawalTiming: 'never',
+    }),
+  },
+
+  variableAnnuity: {
+    accountClass: 'variableAnnuity',
+    label: 'Variable annuity',
+    isLiability: false,
+    blurb:
+      'An insurance-wrapped deferred annuity contract. Same ordinary-income tax treatment as a 401(k)/IRA, plus the things only an annuity has: carrier fees, a surrender period, and — if it is nonqualified, the common case — after-tax basis that comes out LIFO instead of pro-rata.',
+    fields: [
+      balance(),
+      growthMethod,
+      growthRate(),
+      growthSchedule(),
+      {
+        key: 'yearlyPaycheckContribution',
+        label: 'Annual purchase payment',
+        unit: 'currency',
+        min: 0,
+        step: 500,
+        help: 'An ongoing contribution into the contract. Pre-tax only if this sits inside a qualified plan below.',
+      },
+      {
+        key: 'withdrawalTaxRate',
+        label: 'Ordinary income rate',
+        unit: 'percent',
+        min: 0,
+        max: 100,
+        help: 'Withdrawals of gain are taxed as income, not at capital-gains rates.',
+      },
+      {
+        key: 'nonTaxableBase',
+        label: 'Cost basis',
+        unit: 'currency',
+        min: 0,
+        step: 1000,
+        help:
+          'After-tax principal already in the contract, in today’s dollars — the whole point of a nonqualified annuity. Leave at $0 if this sits inside an IRA/401(k) and was funded entirely pre-tax. Only once the balance is drawn back down to this base does a withdrawal stop being taxed.',
+      },
       {
         key: 'isQualifiedAnnuity',
         label: 'Inside a qualified plan (IRA / 401(k))',
         unit: 'plain',
         kind: 'boolean',
-        showWhen: (a) => (a.nonTaxableBase ?? 0) > 0,
         help:
-          'A qualified annuity’s basis (from after-tax contributions) comes out pro-rata with every dollar withdrawn. A nonqualified annuity’s basis comes out only once all growth has been drawn down first (LIFO). Leave off for a nonqualified contract — money invested outside a retirement wrapper, the more common case.',
+          'A qualified annuity’s basis (from after-tax contributions) comes out pro-rata with every dollar withdrawn. A nonqualified annuity’s basis comes out only once all growth has been drawn down first (LIFO) — leave this off for a nonqualified contract, the more common case.',
       },
       {
         key: 'annuityFlatFeeAnnual',
@@ -253,7 +303,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
         min: 0,
         step: 10,
         help:
-          'A fixed dollar rider or contract-administration charge taken from the account every year, independent of its balance — a variable annuity’s flat "contract fee", for instance. Leave at $0 outside an annuity.',
+          'A fixed dollar rider or contract-administration charge taken from the account every year, independent of its balance.',
       },
       {
         key: 'annuityAssetFeePercent',
@@ -263,7 +313,7 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
         max: 100,
         step: 0.05,
         help:
-          'An asset-based carrier charge (mortality & expense risk, administration, fund platform) taken as a percent of the contract value every year. Keep the underlying funds’ own expense ratio out of this — that belongs in the expected return above instead.',
+          'The carrier’s asset-based charge (mortality & expense risk, administration, fund platform), taken as a percent of the contract value every year. Keep the underlying funds’ own expense ratio out of this — that belongs in the expected return above instead.',
       },
       {
         key: 'annuityAdvisoryFeePercent',
@@ -283,15 +333,32 @@ export const ACCOUNT_TYPES: Record<AccountClass, AccountTypeSpec> = {
         help:
           'Percent of a withdrawal the carrier keeps if it is taken during that contract year — year 1 is the year this account started. Leave a year out once the contract is past its surrender period.',
       },
+      {
+        key: 'penaltyRate',
+        label: 'Early withdrawal penalty',
+        unit: 'percent',
+        min: 0,
+        max: 100,
+        help: 'The IRS 10% early-distribution penalty, charged on top of ordinary income tax before the penalty-free age.',
+      },
+      {
+        key: 'penaltyFreeAge',
+        label: 'Penalty-free age',
+        unit: 'age',
+        min: 0,
+        max: 100,
+        step: 0.5,
+      },
       withdrawalTiming,
       withdrawalStartingYear,
     ],
     defaults: base({
-      accountClass: 'taxDeferredInvestment',
+      accountClass: 'variableAnnuity',
       growthRate: 6.5,
       withdrawalTaxRate: 24,
       taxableWithdrawalPercent: 100,
       nonTaxableBase: 0,
+      isQualifiedAnnuity: false,
       penaltyRate: 10,
       penaltyFreeAge: 59.5,
       withdrawalTiming: 'never',
@@ -458,6 +525,7 @@ export const ASSET_CLASSES: AccountClass[] = [
   'cash',
   'taxableInvestment',
   'taxDeferredInvestment',
+  'variableAnnuity',
   'taxFreeInvestment',
   'realEstate',
   'otherAsset',

@@ -352,6 +352,53 @@ describe('runPlan — RMD', () => {
     expect(y.accounts[0].close).toBeCloseTo(1_000_000, 6);
   });
 
+  it('does not force a nonqualified variable annuity, even past RMD_START_AGE', () => {
+    // A nonqualified annuity has no IRS-mandated distribution age at all —
+    // isQualifiedAnnuity left off (the more common case, per accountTypes.ts).
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1 } as never,
+        participants: [{ id: 'p1', name: 'A', birthYear: 1950, lifeExpectancy: 90, isIncluded: true }],
+        accounts: [
+          asset({
+            id: 'v',
+            name: 'Annuity',
+            accountClass: 'variableAnnuity',
+            initialBalance: 1_000_000,
+          }),
+        ],
+      }),
+    );
+    const y = result.years[0];
+    expect(y.income.find((l) => l.label.startsWith('Required minimum distribution'))).toBeUndefined();
+    expect(y.accounts[0].close).toBeCloseTo(1_000_000, 6);
+  });
+
+  it('forces a qualified variable annuity the same as a 401(k)/IRA', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1 } as never,
+        participants: [{ id: 'p1', name: 'A', birthYear: 1950, lifeExpectancy: 90, isIncluded: true }],
+        accounts: [
+          asset({
+            id: 'v',
+            name: 'Annuity',
+            accountClass: 'variableAnnuity',
+            initialBalance: 1_000_000,
+            isQualifiedAnnuity: true,
+            withdrawalTaxRate: 20,
+          }),
+        ],
+      }),
+    );
+    const forced = 1_000_000 / 23.7;
+    const y = result.years[0];
+    expect(y.income.find((l) => l.label.startsWith('Required minimum distribution'))?.amount).toBeCloseTo(
+      forced,
+      2,
+    );
+  });
+
   it('compounds growth on the post-RMD balance, not the opening one', () => {
     const result = runPlan(
       plan({

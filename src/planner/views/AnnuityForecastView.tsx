@@ -15,14 +15,17 @@ import { ChartLegend, MiniChart } from './MiniChart';
  * exactly where it already lives, inside Retirement (`SeppForecastView.tsx`'s
  * `SeppTool`, which now also offers all three IRS sizing methods).
  *
- * Scoped to accounts that have actually opted into the annuity model: a
- * cost basis (`nonTaxableBase`) or any of the contract-fee/surrender fields.
- * A plain 401(k) or IRA with none of those set has nothing to show here —
- * that is what "additive" means (`packages/engine/src/annuity.ts`'s own
- * module doc): it belongs on Accounts, not here.
+ * Scoped to every `variableAnnuity` account (its own account class — Accounts
+ * tab, "Variable annuity"), plus — for a saved plan from before that class
+ * existed — any `taxDeferredInvestment` account that already opted into the
+ * annuity fields by hand. A plain 401(k)/IRA with none of those set has
+ * nothing to show here — that is what "additive" means
+ * (`packages/engine/src/annuity.ts`'s own module doc): it belongs on
+ * Accounts, not here.
  */
 function isAnnuityContract(account: Account): boolean {
   return (
+    account.accountClass === 'variableAnnuity' ||
     (account.nonTaxableBase ?? 0) > 0 ||
     (account.annuityFlatFeeAnnual ?? 0) > 0 ||
     (account.annuityAssetFeePercent ?? 0) > 0 ||
