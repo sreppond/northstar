@@ -112,3 +112,113 @@ describe('startPlan (first-run onboarding)', () => {
     expect(usePlanStore.getState().plans[0].name).toBe('My plan');
   });
 });
+
+/**
+ * The Compare page's What-If: edit the live plan directly, with the
+ * pre-edit content preserved as a hidden `isWhatIfSnapshot` plan the whole
+ * time, so "keep" / "revert" / "fork" can each resolve it without ever
+ * having required the user to duplicate a plan by hand first.
+ */
+describe('What-If (startWhatIf / keepWhatIf / revertWhatIf / forkWhatIf)', () => {
+  it('starting one snapshots the current content as a hidden plan and points compareToPlanId at it', () => {
+    const { plan } = houseEvent();
+    const planCountBefore = usePlanStore.getState().plans.length;
+
+    usePlanStore.getState().startWhatIf(plan.id);
+
+    const state = usePlanStore.getState();
+    expect(state.plans).toHaveLength(planCountBefore + 1);
+    const live = state.plans.find((p) => p.id === plan.id)!;
+    const snapshot = state.plans.find((p) => p.id === live.settings.compareToPlanId);
+    expect(snapshot?.isWhatIfSnapshot).toBe(true);
+    expect(snapshot?.events).toEqual(plan.events);
+    // The live plan itself is untouched by starting one — only its pointer changed.
+    expect(live.events).toEqual(plan.events);
+  });
+
+  it('keeping the changes discards the snapshot and leaves the edits standing', () => {
+    const { plan, event } = houseEvent();
+    const editedYear = event.startYear - 2;
+
+    usePlanStore.getState().startWhatIf(plan.id);
+    const snapshotId = usePlanStore.getState().plans.find((p) => p.id === plan.id)!.settings.compareToPlanId!;
+    usePlanStore.getState().upsertEvent(plan.id, { ...event, startYear: editedYear });
+
+    usePlanStore.getState().keepWhatIf(plan.id);
+
+    const state = usePlanStore.getState();
+    expect(state.plans.some((p) => p.id === snapshotId)).toBe(false);
+    const live = state.plans.find((p) => p.id === plan.id)!;
+    expect(live.settings.compareToPlanId).toBeUndefined();
+    expect(live.events.find((e) => e.id === 'house')?.startYear).toBe(editedYear);
+  });
+
+  it('reverting restores the pre-What-If content and discards the snapshot', () => {
+    const { plan, event } = houseEvent();
+    const originalYear = event.startYear;
+
+    usePlanStore.getState().startWhatIf(plan.id);
+    const snapshotId = usePlanStore.getState().plans.find((p) => p.id === plan.id)!.settings.compareToPlanId!;
+    usePlanStore.getState().upsertEvent(plan.id, { ...event, startYear: originalYear - 2 });
+
+    usePlanStore.getState().revertWhatIf(plan.id);
+
+    const state = usePlanStore.getState();
+    expect(state.plans.some((p) => p.id === snapshotId)).toBe(false);
+    const live = state.plans.find((p) => p.id === plan.id)!;
+    expect(live.id).toBe(plan.id);
+    expect(live.name).toBe(plan.name);
+    expect(live.settings.compareToPlanId).toBeUndefined();
+    expect(live.events.find((e) => e.id === 'house')?.startYear).toBe(originalYear);
+  });
+
+  it('forking saves the edits as a new named plan and reverts the live plan to the snapshot', () => {
+    const { plan, event } = houseEvent();
+    const originalYear = event.startYear;
+    const editedYear = originalYear - 2;
+
+    usePlanStore.getState().startWhatIf(plan.id);
+    usePlanStore.getState().upsertEvent(plan.id, { ...event, startYear: editedYear });
+
+    usePlanStore.getState().forkWhatIf(plan.id, 'Earlier house');
+
+    const state = usePlanStore.getState();
+    const live = state.plans.find((p) => p.id === plan.id)!;
+    expect(live.events.find((e) => e.id === 'house')?.startYear).toBe(originalYear);
+    expect(live.settings.compareToPlanId).toBeUndefined();
+
+    const forked = state.plans.find((p) => p.name === 'Earlier house');
+    expect(forked).toBeDefined();
+    expect(forked!.id).not.toBe(plan.id);
+    expect(forked!.isWhatIfSnapshot).toBeUndefined();
+    expect(forked!.events.find((e) => e.id === 'house')?.startYear).toBe(editedYear);
+
+    // Snapshot cleaned up: only the original plan count plus the one fork remain.
+    expect(state.plans.filter((p) => p.isWhatIfSnapshot).length).toBe(0);
+  });
+});
+
+describe('progress points', () => {
+  beforeEach(() => {
+    usePlanStore.setState({ progressPoints: [] });
+  });
+
+  it('upsertProgressPoint adds a new point, then updates it in place on a repeat id', () => {
+    usePlanStore.getState().upsertProgressPoint({ id: 'pp-1', date: '2024-01-01', netWorth: 100, assets: 120, liabilities: 20 });
+    expect(usePlanStore.getState().progressPoints).toHaveLength(1);
+
+    usePlanStore.getState().upsertProgressPoint({ id: 'pp-1', date: '2024-01-01', netWorth: 150, assets: 170, liabilities: 20 });
+
+    const points = usePlanStore.getState().progressPoints;
+    expect(points).toHaveLength(1);
+    expect(points[0].netWorth).toBe(150);
+  });
+
+  it('deleteProgressPoint removes it', () => {
+    usePlanStore.getState().upsertProgressPoint({ id: 'pp-1', date: '2024-01-01', netWorth: 100, assets: 120, liabilities: 20 });
+
+    usePlanStore.getState().deleteProgressPoint('pp-1');
+
+    expect(usePlanStore.getState().progressPoints).toHaveLength(0);
+  });
+});

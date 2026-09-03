@@ -58,8 +58,13 @@ export function EventsTab({
               className="ns-gantt-tick"
               style={{
                 left: `${leftFor(year)}%`,
-                // The final tick would hang off the right edge centred.
-                ...(i === ticks.length - 1 ? { transform: 'translateX(-100%)' } : {}),
+                // The first and last ticks would hang off their respective
+                // edges if centred like the interior ticks.
+                ...(i === 0
+                  ? { transform: 'translateX(0)' }
+                  : i === ticks.length - 1
+                    ? { transform: 'translateX(-100%)' }
+                    : {}),
               }}
             >
               {year}

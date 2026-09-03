@@ -31,7 +31,7 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const {
-    plans,
+    visiblePlans,
     stored,
     plan,
     updateSettings,
@@ -66,7 +66,7 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
       hint: compareToPlanId === undefined ? 'Current' : undefined,
       run: () => updateSettings(stored.id, { compareToPlanId: undefined }),
     });
-    for (const p of plans) {
+    for (const p of visiblePlans) {
       if (p.id === stored.id) continue;
       out.push({
         id: `compare-${p.id}`,
@@ -85,7 +85,7 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
   }, [
     location.pathname,
     navigate,
-    plans,
+    visiblePlans,
     stored.id,
     compareToPlanId,
     updateSettings,

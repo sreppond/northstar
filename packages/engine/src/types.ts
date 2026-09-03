@@ -313,6 +313,14 @@ export interface Plan {
    * that has never set one simply omits it. Treat a missing value as `[]`.
    */
   goals?: Goal[];
+  /**
+   * Marks a plan as a hidden "before" snapshot created by a What-If
+   * (Compare page): a real plan the undo stack and localStorage carry like
+   * any other, but excluded from every human-facing plan list (the switcher,
+   * the Compare picker, the command palette) since nobody chose to create
+   * it directly.
+   */
+  isWhatIfSnapshot?: boolean;
 }
 
 // ---------------------------------------------------------------------------

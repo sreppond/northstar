@@ -10,6 +10,7 @@ import {
 import type { AccountClass, Account, Plan, PlanEvent, RetirementConfig } from '@northstar/engine';
 import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './store/planStore';
+import type { ProgressPoint } from './progress';
 import { useMonarch } from './useMonarch';
 import { useEventEditor, withDraft } from './drawer/useEventEditor';
 import type { ChartSelection, CompareSeries, FanSeries } from './NetWorthChart';
@@ -28,6 +29,8 @@ import { heroReading } from './reading';
 export interface PlannerContextValue {
   // -- plans & the active one --
   plans: Plan[];
+  /** `plans`, minus any hidden What-If snapshot — what a human should ever pick from. */
+  visiblePlans: Plan[];
   planId: string;
   stored: Plan;
   setActive(id: string): void;
@@ -37,6 +40,17 @@ export interface PlannerContextValue {
   deletePlan(id: string): void;
   replacePlan(plan: Plan): void;
   updateSettings: ReturnType<typeof usePlanStore.getState>['updateSettings'];
+
+  // -- Compare page's What-If --
+  startWhatIf(planId: string): void;
+  keepWhatIf(planId: string): void;
+  revertWhatIf(planId: string): void;
+  forkWhatIf(planId: string, name: string): void;
+
+  // -- Progress: the historical net-worth ledger --
+  progressPoints: ProgressPoint[];
+  upsertProgressPoint(point: ProgressPoint): void;
+  deleteProgressPoint(id: string): void;
 
   // -- the live-preview-composed plan and its projection --
   plan: Plan;
@@ -139,6 +153,13 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const duplicatePlan = usePlanStore((s) => s.duplicatePlan);
   const renamePlan = usePlanStore((s) => s.renamePlan);
   const deletePlan = usePlanStore((s) => s.deletePlan);
+  const startWhatIf = usePlanStore((s) => s.startWhatIf);
+  const keepWhatIf = usePlanStore((s) => s.keepWhatIf);
+  const revertWhatIf = usePlanStore((s) => s.revertWhatIf);
+  const forkWhatIf = usePlanStore((s) => s.forkWhatIf);
+  const progressPoints = usePlanStore((s) => s.progressPoints);
+  const upsertProgressPoint = usePlanStore((s) => s.upsertProgressPoint);
+  const deleteProgressPoint = usePlanStore((s) => s.deleteProgressPoint);
   const editor = useEventEditor();
   const [accountDraft, setAccountDraft] = useState<Account | null>(null);
   const [assumptionsDraft, setAssumptionsDraft] = useState<Plan | null>(null);
@@ -149,6 +170,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [dragDraft, setDragDraft] = useState<PlanEvent | null>(null);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
+  const visiblePlans = useMemo(() => plans.filter((p) => !p.isWhatIfSnapshot), [plans]);
 
   // ⌘Z / ⇧⌘Z, but never while a field has focus.
   useEffect(() => {
@@ -301,6 +323,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
   const value: PlannerContextValue = {
     plans,
+    visiblePlans,
     planId,
     stored,
     setActive,
@@ -310,6 +333,15 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     deletePlan,
     replacePlan,
     updateSettings,
+
+    startWhatIf,
+    keepWhatIf,
+    revertWhatIf,
+    forkWhatIf,
+
+    progressPoints,
+    upsertProgressPoint,
+    deleteProgressPoint,
 
     plan,
     result,

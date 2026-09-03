@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Account, Goal, Plan, PlanEvent } from '@northstar/engine';
 import { mergeGoalRules } from '@northstar/engine';
 import { SAMPLE_PLANS } from '../samplePlan';
+import type { ProgressPoint } from '../progress';
 
 /**
  * The plan is the only source of truth. `PlanResult` is always derived in a
@@ -13,6 +14,7 @@ import { SAMPLE_PLANS } from '../samplePlan';
  */
 
 export const STORAGE_KEY = 'northstar:plans:v1';
+export const PROGRESS_STORAGE_KEY = 'northstar:progress:v1';
 const UNDO_LIMIT = 50;
 
 /**
@@ -42,6 +44,11 @@ interface PlanState {
   past: Plan[][];
   future: Plan[][];
 
+  /** The actual, historical net-worth ledger — see `../progress.ts`. Not part of undo/redo. */
+  progressPoints: ProgressPoint[];
+  upsertProgressPoint(point: ProgressPoint): void;
+  deleteProgressPoint(id: string): void;
+
   activePlan(): Plan;
   setActive(id: string): void;
 
@@ -65,6 +72,19 @@ interface PlanState {
   renamePlan(planId: string, name: string): void;
   deletePlan(planId: string): void;
 
+  /**
+   * The Compare page's What-If: snapshot `planId`'s current content as a
+   * hidden comparison plan and point `planId` at it, so ordinary editing of
+   * the live plan is now "the changes" relative to that snapshot.
+   */
+  startWhatIf(planId: string): void;
+  /** Discards the snapshot; the live plan's edits stand as they are. */
+  keepWhatIf(planId: string): void;
+  /** Restores the live plan to the snapshot and discards the edits. */
+  revertWhatIf(planId: string): void;
+  /** Saves the edited plan under `name` as a new plan; the live plan reverts to the snapshot. */
+  forkWhatIf(planId: string, name: string): void;
+
   undo(): void;
   redo(): void;
   reset(): void;
@@ -81,6 +101,27 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   activeId: loadPlans()[0]?.id ?? '',
   past: [],
   future: [],
+
+  progressPoints: loadProgressPoints(),
+
+  upsertProgressPoint(point) {
+    set((state) => {
+      const exists = state.progressPoints.some((p) => p.id === point.id);
+      const progressPoints = exists
+        ? state.progressPoints.map((p) => (p.id === point.id ? point : p))
+        : [...state.progressPoints, point];
+      persistProgressPoints(progressPoints);
+      return { progressPoints };
+    });
+  },
+
+  deleteProgressPoint(id) {
+    set((state) => {
+      const progressPoints = state.progressPoints.filter((p) => p.id !== id);
+      persistProgressPoints(progressPoints);
+      return { progressPoints };
+    });
+  },
 
   activePlan() {
     const { plans, activeId } = get();
@@ -248,6 +289,60 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     });
   },
 
+  startWhatIf(planId) {
+    const source = get().plans.find((p) => p.id === planId);
+    if (!source) return;
+    const snapshot: Plan = {
+      ...structuredClone(source),
+      id: newId(),
+      name: `${source.name} (before)`,
+      isWhatIfSnapshot: true,
+    };
+    delete snapshot.settings.compareToPlanId;
+    set((state) =>
+      commit(state, (plans) =>
+        [...plans, snapshot].map((p) =>
+          p.id === planId ? { ...p, settings: { ...p.settings, compareToPlanId: snapshot.id } } : p,
+        ),
+      ),
+    );
+  },
+
+  keepWhatIf(planId) {
+    const snapshotId = get().plans.find((p) => p.id === planId)?.settings.compareToPlanId;
+    if (!snapshotId) return;
+    get().deletePlan(snapshotId);
+  },
+
+  revertWhatIf(planId) {
+    const { plans } = get();
+    const plan = plans.find((p) => p.id === planId);
+    const snapshot = plans.find((p) => p.id === plan?.settings.compareToPlanId);
+    if (!plan || !snapshot) return;
+    const restored: Plan = { ...structuredClone(snapshot), id: plan.id, name: plan.name };
+    delete restored.isWhatIfSnapshot;
+    delete restored.settings.compareToPlanId;
+    get().replacePlan(restored);
+    get().deletePlan(snapshot.id);
+  },
+
+  forkWhatIf(planId, name) {
+    const { plans } = get();
+    const plan = plans.find((p) => p.id === planId);
+    const snapshot = plans.find((p) => p.id === plan?.settings.compareToPlanId);
+    if (!plan || !snapshot) return;
+    const forked: Plan = { ...structuredClone(plan), id: newId(), name: name.trim() || `${plan.name} copy` };
+    delete forked.isWhatIfSnapshot;
+    delete forked.settings.compareToPlanId;
+    set((state) => commit(state, (plans) => [...plans, forked]));
+
+    const restored: Plan = { ...structuredClone(snapshot), id: plan.id, name: plan.name };
+    delete restored.isWhatIfSnapshot;
+    delete restored.settings.compareToPlanId;
+    get().replacePlan(restored);
+    get().deletePlan(snapshot.id);
+  },
+
   undo() {
     set((state) => {
       const previous = state.past[state.past.length - 1];
@@ -395,6 +490,26 @@ function isPlanShape(p: unknown): p is Plan {
     typeof plan.settings === 'object' &&
     plan.settings !== null
   );
+}
+
+/** Independent of `plans`/undo — a historical record isn't a plan edit to revert. */
+function loadProgressPoints(): ProgressPoint[] {
+  try {
+    const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ProgressPoint[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistProgressPoints(points: ProgressPoint[]) {
+  try {
+    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(points));
+  } catch {
+    // Private browsing or a full quota — losing persistence is survivable.
+  }
 }
 
 function persist(plans: Plan[]) {

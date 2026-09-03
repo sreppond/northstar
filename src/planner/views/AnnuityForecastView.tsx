@@ -38,7 +38,7 @@ export function AnnuityForecastView({ plan, result }: { plan: Plan; result: Plan
   const candidates = plan.accounts.filter((a) => !a.isSynthetic && isAnnuityContract(a));
 
   return (
-    <div className="ns-card">
+    <div className="ns-card ns-card-view">
       <div className="ns-view-head">
         <div className="ns-view-title">Annuity forecast</div>
         <p className="ns-view-sub">
@@ -141,54 +141,61 @@ function AnnuityContent({
         </span>
       </div>
 
-      {hasFees && (
-        <>
-          <p className="ns-view-sub" style={{ marginTop: 18 }}>
-            Contract fee drag — deducted from growth every year, already netted out of the balance
-            above.
-          </p>
-          <div className="ns-stat-row">
-            <Stat label={`Fees paid through ${asOfYear}`} value={detailMoney(totalFeesToDate)} />
-            {(account.annuityAssetFeePercent ?? 0) > 0 && (
-              <Stat label="Mortality & expense" value={percent(account.annuityAssetFeePercent ?? 0)} />
-            )}
-            {(account.annuityAdvisoryFeePercent ?? 0) > 0 && (
-              <Stat label="Advisory fee" value={percent(account.annuityAdvisoryFeePercent ?? 0)} />
-            )}
-            {(account.annuityFlatFeeAnnual ?? 0) > 0 && (
-              <Stat label="Flat annual fee" value={detailMoney(account.annuityFlatFeeAnnual ?? 0)} />
-            )}
-          </div>
-          <MiniChart
-            years={rows.map((r) => r.year)}
-            series={[{ label: 'Fees deducted', color: 'var(--out)', values: feeSeries, fill: true }]}
-            height={140}
-          />
-          <ChartLegend series={[{ label: 'Fees deducted', color: 'var(--out)' }]} />
-        </>
-      )}
-
-      {schedule.length > 0 && (
-        <>
-          <p className="ns-view-sub" style={{ marginTop: 18 }}>
-            Surrender charge — the percent of a withdrawal the carrier keeps if it is taken during
-            that contract year. Currently in contract year {contractYear}
-            {currentCharge > 0
-              ? `; withdrawing the full balance today would cost ${detailMoney(currentCharge)}.`
-              : ' — past the surrender period, or the schedule has no entry for it.'}
-          </p>
-          <div className="ns-surrender-list">
-            {schedule.map((entry) => (
-              <div
-                key={entry.year}
-                className={`ns-surrender-row${entry.year === contractYear ? ' ns-surrender-row-current' : ''}`}
-              >
-                <span>Year {entry.year}</span>
-                <span className="ns-num">{percent(entry.percent)}</span>
+      {(hasFees || schedule.length > 0) && (
+        <div className="ns-annuity-split">
+          {hasFees && (
+            <div>
+              <p className="ns-view-sub" style={{ marginTop: 18 }}>
+                Contract fee drag — deducted from growth every year, already netted out of the
+                balance above.
+              </p>
+              <div className="ns-stat-row">
+                <Stat label={`Fees paid through ${asOfYear}`} value={detailMoney(totalFeesToDate)} />
+                {(account.annuityAssetFeePercent ?? 0) > 0 && (
+                  <Stat
+                    label="Mortality & expense"
+                    value={percent(account.annuityAssetFeePercent ?? 0)}
+                  />
+                )}
+                {(account.annuityAdvisoryFeePercent ?? 0) > 0 && (
+                  <Stat label="Advisory fee" value={percent(account.annuityAdvisoryFeePercent ?? 0)} />
+                )}
+                {(account.annuityFlatFeeAnnual ?? 0) > 0 && (
+                  <Stat label="Flat annual fee" value={detailMoney(account.annuityFlatFeeAnnual ?? 0)} />
+                )}
               </div>
-            ))}
-          </div>
-        </>
+              <MiniChart
+                years={rows.map((r) => r.year)}
+                series={[{ label: 'Fees deducted', color: 'var(--out)', values: feeSeries, fill: true }]}
+                height={140}
+              />
+              <ChartLegend series={[{ label: 'Fees deducted', color: 'var(--out)' }]} />
+            </div>
+          )}
+
+          {schedule.length > 0 && (
+            <div>
+              <p className="ns-view-sub" style={{ marginTop: 18 }}>
+                Surrender charge — the percent of a withdrawal the carrier keeps if it is taken
+                during that contract year. Currently in contract year {contractYear}
+                {currentCharge > 0
+                  ? `; withdrawing the full balance today would cost ${detailMoney(currentCharge)}.`
+                  : ' — past the surrender period, or the schedule has no entry for it.'}
+              </p>
+              <div className="ns-surrender-list">
+                {schedule.map((entry) => (
+                  <div
+                    key={entry.year}
+                    className={`ns-surrender-row${entry.year === contractYear ? ' ns-surrender-row-current' : ''}`}
+                  >
+                    <span>Year {entry.year}</span>
+                    <span className="ns-num">{percent(entry.percent)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </>
   );

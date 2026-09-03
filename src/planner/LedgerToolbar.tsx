@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { usePlanner } from './PlannerContext';
 import { CompareDiff } from './CompareDiff';
 
@@ -11,7 +12,7 @@ import { CompareDiff } from './CompareDiff';
  */
 export function LedgerToolbar({ showPager }: { showPager: boolean }) {
   const {
-    plans,
+    visiblePlans,
     stored,
     plan,
     result,
@@ -32,23 +33,35 @@ export function LedgerToolbar({ showPager }: { showPager: boolean }) {
           <label className="ns-compare-label" htmlFor="ns-compare-select">
             Compare
           </label>
-          <select
-            id="ns-compare-select"
-            className="ns-select"
-            value={stored.settings.compareToPlanId ?? ''}
-            onChange={(e) =>
-              updateSettings(stored.id, { compareToPlanId: e.target.value || undefined })
-            }
-          >
-            <option value="">None</option>
-            {plans
-              .filter((p) => p.id !== stored.id)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-          </select>
+          {comparePlan?.isWhatIfSnapshot ? (
+            // A What-If's `compareToPlanId` points at a hidden snapshot, not
+            // a plan this select ever lists (`visiblePlans` excludes it on
+            // purpose) — showing the live dropdown here would either read
+            // "None" (the value matches no option) or let a stray pick
+            // silently orphan the snapshot. The Compare page owns keeping
+            // /reverting/forking it instead.
+            <Link to="/compare" className="ns-select ns-compare-whatif-link">
+              What-If in progress
+            </Link>
+          ) : (
+            <select
+              id="ns-compare-select"
+              className="ns-select"
+              value={stored.settings.compareToPlanId ?? ''}
+              onChange={(e) =>
+                updateSettings(stored.id, { compareToPlanId: e.target.value || undefined })
+              }
+            >
+              <option value="">None</option>
+              {visiblePlans
+                .filter((p) => p.id !== stored.id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          )}
         </div>
 
         {showPager && (
@@ -77,7 +90,14 @@ export function LedgerToolbar({ showPager }: { showPager: boolean }) {
       </div>
 
       {comparePlan && compare && (
-        <CompareDiff plan={plan} comparePlan={comparePlan} result={result} compareResult={compare.result} />
+        // A What-If's snapshot is the "before" — see the matching comment on
+        // ComparePage.tsx — so plan/comparePlan swap here too, for the same
+        // "moves OLD → NEW" reading.
+        comparePlan.isWhatIfSnapshot ? (
+          <CompareDiff plan={comparePlan} comparePlan={plan} result={compare.result} compareResult={result} />
+        ) : (
+          <CompareDiff plan={plan} comparePlan={comparePlan} result={result} compareResult={compare.result} />
+        )
       )}
     </>
   );

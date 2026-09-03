@@ -21,6 +21,19 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Every wide surface (the Gantt, the ledger tables, the net-worth chart
+   below 700px) owns its own `overflow-x: auto` scroll region on purpose.
+   Without a hard stop here, a component that outgrows its column — the
+   Gantt's minimum track width on a narrow phone, say — expands the *root*
+   scrolling box (`document.scrollingElement`, which is `<html>`, not
+   `<body>`) instead of scrolling internally, dragging the header and
+   everything else sideways with it. Both elements need the rule: setting
+   it on `body` alone leaves `<html>` free to keep growing. */
+html,
+body {
+  overflow-x: hidden;
+}
+
 button {
   font-family: inherit;
 }

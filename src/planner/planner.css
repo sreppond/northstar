@@ -589,6 +589,16 @@
   gap: 2px;
 }
 
+/* The one hairline in the rail — separates "the plan" (Overview…Annuity)
+   from "reading about the plan" (Progress/Compare/Reports) now that the
+   list is ten items. Chrome-neutral, the same rule the rest of the app
+   uses for a divider, just on the dark rail's own ink. */
+.ns-rail-divider {
+  height: 1px;
+  margin: 8px 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .ns-rail-link {
   display: flex;
   align-items: center;
@@ -722,6 +732,23 @@
 }
 
 .ns-main {
+  /* `width: 100%` is load-bearing, not decoration: as a direct CSS Grid
+     item, `width: auto` + `margin: 0 auto` shrink-to-fits the content
+     instead of filling-then-centering (the block-flow idiom this pattern
+     usually means) — any page whose content doesn't force its own
+     min-width (the Events Gantt did not) silently collapsed the whole
+     column to a few hundred px. `width: 100%` makes the grid track's size
+     win up to max-width, so margin: auto has real space to centre. */
+  width: 100%;
+  /* The other half of the same story: a grid item's `min-width: auto`
+     defaults to its *content's* min-content size, not 0 — so a forced
+     minimum from deep inside (the Gantt's `minmax(380px, 1fr)` track, four
+     levels down through plain block boxes that don't themselves resize
+     their ancestors) still wins over the `width: 100%` above and pushes
+     this column wider than the viewport. `min-width: 0` is the standard
+     override; the inner `overflow-x: auto` surfaces then do their job of
+     scrolling their own wide content instead of stretching this column. */
+  min-width: 0;
   max-width: 1180px;
   margin: 0 auto;
   padding: 32px 34px 88px;
@@ -1788,7 +1815,14 @@
 
 .ns-gantt-head {
   display: grid;
-  grid-template-columns: 268px 1fr;
+  /* The track can't rely on `min-width: max-content` the way `.ns-grid`
+     does (line ~3063): its bars are `position: absolute`, so they
+     contribute nothing to the track's intrinsic size and a bare `1fr`
+     just shrinks to whatever the scroll container offers — which is how
+     the ticks and bars end up overlapping on a narrow card instead of the
+     row scrolling. `minmax(420px, 1fr)` gives the track a real floor so
+     `.ns-table-scroll`'s `overflow-x: auto` has something to trigger on. */
+  grid-template-columns: 268px minmax(420px, 1fr);
   border-bottom: 1px solid var(--rule);
   background: var(--surface-sub);
 }
@@ -1816,7 +1850,14 @@
 
 .ns-gantt-row {
   display: grid;
-  grid-template-columns: 268px 1fr;
+  /* The track can't rely on `min-width: max-content` the way `.ns-grid`
+     does (line ~3063): its bars are `position: absolute`, so they
+     contribute nothing to the track's intrinsic size and a bare `1fr`
+     just shrinks to whatever the scroll container offers — which is how
+     the ticks and bars end up overlapping on a narrow card instead of the
+     row scrolling. `minmax(420px, 1fr)` gives the track a real floor so
+     `.ns-table-scroll`'s `overflow-x: auto` has something to trigger on. */
+  grid-template-columns: 268px minmax(420px, 1fr);
   border-bottom: 1px solid var(--rule-light);
 }
 .ns-gantt-label {
@@ -2970,6 +3011,16 @@
 .ns-select:hover {
   background: var(--bg);
 }
+.ns-compare-whatif-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--accent);
+  font-weight: 500;
+}
+.ns-compare-whatif-link:hover {
+  background: var(--bg);
+}
 
 /* The year window sits after the compare picker, so it no longer needs to
    claim the free space itself. */
@@ -3268,7 +3319,7 @@
   }
   .ns-gantt-head,
   .ns-gantt-row {
-    grid-template-columns: 170px 1fr;
+    grid-template-columns: 170px minmax(380px, 1fr);
   }
 
   .ns-hovercard {
@@ -3595,8 +3646,18 @@
 }
 
 /* ---------------------------------------------------------------------------
- * FOCUSED FORECAST VIEWS — Retirement, House, SEPP
+ * FOCUSED FORECAST VIEWS — Retirement, House, Annuity, SEPP
  * ------------------------------------------------------------------------- */
+
+/* `.ns-card` itself carries no padding — Accounts/Cash Flow/Events want
+   their table cells flush to the card edge and manage their own inset.
+   These four views don't have that internal structure, so without this
+   modifier their prose and stat rows render flush against all four card
+   edges with zero breathing room (visible as a headline that reads as
+   clipped against the rail). */
+.ns-card-view {
+  padding: 28px 32px 32px;
+}
 
 .ns-view-head {
   display: flex;
@@ -3696,6 +3757,18 @@
 }
 .ns-split-bar-legend b {
   color: var(--ink);
+}
+
+/* Fees and the surrender schedule are independent facts about the same
+   contract — side by side when there's room for both, instead of a long
+   single-column stack. `auto-fit` collapses to one column both on a narrow
+   card and when only one of the two sections is present, so no conditional
+   class is needed for the single-section case. */
+.ns-annuity-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0 40px;
+  align-items: start;
 }
 
 .ns-surrender-list {
@@ -4008,8 +4081,15 @@
 
 /* A small magnitude bar (docs/REDESIGN.md §4.1's ledger-row recipe, scaled
    down for a standalone card rather than a table-row wash), scaled per option
-   against the sweep's largest balance so the cards compare at a glance. */
-.ns-mag-bar {
+   against the sweep's largest balance so the cards compare at a glance.
+   Named `ns-sepp-*` rather than reusing `.ns-mag-bar` — that name already
+   belongs to DataTable.tsx's ledger-row bar (a different component: a
+   tone-tinted, absolutely positioned strip behind a table cell), and both
+   classes landing on the same element elsewhere would have been a silent
+   cascade collision — the flat `var(--track)` background here would have
+   always beaten the ledger bar's `color-mix` tone at equal specificity,
+   which is exactly what was happening before this was split out. */
+.ns-sepp-mag-bar {
   display: block;
   height: 4px;
   margin-top: 4px;
@@ -4017,7 +4097,7 @@
   background: var(--track);
   overflow: hidden;
 }
-.ns-mag-bar-fill {
+.ns-sepp-mag-bar-fill {
   display: block;
   height: 100%;
   border-radius: 4px;
@@ -4410,4 +4490,149 @@
     flex-direction: column;
     gap: 6px;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * PROGRESS / REPORTS / COMPARE
+ * ------------------------------------------------------------------------- */
+
+.ns-btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+.ns-progress-summary {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 16px;
+}
+.ns-progress-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ns-progress-stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.ns-progress-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.ns-progress-form {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  align-items: end;
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--surface-sub);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.ns-progress-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .ns-progress-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ns-datatable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 13px;
+}
+.ns-datatable th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.ns-datatable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule-light);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  /* Containing block for the `Cell` magnitude bar it wraps — the ledger
+     grid gets this from its row-kind rules (`.ns-row-child > div + div`
+     etc.); a plain `<td>` needs it stated directly. */
+  position: relative;
+}
+.ns-datatable tbody tr:hover {
+  background: var(--tint-row);
+}
+.ns-datatable-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ns-reports-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ns-reports-toolbar-spacer {
+  flex: 1;
+}
+
+.ns-plot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.ns-plot-card {
+  padding: 16px;
+  background: var(--surface-sub);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.ns-plot-card .ns-section-title {
+  margin-bottom: 8px;
+}
+
+.ns-compare-option {
+  padding: 20px 0;
+  border-top: 1px solid var(--rule);
+}
+.ns-compare-option:first-of-type {
+  padding-top: 12px;
+  border-top: none;
+}
+.ns-compare-option .ns-section-title {
+  margin-bottom: 6px;
+}
+.ns-compare-plan-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ns-compare-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.ns-compare-fork-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.ns-compare-fork-form .ns-input {
+  flex: 1;
 }

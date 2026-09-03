@@ -27,10 +27,13 @@ export function MiniChart({
   years,
   series,
   height = VB_H,
+  formatX = String,
 }: {
   years: number[];
   series: ChartSeries[];
   height?: number;
+  /** Ticks default to the bare `years` value — Progress's fractional-year x-axis passes a date formatter instead. */
+  formatX?: (year: number) => string;
 }) {
   const allValues = series.flatMap((s) => s.values);
   const max = Math.max(0, ...allValues);
@@ -85,7 +88,7 @@ export function MiniChart({
         const anchor = i === 0 ? 'start' : i === years.length - 1 ? 'end' : 'middle';
         return (
           <text key={y} x={xFor(i)} y={BOTTOM + 20} className="ns-mini-axis" textAnchor={anchor}>
-            {y}
+            {formatX(y)}
           </text>
         );
       })}

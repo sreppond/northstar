@@ -43,7 +43,7 @@ export function RetirementForecastView({
   const retiree = owner ?? plan.participants.find((p) => p.isIncluded);
 
   return (
-    <div className="ns-card">
+    <div className="ns-card ns-card-view">
       <div className="ns-view-head">
         <div className="ns-view-title">Retirement forecast</div>
         <p className="ns-view-sub">

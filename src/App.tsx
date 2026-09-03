@@ -25,6 +25,9 @@ import { EventsPage } from './planner/pages/EventsPage';
 import { RetirementPage } from './planner/pages/RetirementPage';
 import { HousePage } from './planner/pages/HousePage';
 import { AnnuityPage } from './planner/pages/AnnuityPage';
+import { ProgressPage } from './planner/pages/ProgressPage';
+import { ComparePage } from './planner/pages/ComparePage';
+import { ReportsPage } from './planner/pages/ReportsPage';
 
 /**
  * The gate in front of the planner (docs/REDESIGN.md §6 item 6). A
@@ -67,7 +70,7 @@ function PlannerShell() {
     setSidebarOpen,
     paletteOpen,
     setPaletteOpen,
-    plans,
+    visiblePlans,
     planId,
     setActive,
     createPlan,
@@ -106,6 +109,9 @@ function PlannerShell() {
           <Route path="/retirement" element={<RetirementPage />} />
           <Route path="/house" element={<HousePage />} />
           <Route path="/annuity" element={<AnnuityPage />} />
+          <Route path="/progress" element={<ProgressPage />} />
+          <Route path="/compare" element={<ComparePage />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="*" element={<Navigate to="/overview" replace />} />
         </Routes>
       </main>
@@ -113,7 +119,7 @@ function PlannerShell() {
       {sidebarOpen && (
         <PlanSwitcher
           onClose={() => setSidebarOpen(false)}
-          plans={plans}
+          plans={visiblePlans}
           activePlanId={planId}
           onSelectPlan={(id) => {
             setActive(id);
@@ -121,7 +127,7 @@ function PlannerShell() {
             resetWindow();
             editor.close();
           }}
-          onCreatePlan={() => createPlan(`Scenario ${plans.length + 1}`)}
+          onCreatePlan={() => createPlan(`Scenario ${visiblePlans.length + 1}`)}
           onRenamePlan={renamePlan}
           onDuplicatePlan={duplicatePlan}
           onDeletePlan={deletePlan}

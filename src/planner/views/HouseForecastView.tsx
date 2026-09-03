@@ -22,7 +22,7 @@ export function HouseForecastView({ plan, result }: { plan: Plan; result: PlanRe
   const homeEvents = plan.events.filter((e) => e.kind === 'buyAHome' && e.isIncluded);
 
   return (
-    <div className="ns-card">
+    <div className="ns-card ns-card-view">
       <div className="ns-view-head">
         <div className="ns-view-title">House forecast</div>
         <p className="ns-view-sub">

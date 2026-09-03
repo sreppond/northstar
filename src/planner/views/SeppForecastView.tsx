@@ -206,9 +206,9 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
                 <span className="ns-sepp-option-balance">
                   {detailMoney(s.balanceAtReference)} at {MANDATORY_AGE}
                 </span>
-                <span className="ns-mag-bar">
+                <span className="ns-sepp-mag-bar">
                   <span
-                    className="ns-mag-bar-fill"
+                    className="ns-sepp-mag-bar-fill"
                     style={{ width: `${(s.balanceAtReference / maxSweepBalance) * 100}%` }}
                   />
                 </span>

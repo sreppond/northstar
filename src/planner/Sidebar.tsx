@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -7,6 +8,9 @@ import {
   Sunrise,
   Home,
   Umbrella,
+  TrendingUp,
+  GitCompare,
+  Table2,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { usePlanner } from './PlannerContext';
@@ -27,13 +31,16 @@ import { HeaderMenu } from './HeaderMenu';
  * rather than a second copy that could drift.
  */
 export const NAV_ITEMS = [
-  { to: '/overview', label: 'Overview', Icon: LayoutDashboard },
-  { to: '/accounts', label: 'Accounts', Icon: Wallet },
-  { to: '/cashflow', label: 'Cash Flow', Icon: ArrowLeftRight },
-  { to: '/events', label: 'Events', Icon: CalendarRange },
-  { to: '/retirement', label: 'Retirement', Icon: Sunrise },
-  { to: '/house', label: 'House', Icon: Home },
-  { to: '/annuity', label: 'Annuity', Icon: Umbrella },
+  { to: '/overview', label: 'Overview', Icon: LayoutDashboard, group: 'plan' },
+  { to: '/accounts', label: 'Accounts', Icon: Wallet, group: 'plan' },
+  { to: '/cashflow', label: 'Cash Flow', Icon: ArrowLeftRight, group: 'plan' },
+  { to: '/events', label: 'Events', Icon: CalendarRange, group: 'plan' },
+  { to: '/retirement', label: 'Retirement', Icon: Sunrise, group: 'plan' },
+  { to: '/house', label: 'House', Icon: Home, group: 'plan' },
+  { to: '/annuity', label: 'Annuity', Icon: Umbrella, group: 'plan' },
+  { to: '/progress', label: 'Progress', Icon: TrendingUp, group: 'analysis' },
+  { to: '/compare', label: 'Compare', Icon: GitCompare, group: 'analysis' },
+  { to: '/reports', label: 'Reports', Icon: Table2, group: 'analysis' },
 ] as const;
 
 export function Sidebar() {
@@ -67,15 +74,19 @@ export function Sidebar() {
       </button>
 
       <div className="ns-rail-nav">
-        {NAV_ITEMS.map(({ to, label, Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) => `ns-rail-link${isActive ? ' active' : ''}`}
-          >
-            <Icon size={17} strokeWidth={1.75} aria-hidden />
-            <span>{label}</span>
-          </NavLink>
+        {NAV_ITEMS.map(({ to, label, Icon, group }, i) => (
+          <Fragment key={to}>
+            {/* A hairline between "the plan" and "reading about the plan" —
+                ten flat rows is a lot to scan, and the two halves answer
+                different questions (author it vs. analyse it). Keyed off a
+                group change rather than a fixed index so the boundary moves
+                itself if NAV_ITEMS is ever reordered. */}
+            {i > 0 && group !== NAV_ITEMS[i - 1].group && <div className="ns-rail-divider" />}
+            <NavLink to={to} className={({ isActive }) => `ns-rail-link${isActive ? ' active' : ''}`}>
+              <Icon size={17} strokeWidth={1.75} aria-hidden />
+              <span>{label}</span>
+            </NavLink>
+          </Fragment>
         ))}
       </div>
 
