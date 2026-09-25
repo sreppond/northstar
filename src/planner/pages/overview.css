@@ -1,0 +1,239 @@
+/*
+ * Overview dashboard — page-specific layout on top of the shared `ui/` kit
+ * (docs/REDESIGN-V3.md "Overview (the dashboard)"). Everything reusable
+ * (StatStrip, SectionCard, StatCard, StackedBar, ProgressBar, Badge) lives in
+ * src/planner/ui/ and stays untouched; this file is only the glue between
+ * them — grids, row layouts, and the one button-reset needed to make a Stat
+ * pressable.
+ */
+
+/* The header's action row, wrapped so three buttons + the status chip can
+   reflow onto a second line at phone widths instead of overflowing the page
+   (`.ns-page-actions`, the shared wrapper `PageHeader` itself renders, is
+   nowrap on every page — seen here because Overview is the one page with a
+   status chip and two actions on the same row). */
+.ns-ov-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* `flex-wrap` only ever engages once a box is squeezed narrower than its
+   children's combined width — and nothing upstream does that here:
+   `.ns-page-header-side` is `flex: none` (shared by every page, so it isn't
+   this file's to change), which means it never shrinks below its natural
+   content width, so this row is never actually offered less space and a
+   plain `flex-wrap: wrap` never triggers; it would just overflow the page
+   instead. Switching to a COLUMN at the phone breakpoint sidesteps that: a
+   column's natural width is its widest single child, not the sum of all of
+   them, so `.ns-page-header-side` ends up narrow enough to fit even though
+   nothing forced it to. */
+/* At phone widths the status chip moves into the meta line instead of
+   sitting above two stacked buttons (docs/REVIEW.md S11) — `OverviewPage.tsx`
+   renders the same status text twice (once for the chip, once folded into
+   the meta paragraph) and this pair of rules picks which copy shows. */
+.ns-ov-status-chip {
+  display: inline;
+}
+.ns-ov-meta-status {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* Hiding `.ns-ov-status-chip` alone still left an empty pill: `PageHeader`
+     (not this file's to change) wraps `status` in its own `.ns-page-status`
+     chip chrome — background, border, radius, padding — regardless of
+     whether the content inside is visible. `:has()` reaches that wrapper
+     from here without editing `PageHeader.tsx`, scoped to exactly the
+     status this page marks with `.ns-ov-status-chip`. */
+  .ns-page-status:has(.ns-ov-status-chip) {
+    display: none;
+  }
+  .ns-ov-status-chip {
+    display: none;
+  }
+  .ns-ov-meta-status {
+    display: inline;
+  }
+
+  /* Two even actions rather than a stack of three full-width buttons
+     (docs/REVIEW.md S11) — the Monarch action is often absent (`null`),
+     which just leaves the last cell empty rather than lopsided. */
+  .ns-ov-header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  /* Grid blockifies a direct `span` child (the HoverCard anchor) on its own,
+     but its button grandchild still needs telling to fill that span. */
+  .ns-ov-header-actions > * {
+    width: 100%;
+  }
+  .ns-ov-header-actions .ns-hovercard-anchor {
+    display: block;
+  }
+  .ns-ov-header-actions .ns-hovercard-anchor > button,
+  .ns-ov-header-actions > button {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* Horizon cards (Goodcast's "30D / 60D / Q-end" row, docs/REDESIGN-V3.md).
+   A flex row rather than a fixed grid — a short plan has no +10yr candidate
+   (see `dashboard.ts`'s `horizonPoints`) and a grid would leave a gap where
+   a flex row just gives the remaining cards more room. */
+.ns-ov-horizons {
+  display: flex;
+  gap: 12px;
+}
+.ns-ov-horizons > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Goals + Coming up, side by side on a real screen. */
+.ns-ov-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.ns-ov-goals {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.ns-ov-goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ns-ov-goal-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+.ns-ov-goal-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ns-ov-upcoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ns-ov-upcoming-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 8px;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-soft);
+}
+.ns-ov-upcoming-row:hover {
+  background: var(--surface-sub);
+}
+.ns-ov-upcoming-name {
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  max-width: 40%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns-ov-upcoming-detail {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The impact `DeltaTag` (docs/REVIEW.md S13) takes `.ns-ov-upcoming-detail`'s
+   old flex slot when an event's counterfactual impact is known — same
+   `flex: 1` so the row's spacing doesn't shift depending on which one
+   renders. */
+.ns-ov-upcoming-row .ns-ui-delta {
+  flex: 0 1 auto;
+  margin-right: auto;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.ns-ov-upcoming-year {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--muted-light);
+}
+
+.ns-ov-liabilities-note {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* --- responsive ------------------------------------------------------------
+ * At 390px: horizon cards become a horizontal scroll row (a fixed card width
+ * reads better than squeezing three StatCards to ~120px each); Goals/Coming
+ * up drop to one column; the upcoming row hides its detail column first,
+ * since the name and the "in N yrs" are the two things worth keeping.
+ * ---------------------------------------------------------------------------*/
+
+@media (max-width: 900px) {
+  .ns-ov-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .ns-ov-horizons {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+  .ns-ov-horizons > * {
+    /* A fixed 168px only ever showed two cards with no hint a third was
+       there (docs/REVIEW.md S12) — 72% leaves a sliver of the next card
+       peeking in as the scroll cue instead. */
+    flex: 0 0 72%;
+    scroll-snap-align: start;
+  }
+  /* The "2031 · +5 YRS" label was wrapping to three lines beside the spread
+     badge at this width — moved into the foot row instead (see
+     `StatCard.tsx`'s two-copy badge render). */
+  .ns-ov-horizons .ns-ui-statcard-badge-head {
+    display: none;
+  }
+  .ns-ov-horizons .ns-ui-statcard-badge-foot {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 560px) {
+  .ns-ov-upcoming-detail {
+    display: none;
+  }
+}

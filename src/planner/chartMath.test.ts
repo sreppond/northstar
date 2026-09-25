@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  actualPointYear,
   clampYear,
+  domainStartYear,
+  niceAxisTicks,
+  packLabelLanes,
   quantiseYear,
   rubberBandYear,
   xForYear,
@@ -131,5 +135,135 @@ describe('rubberBandYear', () => {
     const above = rubberBandYear(END + 1, START, END);
     const below = rubberBandYear(START - 1, START, END);
     expect(above - END).toBeCloseTo(START - below, 9);
+  });
+});
+
+describe('niceAxisTicks', () => {
+  it('never uses the ceiling itself as the step — always a 1/2/2.5/5 x 10^n multiple', () => {
+    for (const ceiling of [4_290_000, 1_070_000, 999_999, 3_000_000, 61_000]) {
+      const ticks = niceAxisTicks(ceiling);
+      const step = ticks[1]?.value ?? 0;
+      const exponent = Math.floor(Math.log10(step));
+      const fraction = step / 10 ** exponent;
+      expect([1, 2, 2.5, 5, 10]).toContain(Number(fraction.toFixed(6)));
+    }
+  });
+
+  it('always starts at zero', () => {
+    expect(niceAxisTicks(4_290_000)[0]?.value).toBe(0);
+  });
+
+  it('produces 3-5 nice lines for a typical ceiling', () => {
+    // Excludes a possible trailing "actual ceiling" line, which is a
+    // separate, deliberate addition rather than part of the nice sequence.
+    const ticks = niceAxisTicks(4_290_000);
+    const lastNice = ticks[ticks.length - 1]?.value === 4_290_000 ? ticks.length - 1 : ticks.length;
+    expect(lastNice).toBeGreaterThanOrEqual(3);
+    expect(lastNice).toBeLessThanOrEqual(6);
+  });
+
+  it('adds the actual ceiling as its own line only when it is far from the last nice one', () => {
+    // 4.29M is well clear of a $4M nice line (~7.25% away — just under the
+    // threshold, no extra line).
+    const close = niceAxisTicks(4_290_000);
+    expect(close[close.length - 1]?.value).not.toBe(4_290_000);
+
+    // 4.6M is comfortably more than 8% past a $4M nice line.
+    const far = niceAxisTicks(4_600_000);
+    expect(far[far.length - 1]?.value).toBe(4_600_000);
+  });
+
+  it('degenerates to a single zero line rather than dividing by zero on a non-positive ceiling', () => {
+    expect(niceAxisTicks(0)).toEqual([{ value: 0 }]);
+    expect(niceAxisTicks(-5)).toEqual([{ value: 0 }]);
+  });
+});
+
+describe('packLabelLanes', () => {
+  it('keeps non-overlapping labels in the same lane', () => {
+    const result = packLabelLanes(
+      [
+        { id: 'a', x: 100, width: 60 },
+        { id: 'b', x: 300, width: 60 },
+      ],
+      14,
+    );
+    expect(result.map((r) => r.lane)).toEqual([0, 0]);
+  });
+
+  it('drops a colliding label to the next lane down', () => {
+    const result = packLabelLanes(
+      [
+        { id: 'a', x: 100, width: 80 },
+        { id: 'b', x: 120, width: 80 }, // well within 80px of `a` — must collide
+      ],
+      14,
+    );
+    expect(result[0].lane).toBe(0);
+    expect(result[1].lane).toBe(1);
+  });
+
+  it('reuses an earlier lane once there is room again, rather than stacking new lanes forever', () => {
+    const result = packLabelLanes(
+      [
+        { id: 'a', x: 100, width: 60 }, // lane 0, right edge ~130+gap
+        { id: 'b', x: 110, width: 60 }, // collides with a -> lane 1
+        { id: 'c', x: 400, width: 60 }, // far clear of both -> lane 0 again
+      ],
+      14,
+    );
+    expect(result.map((r) => r.lane)).toEqual([0, 1, 0]);
+  });
+
+  it('leaves a label alone when it is already clear of minLeft', () => {
+    const result = packLabelLanes([{ id: 'a', x: 500, width: 60 }], 14, 66);
+    expect(result[0].left).toBe(500 - 30);
+  });
+
+  it('clamps a label centred near the plot edge instead of letting it spill into the gutter', () => {
+    // An event right at the plot's left edge (x=66) centres a 60-wide label
+    // at left=36 — well past the axis into the tick gutter without a clamp.
+    const result = packLabelLanes([{ id: 'a', x: 66, width: 60 }], 14, 70);
+    expect(result[0].left).toBe(70);
+  });
+
+  it('tracks lane occupancy from the CLAMPED left, not the raw one, so a later label still collides correctly', () => {
+    const result = packLabelLanes(
+      [
+        { id: 'a', x: 66, width: 60 }, // clamped to left=70, occupies to ~130+gap
+        { id: 'b', x: 100, width: 60 }, // left=70 unclamped — collides with a's clamped span
+      ],
+      14,
+      70,
+    );
+    expect(result[0].lane).toBe(0);
+    expect(result[1].lane).toBe(1);
+  });
+});
+
+describe('domainStartYear', () => {
+  it('is the projection start when there are no actuals', () => {
+    expect(domainStartYear([], START)).toBe(START);
+  });
+
+  it('extends back to the earliest actual, never forward past the projection start', () => {
+    expect(domainStartYear([2023.4, 2024.8], START)).toBe(2023.4);
+    expect(domainStartYear([START + 5], START)).toBe(START);
+  });
+});
+
+describe('actualPointYear', () => {
+  it('places a point logged exactly on asOf at startYear, not at its own raw calendar fraction', () => {
+    // The bug this guards: `years[0]` sits at `startYear` on the chart, but
+    // `asOf` (when it falls mid-year) is a larger number — plotting the raw
+    // fraction put "today" to the right of the projection's own start.
+    const asOf = START + 0.73;
+    expect(actualPointYear(asOf, asOf, START)).toBe(START);
+  });
+
+  it('offsets earlier and later points by the same distance from asOf', () => {
+    const asOf = START + 0.73;
+    expect(actualPointYear(asOf - 1, asOf, START)).toBeCloseTo(START - 1, 9);
+    expect(actualPointYear(asOf + 0.5, asOf, START)).toBeCloseTo(START + 0.5, 9);
   });
 });

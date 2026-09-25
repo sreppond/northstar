@@ -4,6 +4,7 @@ import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { GearIcon } from '../icons';
 import { IconBadge } from '../IconBadge';
+import { Badge } from '../ui';
 import type { ChartSelection } from '../NetWorthChart';
 
 /**
@@ -29,16 +30,19 @@ export function EventsTab({
   const { startYear, endYear } = result;
   const span = Math.max(1, endYear - startYear);
   const leftFor = (year: number) => ((year - startYear) / span) * 100;
+  const todayX = leftFor(todayYearFraction(plan, startYear));
 
   const tickEvery = Math.max(1, Math.round(span / 5));
   const ticks: number[] = [];
   for (let y = startYear; y <= endYear; y += tickEvery) ticks.push(y);
 
-  // Same filter the chart applies. An event beyond the horizon contributes
-  // nothing to the projection, so showing a row with no bar just reads as a
-  // rendering bug — and the two views must agree on what is in the plan.
+  // Same range the chart applies, but — unlike the chart, which only ever
+  // plots what's actually in the projection — an EXCLUDED event still gets a
+  // row here, dimmed with a Badge (docs/REDESIGN-V3.md "Events" — "include
+  // /exclude state visible"), since this is the one place include/exclude
+  // is actually set.
   const visible = events
-    .filter((e) => e.isIncluded && !e.isHidden)
+    .filter((e) => !e.isHidden)
     .filter((e) => e.startYear >= startYear && e.startYear <= endYear)
     .slice()
     .sort((a, b) => a.startYear - b.startYear);
@@ -50,8 +54,15 @@ export function EventsTab({
   return (
     <div className="ns-table-scroll">
       <div className="ns-gantt-head">
-        <div>Life events</div>
+        {/* The SectionCard above already titles this "Life timeline" — this
+            column header just needs to say what its own rows are. */}
+        <div>Event</div>
         <div className="ns-gantt-ticks">
+          {/* The dashed TODAY line runs down every row's track below, but the
+              label only needs to appear once, at the top (REVIEW.md S19). */}
+          <span className="ns-gantt-today-label" style={{ left: `${todayX}%` }}>
+            Today
+          </span>
           {ticks.map((year, i) => (
             <div
               key={year}
@@ -83,16 +94,36 @@ export function EventsTab({
         const left = leftFor(event.startYear);
         const width = Math.max(2, leftFor(until) - left);
         const isSelected = selected?.eventId === event.id;
+        const excluded = !event.isIncluded;
+
+        // The whole label opens the editor, not just its gear
+        // (docs/REDESIGN-V3.md "Events" — "make each row a button that
+        // opens the editor"). A `div` rather than a real `<button>` because
+        // it wraps one already (the gear) — nesting buttons isn't valid
+        // HTML; the click still bubbles up from the gear either way.
+        const openEditor = () => onEdit(event);
 
         return (
-          <div key={event.id} className="ns-gantt-row">
-            <div className="ns-gantt-label">
+          <div key={event.id} className="ns-gantt-row" data-excluded={excluded || undefined}>
+            <div
+              className="ns-gantt-label ns-row-clickable"
+              role="button"
+              tabIndex={0}
+              onClick={openEditor}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openEditor();
+                }
+              }}
+            >
               <HoverCard detail={eventDetail(event, plan)} side="bottom">
                 <IconBadge kind={event.kind} tone={tone} />
               </HoverCard>
               <span className="ns-gantt-name" title={event.name}>
                 {event.name}
               </span>
+              {excluded && <Badge tone="neutral">Excluded</Badge>}
               {/* Same contract as the balance sheet: hover for the assumptions,
                   click to edit the very same ones. */}
               <HoverCard detail={eventDetail(event, plan)} side="bottom">
@@ -107,6 +138,7 @@ export function EventsTab({
               </HoverCard>
             </div>
             <div className="ns-gantt-track">
+              <div className="ns-gantt-today" style={{ left: `${todayX}%` }} aria-hidden />
               {ticks.map((year) => (
                 <div
                   key={year}
@@ -118,6 +150,15 @@ export function EventsTab({
               {tone === 'end' ? (
                 <div className="ns-bar ns-bar-end" style={{ left: `${left}%` }}>
                   {event.startYear} · {detail}
+                </div>
+              ) : excluded ? (
+                <div
+                  className={`ns-bar ns-bar-${tone}`}
+                  title={detail ? `${event.name} · ${event.startYear} · ${detail} · excluded` : `${event.name} · excluded`}
+                  style={{ left: `${left}%`, width: `${width}%` }}
+                >
+                  {event.startYear}
+                  {detail && width >= 8 ? ` · ${detail}` : ''}
                 </div>
               ) : (
                 <button
@@ -163,6 +204,27 @@ export function EventsTab({
       )}
     </div>
   );
+}
+
+/**
+ * TODAY as a fractional year (docs/REDESIGN-V3.md "Events" — "add a dotted
+ * TODAY line") — the projection's first year is never an estimate, but a
+ * plan can still start PARTWAY through it (`plan.settings.asOfDate`,
+ * docs/PLAN.md §4.3), so the honest mark is `startYear` plus how much of
+ * that calendar year has already elapsed, not the tick itself (which would
+ * sit right on top of the track's own left border and mark nothing).
+ * Computed in UTC for the same reason `format.ts`'s `asOfDateLabel` is — a
+ * bare date string parsed with `new Date(str)` renders a day early for
+ * anyone west of Greenwich.
+ */
+function todayYearFraction(plan: Plan | undefined, startYear: number): number {
+  const asOf = plan?.settings.asOfDate;
+  if (!asOf) return startYear;
+  const [y, m, d] = asOf.split('-').map(Number);
+  if (y !== startYear) return startYear;
+  const dayOfYear = (Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86_400_000;
+  const daysInYear = (Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1)) / 86_400_000;
+  return startYear + dayOfYear / daysInYear;
 }
 
 /** How far an event's effect reaches, for the bar width. */

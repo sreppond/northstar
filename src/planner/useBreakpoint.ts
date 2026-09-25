@@ -10,7 +10,10 @@ import { useEffect, useState } from 'react';
 export type Breakpoint = 'phone' | 'tablet' | 'desktop';
 
 const PHONE = '(max-width: 640px)';
-const TABLET = '(max-width: 1024px)';
+// 1023, not 1024 (docs/REDESIGN-V3.md review S10): a 1024px iPad-landscape
+// viewport should read as desktop (persistent rail), not fall through to
+// the mobile top bar, whose plan switcher then has no room to be readable.
+const TABLET = '(max-width: 1023px)';
 
 export function useBreakpoint(): Breakpoint {
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(() => read());

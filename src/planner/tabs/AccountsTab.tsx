@@ -6,6 +6,7 @@ import { HoverCard } from '../HoverCard';
 import { Cell, type CellMagnitude } from './DataTable';
 import { GearIcon } from '../icons';
 import { ACCOUNT_ICON } from '../domainIcons';
+import { classBalances, missingAccountClasses } from '../ledger';
 
 /**
  * The balance sheet, one row per ACCOUNT TYPE rather than per linked account.
@@ -30,39 +31,26 @@ export function AccountsTab({
   const yearLabels = years.map((y) => y.year);
   const style = { ['--cols' as string]: yearLabels.length };
 
-  const classRow = (accountClass: AccountClass, liability: boolean) =>
-    years.map((y) =>
-      y.accounts
-        .filter((a) => a.isLiability === liability && a.accountClass === accountClass)
-        .reduce((total, a) => total + a.close, 0),
-    );
+  const classRow = (accountClass: AccountClass, liability: boolean) => classBalances(years, accountClass, liability);
 
-  /** Types not yet on the balance sheet, offered as a trailing add row. */
+  /**
+   * Types not yet on the balance sheet, offered as a trailing add row — a
+   * plain flush flex row spanning the table's full width rather than a
+   * `.ns-grid` row confined to the 268px label column, which is what used
+   * to wrap several pills into a vertical stack instead of one tidy row
+   * (docs/REDESIGN-V3.md "Accounts").
+   */
   const renderAddRow = (classes: AccountClass[], liability: boolean) => {
-    const missing = classes.filter((accountClass) => {
-      const hasValue = classRow(accountClass, liability).some((v) => Math.abs(v) >= 1);
-      const owned = accounts.some((a) => a.accountClass === accountClass && !a.isSynthetic);
-      return !hasValue && !owned;
-    });
+    const missing = missingAccountClasses(classes, liability, accounts, years);
     if (missing.length === 0) return null;
 
     return (
-      <div className="ns-grid ns-row-child ns-row-add" style={style}>
-        <div className="ns-add-cell">
-          <span className="ns-add-label">Add</span>
-          {missing.map((accountClass) => (
-            <button
-              key={accountClass}
-              type="button"
-              className="ns-add-pill"
-              onClick={() => onEditType(accountClass)}
-            >
-              + {ACCOUNT_TYPES[accountClass].label}
-            </button>
-          ))}
-        </div>
-        {yearLabels.map((y) => (
-          <div key={y} />
+      <div className="ns-add-row-flush">
+        <span className="ns-add-label">Add</span>
+        {missing.map((accountClass) => (
+          <button key={accountClass} type="button" className="ns-add-pill" onClick={() => onEditType(accountClass)}>
+            + {ACCOUNT_TYPES[accountClass].label}
+          </button>
         ))}
       </div>
     );
@@ -95,8 +83,31 @@ export function AccountsTab({
         // dollar magnitude rather than a time span.
         const rowMax = Math.max(1, ...cells.map((v) => Math.abs(v)));
 
+        // The whole row opens the editor, not just its gear
+        // (docs/REDESIGN-V3.md "Accounts") — but only when there's an
+        // owned account to edit; a synthetic-only row's gear is locked for
+        // the same reason.
+        const rowProps = owned
+          ? {
+              role: 'button' as const,
+              tabIndex: 0,
+              onClick: () => onEditType(accountClass),
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onEditType(accountClass);
+                }
+              },
+            }
+          : {};
+
         return (
-          <div key={accountClass} className="ns-grid ns-row-child" style={style}>
+          <div
+            key={accountClass}
+            className={`ns-grid ns-row-child${owned ? ' ns-row-clickable' : ''}`}
+            style={style}
+            {...rowProps}
+          >
             <div className="ns-type-cell">
               {(() => {
                 const Icon = ACCOUNT_ICON[accountClass];
@@ -147,7 +158,9 @@ export function AccountsTab({
   return (
     <div className="ns-table-scroll">
       <div className="ns-grid ns-row-head" style={style}>
-        <div>Balance sheet</div>
+        {/* The SectionCard above already titles this "Balance sheet" —
+            this column header just needs to say what its own rows are. */}
+        <div>Account</div>
         {yearLabels.map((y) => (
           <div key={y} className={y === highlightYear ? 'ns-col-scrub' : undefined}>
             {y}

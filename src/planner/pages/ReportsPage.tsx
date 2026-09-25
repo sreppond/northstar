@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { usePlanner } from '../PlannerContext';
 import { MiniChart } from '../views/MiniChart';
 import { Cell, type CellMagnitude } from '../tabs/DataTable';
-import { percent, tableMoney } from '../format';
+import { detailMoney, percent, planMetaLine, tableMoney } from '../format';
 import {
   buildExploreRows,
   downloadTextFile,
@@ -11,6 +11,7 @@ import {
   exploreRowsToJson,
   type ExploreRow,
 } from '../reports';
+import { Page, PageHeader, SectionCard, Segmented, Stat, StatStrip } from '../ui';
 
 /** Expense-shaped columns get the "money out" hue; everything else (net
     worth, income, contributions, savings rate) reads as "money in" — the
@@ -21,14 +22,22 @@ const COST_COLUMNS = new Set<keyof ExploreRow>(['expenses', 'taxes', 'withdrawal
 
 type ReportsTab = 'explore' | 'plots';
 
+const TAB_OPTIONS = [
+  { value: 'explore', label: 'Table' },
+  { value: 'plots', label: 'Charts' },
+];
+
 const PLOT_DEFINITIONS: { key: keyof ExploreRow; label: string; color: string }[] = [
   { key: 'netWorth', label: 'Net Worth', color: 'var(--data-nw)' },
   { key: 'income', label: 'Income', color: 'var(--in)' },
   { key: 'expenses', label: 'Expenses', color: 'var(--out)' },
   { key: 'taxes', label: 'Taxes', color: 'var(--out)' },
   { key: 'contributions', label: 'Contributions', color: 'var(--in)' },
-  { key: 'withdrawals', label: 'Withdrawals', color: 'var(--cmp)' },
-  { key: 'savingsRatePercent', label: 'Savings Rate', color: 'var(--in)' },
+  // M16: this was `--cmp` (the compared-PLAN hue) — a colour reserved for
+  // "the other line in a comparison," which withdrawals are not. Money
+  // leaving the accounts is a cost, same as Expenses/Taxes above.
+  { key: 'withdrawals', label: 'Withdrawals', color: 'var(--out)' },
+  { key: 'contributionRatePercent', label: 'Contribution Rate', color: 'var(--in)' },
 ];
 
 /**
@@ -57,6 +66,19 @@ export function ReportsPage() {
     return max;
   }, [rows]);
 
+  const summary = useMemo(() => {
+    const netWorthAtHorizon = rows.at(-1)?.netWorth ?? 0;
+    const avgContributionRate = rows.length
+      ? rows.reduce((s, r) => s + r.contributionRatePercent, 0) / rows.length
+      : 0;
+    const totalTaxes = rows.reduce((s, r) => s + r.taxes, 0);
+    const peakWithdrawalRow = rows.reduce<ExploreRow | undefined>(
+      (best, r) => (r.withdrawals > (best?.withdrawals ?? 0) ? r : best),
+      undefined,
+    );
+    return { netWorthAtHorizon, avgContributionRate, totalTaxes, peakWithdrawalRow };
+  }, [rows]);
+
   function exportCsv() {
     downloadTextFile(`${fileSlug(stored.name)}-explore.csv`, exploreRowsToCsv(rows), 'text/csv');
   }
@@ -65,95 +87,107 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="ns-card ns-card-view">
-      <div className="ns-view-head">
-        <div className="ns-view-title">Reports</div>
-        <p className="ns-view-sub">
-          Every plan year as one row of figures, or the same numbers plotted individually — the spreadsheet view of
-          what the rest of the app already computes.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        title="Reports"
+        meta={planMetaLine(stored, result.endYear)}
+        actions={
+          hasPlan && (
+            <>
+              {/* S1: was `ns-btn-ghost` (no border), which reads as no
+                  button at all in dark mode — bordered secondary, same as
+                  "Edit assumptions" elsewhere. */}
+              <button type="button" className="ns-btn ns-btn-sm" onClick={exportCsv}>
+                Export CSV
+              </button>
+              <button type="button" className="ns-btn ns-btn-sm" onClick={exportJson}>
+                Export JSON
+              </button>
+            </>
+          )
+        }
+      />
 
       {!hasPlan ? (
-        <div className="ns-view-empty">Add an account or an event to see reports.</div>
+        <div className="ns-card">
+          <div className="ns-view-empty">Add an account or an event to see reports.</div>
+        </div>
       ) : (
         <>
-          <div className="ns-reports-toolbar">
-            <button
-              type="button"
-              className={`ns-btn ns-btn-sm${tab === 'explore' ? ' ns-btn-primary' : ' ns-btn-ghost'}`}
-              onClick={() => setTab('explore')}
-            >
-              Explore
-            </button>
-            <button
-              type="button"
-              className={`ns-btn ns-btn-sm${tab === 'plots' ? ' ns-btn-primary' : ' ns-btn-ghost'}`}
-              onClick={() => setTab('plots')}
-            >
-              Plots
-            </button>
-            <div className="ns-reports-toolbar-spacer" />
-            <button type="button" className="ns-btn ns-btn-sm ns-btn-ghost" onClick={exportCsv}>
-              Export CSV
-            </button>
-            <button type="button" className="ns-btn ns-btn-sm ns-btn-ghost" onClick={exportJson}>
-              Export JSON
-            </button>
-          </div>
+          <StatStrip>
+            <Stat size="xl" label="Net worth at horizon" value={detailMoney(summary.netWorthAtHorizon)} />
+            <Stat label="Avg. contribution rate" value={percent(summary.avgContributionRate, 0)} />
+            <Stat label="Total taxes" value={detailMoney(summary.totalTaxes)} />
+            <Stat
+              label="Peak withdrawal year"
+              value={summary.peakWithdrawalRow ? String(summary.peakWithdrawalRow.year) : '—'}
+              sub={summary.peakWithdrawalRow ? detailMoney(summary.peakWithdrawalRow.withdrawals) : 'None modeled'}
+            />
+          </StatStrip>
 
-          {tab === 'explore' ? (
-            <div className="ns-table-scroll">
-              <table className="ns-datatable">
-                <thead>
-                  <tr>
-                    {EXPLORE_COLUMNS.map((col) => (
-                      <th key={col.key}>{col.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.year}>
-                      {EXPLORE_COLUMNS.map((col) => {
-                        if (col.key === 'year') return <td key={col.key}>{row.year}</td>;
-                        const value = row[col.key] as number;
-                        const max = columnMax.get(col.key) ?? 1;
-                        const magnitude: CellMagnitude = {
-                          fraction: Math.abs(value) / max,
-                          tone: COST_COLUMNS.has(col.key) ? 'cost' : 'income',
-                        };
-                        return (
-                          <td key={col.key}>
-                            <Cell
-                              value={col.percent ? percent(value) : tableMoney(value)}
-                              magnitude={magnitude}
-                            />
-                          </td>
-                        );
-                      })}
+          <SectionCard
+            title="Plan by year"
+            actions={<Segmented options={TAB_OPTIONS} value={tab} onChange={(v) => setTab(v as ReportsTab)} size="sm" ariaLabel="View" />}
+            flush={tab === 'explore'}
+          >
+            {tab === 'explore' ? (
+              // S5: dropped the 560px inner scroll — a plan's full year range
+              // (~20-60 rows) reads fine as one plain scroll of the page,
+              // and a sticky-inside-a-fixed-height panel hid rows with no
+              // affordance that more existed below the fold.
+              <div className="ns-table-scroll">
+                <table className="ns-datatable">
+                  <thead>
+                    <tr>
+                      {EXPLORE_COLUMNS.map((col) => (
+                        <th key={col.key}>{col.label}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="ns-plot-grid">
-              {PLOT_DEFINITIONS.map((p) => (
-                <div className="ns-plot-card" key={p.key}>
-                  <div className="ns-section-title">{p.label}</div>
-                  <MiniChart
-                    height={150}
-                    years={rows.map((r) => r.year)}
-                    series={[{ label: p.label, color: p.color, values: rows.map((r) => r[p.key] as number) }]}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.year}>
+                        {EXPLORE_COLUMNS.map((col) => {
+                          if (col.key === 'year') return <td key={col.key}>{row.year}</td>;
+                          const value = row[col.key] as number;
+                          const max = columnMax.get(col.key) ?? 1;
+                          const magnitude: CellMagnitude = {
+                            fraction: Math.abs(value) / max,
+                            tone: COST_COLUMNS.has(col.key) ? 'cost' : 'income',
+                          };
+                          return (
+                            <td key={col.key}>
+                              <Cell
+                                value={col.percent ? percent(value) : tableMoney(value)}
+                                magnitude={magnitude}
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="ns-plot-grid">
+                {PLOT_DEFINITIONS.map((p) => (
+                  <div className="ns-plot-card" key={p.key}>
+                    <div className="ns-section-title">{p.label}</div>
+                    <MiniChart
+                      height={150}
+                      years={rows.map((r) => r.year)}
+                      series={[{ label: p.label, color: p.color, values: rows.map((r) => r[p.key] as number) }]}
+                      formatY={p.key === 'contributionRatePercent' ? (v) => `${Math.round(v)}%` : undefined}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
         </>
       )}
-    </div>
+    </Page>
   );
 }
 

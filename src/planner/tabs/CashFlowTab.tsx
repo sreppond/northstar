@@ -1,6 +1,6 @@
 import type { LineItem, PlanEvent, YearSnapshot } from '@northstar/engine';
 import { DataTable, type TableRow } from './DataTable';
-import { tableMoney, signedTableMoney } from '../format';
+import { tableMoney, signedTableMoney, percent, ZERO_DASH } from '../format';
 import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { GearIcon } from '../icons';
@@ -136,16 +136,26 @@ export function CashFlowTab({
     }
   }
 
+  // Styled as a group row, the same weight as Income/Expenses above
+  // (docs/REDESIGN-V3.md "Cash Flow" — "section headers Income / Expenses /
+  // Savings styled as group rows") rather than the heavier tinted `total`
+  // treatment `.ns-row-total` reserves for Accounts' Net worth line.
   rows.push({
-    key: 'net',
-    kind: 'total',
-    label: 'Net cash flow',
+    key: 'savings',
+    kind: 'group',
+    label: 'Savings',
     cells: window.map((y) => signedTableMoney(y.netCashFlow)),
     // The one row that can genuinely flip sign year to year — its bar's
     // side and tone follow each cell's own value rather than a fixed
     // per-row direction (see `RowBar.signed` in DataTable.tsx).
     values: window.map((y) => y.netCashFlow),
     bar: { direction: 'diverging', signed: true },
+  });
+  rows.push({
+    key: 'savings-rate',
+    kind: 'child',
+    label: 'Savings rate',
+    cells: window.map((y) => (y.totalIncome > 0 ? percent((y.netCashFlow / y.totalIncome) * 100, 0) : ZERO_DASH)),
   });
 
   const shortfalls = window.filter((y) => y.unfundedShortfall);
@@ -162,7 +172,9 @@ export function CashFlowTab({
     });
   }
 
-  return <DataTable caption="Annual cash flow" years={years} rows={rows} highlightYear={highlightYear} />;
+  // The page's SectionCard already titles this "Annual cash flow" — this
+  // column header just needs to say what its own rows are.
+  return <DataTable caption="Category" years={years} rows={rows} highlightYear={highlightYear} />;
 }
 
 /** A cash flow row label with its gear. Detail is optional — the assumptions

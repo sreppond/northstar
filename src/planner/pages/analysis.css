@@ -1,0 +1,83 @@
+/*
+ * Analysis pages — Progress, Compare, Reports (docs/REDESIGN-V3.md "Target
+ * information architecture": the ANALYSIS sidebar group). Existing rules for
+ * these three lenses stay in `planner.css`'s progress/compare/reports
+ * sections; this file holds patterns genuinely new to the v3 pass — right
+ * now, Compare's grid of plan cards and their inline sparkline.
+ */
+
+/* --- Compare: a card per other plan --------------------------------------- */
+
+.ns-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+/* S9: geometry matched to `ui/StatCard`'s `.ns-ui-statcard` exactly (12px
+   radius, 14px/16px padding, 8px gap) rather than this card's own
+   14px/16px18px — the two sit side by side across the app (Overview's
+   horizon cards use `StatCard` itself) and used to read as two different
+   card systems. Not rendered as an actual `StatCard`: that component has no
+   slot for the sparkline body this card needs (label/badge/value/foot only)
+   — see StatCard.tsx, owned by fix-2's Overview/StatCard pass. */
+.ns-compare-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition:
+    border-color 140ms var(--ease-soft),
+    background-color 140ms var(--ease-soft),
+    transform 100ms var(--ease-soft);
+}
+.ns-compare-card:hover {
+  background: var(--surface-sub);
+  border-color: var(--border-strong);
+}
+.ns-compare-card:active {
+  transform: scale(0.985);
+}
+
+.ns-compare-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ns-compare-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-compare-card-value {
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+.ns-compare-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.ns-compare-sparkline {
+  display: block;
+  width: 100%;
+  height: 36px;
+  overflow: visible;
+}

@@ -115,6 +115,14 @@ export function heroReading(
   result: PlanResult,
   markers: PathMarkers,
   growth: number | undefined,
+  /** The plan's own return assumption (`headlineReturnRate`), separate from
+      `growth` (net worth's own CAGR, which already includes savings on top
+      of that market return). Optional and additive — omitting it keeps the
+      old, shorter sentence. Passed so the reading can say which is which:
+      without it, "16.1% a year" next to the chart's own "Return 6.5%" meta
+      line reads as a contradiction rather than two different numbers
+      (docs/REVIEW.md S15). */
+  marketReturn?: number,
 ): HeroReading {
   const last = result.years[result.years.length - 1];
   const figure = last?.netWorth ?? 0;
@@ -136,12 +144,23 @@ export function heroReading(
     };
   }
 
-  const rate = growth === undefined ? null : `${percent(growth)} a year`;
+  const rate = growth === undefined ? null : percent(growth);
   const through = milestones(plan);
+  // Named as "net worth" growth and parenthesised against the market
+  // return, rather than a bare "X% a year" — otherwise this sentence's own
+  // number and the chart meta line's "Return Y%" read as if they disagreed
+  // about the same thing, when one is the outcome (savings included) and
+  // the other is the assumption behind it (docs/REVIEW.md S15).
+  const rateClause =
+    rate === null
+      ? null
+      : marketReturn === undefined
+        ? `${rate} a year`
+        : `Net worth grows ${rate} a year with savings (${percent(marketReturn)} market return)`;
 
   let read: string;
-  if (rate && through.length > 0) read = `${rate}, through ${sentenceList(through)}.`;
-  else if (rate) read = `${rate}, with nothing else in the way.`;
+  if (rateClause && through.length > 0) read = `${rateClause}, through ${sentenceList(through)}.`;
+  else if (rateClause) read = `${rateClause}, with nothing else in the way.`;
   else if (through.length > 0) read = `Through ${sentenceList(through)}.`;
   else read = 'No milestones in this plan yet.';
 

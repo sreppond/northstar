@@ -1,3 +1,35 @@
+/**
+ * "Sep 2, 2026" for a plan's `settings.asOfDate` (an ISO `YYYY-MM-DD`, or
+ * undefined for the plan's start of year) in every page header's mono meta
+ * line. Parsed as UTC-midnight-of-the-date rather than via `new Date(str)`
+ * directly — the latter treats a bare date string as UTC internally but
+ * *renders* it in the browser's local zone, which rolls the date back a day
+ * for anyone west of Greenwich.
+ */
+export function asOfDateLabel(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(
+    date,
+  );
+}
+
+/**
+ * The mono meta line every `PageHeader` shows below its title:
+ * "{plan name} · as of {date} · {start}–{end}" (docs/REDESIGN-V3.md "Target
+ * information architecture"). One helper rather than ten copies of the same
+ * `asOfDate ?? \`${startYear}-01-01\`` fallback each page would otherwise
+ * repeat — `planDetail` in detail.ts uses the same fallback for its "As of"
+ * row, so this mirrors it rather than inventing a second convention.
+ */
+export function planMetaLine(
+  plan: { name: string; settings: { startYear: number; asOfDate?: string } },
+  endYear: number,
+): string {
+  const asOf = plan.settings.asOfDate ?? `${plan.settings.startYear}-01-01`;
+  return `${plan.name} · as of ${asOfDateLabel(asOf)} · ${plan.settings.startYear}–${endYear}`;
+}
+
 /** Compact money used across the KPI strip, chart axis, tooltip and tables. */
 export function money(value: number): string {
   const abs = Math.abs(value);
@@ -10,13 +42,17 @@ export function money(value: number): string {
 
 /**
  * Terser money for the chart's y-axis, where the label sits in a ~54px gutter
- * next to the pin row. `$10.00M` collides; `$10M` does not.
+ * next to the pin row. `$10.00M` collides; `$10M` does not. Thousands round
+ * to whole K (`$925K`, never `$922.71K`) — the same "no decimal below a
+ * million" convention `tableMoney` uses for a column of figures; millions
+ * keep `trim`'s up-to-two-decimal precision since ticks a year apart there
+ * can otherwise land on the same rounded label.
  */
 export function axisMoney(value: number): string {
   const abs = Math.abs(value);
   if (abs === 0) return '$0';
   if (abs >= 1e6) return `$${trim(abs / 1e6)}M`;
-  if (abs >= 1e3) return `$${trim(abs / 1e3)}K`;
+  if (abs >= 1e3) return `$${Math.round(abs / 1e3)}K`;
   return `$${Math.round(abs)}`;
 }
 

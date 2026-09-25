@@ -289,9 +289,14 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const last = result.years[result.years.length - 1];
   const growth = cagr(first?.netWorth ?? 0, last?.netWorth ?? 0, result.years.length - 1);
 
+  // Passed separately from `growth` (docs/REVIEW.md S15) so the hero reading
+  // can name the market-return assumption behind the net-worth CAGR it
+  // reports, rather than leaving that number looking like it disagrees with
+  // the chart meta line's own "Return X%".
+  const marketReturn = headlineReturnRate(plan);
   const reading = useMemo(
-    () => heroReading(plan, result, markers, growth),
-    [plan, result, markers, growth],
+    () => heroReading(plan, result, markers, growth, marketReturn),
+    [plan, result, markers, growth, marketReturn],
   );
 
   const heroFigure =

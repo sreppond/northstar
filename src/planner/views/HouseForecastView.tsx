@@ -2,49 +2,37 @@ import { useMemo } from 'react';
 import type { Goal, Plan, PlanEvent, PlanResult } from '@northstar/engine';
 import { goalFundingProgress, mergeGoalRules, pathMarkers, runPlan } from '@northstar/engine';
 import { detailMoney, joinNames, percent } from '../format';
-import { AnimatedFigure } from '../AnimatedFigure';
-import { ChartLegend, GoalRing, MiniChart } from './MiniChart';
+import { MiniChart } from './MiniChart';
+import { Badge, ProgressBar, SectionCard, Stat, StatStrip } from '../ui';
 
 /**
- * The House lens (docs/REDESIGN.md §4.3): the actual decision, in three
- * honest stages per home, top to bottom —
+ * The House lens (docs/REDESIGN-V3.md "House"): the actual decision, per
+ * home, top to bottom —
  *
- *   1. Can I afford the down payment?  (the house goal's funding progress)
- *   2. The ownership arc.              (value / mortgage / equity over time)
- *   3. What it costs the rest of the plan. (this plan, with vs without the
- *      purchase, run through the same engine and diffed)
+ *   1. A stat strip (home value at horizon, equity at purchase and at
+ *      horizon, mortgage payoff year).
+ *   2. Down-payment readiness as a goal row (a progress bar + an on-track
+ *      badge, not a donut).
+ *   3. The ownership arc — value / mortgage / equity — with direct end
+ *      labels instead of a bottom legend.
+ *   4. What it costs the rest of the plan, as a neutral one-line reading
+ *      (this plan, with vs without the purchase, run through the same
+ *      engine and diffed) rather than an alarm box.
  *
- * None of the three stages is allowed to go blank for an included `buyAHome`
- * event: a missing goal says so plainly instead of omitting the stage, and
- * stage 3 always runs a real comparison rather than a canned line.
+ * `HousePage` only renders this once at least one included `buyAHome` event
+ * exists — an empty plan gets an `EmptyState` there instead — so this
+ * component's own empty branch is a defensive fallback, not the primary path.
  */
 export function HouseForecastView({ plan, result }: { plan: Plan; result: PlanResult }) {
   const homeEvents = plan.events.filter((e) => e.kind === 'buyAHome' && e.isIncluded);
+  if (homeEvents.length === 0) return null;
 
   return (
-    <div className="ns-card ns-card-view">
-      <div className="ns-view-head">
-        <div className="ns-view-title">House forecast</div>
-        <p className="ns-view-sub">
-          Whether you can afford the down payment, how equity builds after you buy, and what buying
-          costs the rest of the plan.
-        </p>
-      </div>
-
-      {homeEvents.length === 0 ? (
-        <div className="ns-view-empty">Add a Buy a home event to the plan to see this forecast.</div>
-      ) : (
-        homeEvents.map((event) => (
-          <HouseCard
-            key={event.id}
-            event={event}
-            plan={plan}
-            result={result}
-            isOnlyHome={homeEvents.length === 1}
-          />
-        ))
-      )}
-    </div>
+    <>
+      {homeEvents.map((event) => (
+        <HouseCard key={event.id} event={event} plan={plan} result={result} isOnlyHome={homeEvents.length === 1} />
+      ))}
+    </>
   );
 }
 
@@ -79,35 +67,31 @@ function HouseCard({
 
   return (
     <div className="ns-house-card">
-      <div className="ns-house-card-title">{event.name}</div>
+      {!isOnlyHome && <div className="ns-house-card-title">{event.name}</div>}
 
-      <p className="ns-view-sub" style={{ marginTop: 8 }}>
-        Can I afford the down payment?
-      </p>
-      <DownPaymentStage plan={plan} eventName={event.name} goal={goal} result={result} />
+      {/* Frame order per docs/REDESIGN-V3.md's page frame (S1): StatStrip
+          before the goal row, not after -- this used to render the readiness
+          bar first, ahead of the numbers it's a readout of. */}
+      {hasStarted && (
+        <StatStrip>
+          <Stat
+            size="xl"
+            label={isOnlyHome ? 'Home value at horizon' : `${event.name} value at horizon`}
+            value={detailMoney(currentValue)}
+          />
+          <Stat label={`Equity at purchase (${years[ownedIndex]})`} value={detailMoney(equity[ownedIndex])} />
+          <Stat label="Equity at horizon" value={detailMoney(currentEquity)} />
+          <Stat
+            label="Mortgage payoff"
+            value={payoffIndex >= 0 ? String(years[payoffIndex]) : `Not by ${result.endYear}`}
+          />
+        </StatStrip>
+      )}
 
-      <p className="ns-view-sub" style={{ marginTop: 18 }}>
-        The ownership arc
-      </p>
+      <DownPaymentReadiness plan={plan} eventName={event.name} goal={goal} result={result} />
+
       {hasStarted ? (
-        <>
-          <div className="ns-stat-row">
-            <Stat
-              label={event.name}
-              value={detailMoney(currentValue)}
-              note={`Value at ${years[years.length - 1]}`}
-            />
-            <Stat
-              label="Mortgage payoff"
-              value={payoffIndex >= 0 ? String(years[payoffIndex]) : `Not paid off by ${result.endYear}`}
-            />
-            <Stat
-              label={`Equity at purchase (${years[ownedIndex]})`}
-              value={detailMoney(equity[ownedIndex])}
-            />
-            <Stat label="Equity at horizon" value={detailMoney(currentEquity)} />
-          </div>
-
+        <SectionCard title="The ownership arc" meta={`${years[0]}–${years[years.length - 1]}`} divider={false}>
           <MiniChart
             years={years}
             series={[
@@ -115,16 +99,10 @@ function HouseCard({
               { label: 'Mortgage balance', color: 'var(--out)', values: mortgage },
               { label: 'Equity', color: 'var(--in)', values: equity, fill: true },
             ]}
-            height={220}
+            height={240}
+            endLabels
           />
-          <ChartLegend
-            series={[
-              { label: 'Home value', color: 'var(--data-nw)' },
-              { label: 'Mortgage balance', color: 'var(--out)' },
-              { label: 'Equity', color: 'var(--in)' },
-            ]}
-          />
-        </>
+        </SectionCard>
       ) : (
         <div className="ns-goal-empty">
           {event.name} is set to buy in {event.startYear}, after this plan's {result.endYear} horizon
@@ -132,9 +110,6 @@ function HouseCard({
         </div>
       )}
 
-      <p className="ns-view-sub" style={{ marginTop: 18 }}>
-        What it costs the rest of the plan
-      </p>
       <CostOfBuyingStage plan={plan} event={event} result={result} />
     </div>
   );
@@ -154,8 +129,9 @@ function resolveHouseGoal(plan: Plan, eventId: string, isOnlyHome: boolean): Goa
   return houseGoals[0];
 }
 
-/** Stage 1 — the house goal's funding-progress ring (docs/REDESIGN.md §2.2, §4.3). */
-function DownPaymentStage({
+/** Down-payment readiness as a goal row (docs/REDESIGN-V3.md "House") — a
+    progress bar plus an on-track badge, replacing the funding-progress ring. */
+function DownPaymentReadiness({
   plan,
   eventName,
   goal,
@@ -174,9 +150,9 @@ function DownPaymentStage({
   if (!goal) {
     return (
       <div className="ns-goal-empty">
-        No down-payment goal is set for {eventName}. A goal would show a funding-progress ring here —
-        the target amount, the year you plan to buy, and how close your earmarked accounts are on the
-        current trajectory.
+        No down-payment goal is set for {eventName}. A goal would show readiness here — the target
+        amount, the year you plan to buy, and how close your earmarked accounts are on the current
+        trajectory.
       </div>
     );
   }
@@ -189,7 +165,6 @@ function DownPaymentStage({
     );
   }
 
-  const fraction = progress?.byYearFraction ?? 0;
   const balance = progress?.byYearBalance ?? 0;
   const funded = progress?.funded ?? false;
   const accountNames = joinNames(
@@ -199,17 +174,21 @@ function DownPaymentStage({
   );
 
   return (
-    <div className="ns-goal-ring-row">
-      <GoalRing fraction={fraction} funded={funded} />
-      <div className="ns-goal-ring-text">
-        <div className="ns-goal-ring-headline">
-          {funded ? 'On track' : 'At risk'} for the {detailMoney(goal.targetAmount)} down payment by{' '}
-          {goal.byYear}
-        </div>
-        <div className="ns-goal-ring-note">
-          {detailMoney(balance)} earmarked ({percent(fraction * 100, 0)}
-          {accountNames ? ` from ${accountNames}` : ''})
-        </div>
+    <div className="ns-goal-readiness">
+      <div className="ns-goal-readiness-head">
+        <span className="ns-goal-readiness-title">
+          {goal.name} — {detailMoney(goal.targetAmount)} by {goal.byYear}
+        </span>
+        <Badge tone={funded ? 'in' : 'out'}>{funded ? 'On track' : 'At risk'}</Badge>
+      </div>
+      {/* `accent` and `--data-nw` share the same value at both themes' :root
+          -- M16's §5.1 rule ("net-worth blue when funded, out-orange when
+          short") applied the same way here, in Retirement's goal row, and
+          (per fix-2) Overview's. */}
+      <ProgressBar value={balance} max={goal.targetAmount} tone={funded ? 'accent' : 'out'} label={`${goal.name} progress`} />
+      <div className="ns-goal-readiness-note">
+        {detailMoney(balance)} earmarked ({percent(goal.targetAmount > 0 ? (balance / goal.targetAmount) * 100 : 0, 0)}
+        {accountNames ? ` from ${accountNames}` : ''})
       </div>
     </div>
   );
@@ -218,7 +197,9 @@ function DownPaymentStage({
 /** A cost delta smaller than this is float noise, not a story — mirrors diff.ts's `diffOutcomes`. */
 const NET_WORTH_NOISE_FLOOR = 500;
 
-/** Stage 3 — the plan run with and without this home, diffed (docs/REDESIGN.md §4.3). */
+/** What it costs the rest of the plan, as a neutral one-line reading rather
+    than an alarm box (docs/REDESIGN-V3.md "House") — a badge carries the
+    direction, the sentence stays plain ink either way. */
 function CostOfBuyingStage({
   plan,
   event,
@@ -238,7 +219,14 @@ function CostOfBuyingStage({
     [plan, result, withoutHouseResult],
   );
 
-  return <div className={`ns-house-cost ns-house-cost-${reading.tone}`}>{reading.text}</div>;
+  return (
+    <div className="ns-house-cost">
+      <Badge tone={reading.tone === 'down' ? 'out' : reading.tone === 'up' ? 'in' : 'neutral'}>
+        {reading.tone === 'down' ? 'Costs' : reading.tone === 'up' ? 'Saves' : 'Neutral'}
+      </Badge>
+      <p>{reading.text}</p>
+    </div>
+  );
 }
 
 /**
@@ -315,22 +303,12 @@ function describeCostOfBuying(plan: Plan, withHouse: PlanResult, withoutHouse: P
 
   if (Math.abs(netWorthDelta) > NET_WORTH_NOISE_FLOOR) {
     return netWorthDelta > 0
-      ? { text: `Buying costs ${detailMoney(netWorthDelta)} at the ${withHouse.endYear} horizon.`, tone: 'down' }
+      ? { text: `Buying costs ${detailMoney(netWorthDelta)} at the ${withHouse.endYear} horizon, compared to not buying.`, tone: 'down' }
       : {
-          text: `Buying leaves you ${detailMoney(-netWorthDelta)} ahead at the ${withHouse.endYear} horizon.`,
+          text: `Buying leaves you ${detailMoney(-netWorthDelta)} ahead at the ${withHouse.endYear} horizon, compared to not buying.`,
           tone: 'up',
         };
   }
 
   return { text: 'Leaves the plan sound either way — no material difference at the horizon.', tone: 'neutral' };
-}
-
-function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="ns-stat">
-      <div className="ns-stat-label">{label}</div>
-      <AnimatedFigure className="ns-stat-value" value={value} />
-      {note && <div className="ns-stat-note">{note}</div>}
-    </div>
-  );
 }

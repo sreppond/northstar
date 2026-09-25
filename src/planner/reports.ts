@@ -13,7 +13,15 @@ export interface ExploreRow {
   income: number;
   expenses: number;
   taxes: number;
-  savingsRatePercent: number;
+  /** Contributions ÷ income — deliberately named for what it actually
+      measures (S5), not "savings rate": Overview and Cash Flow both already
+      use that label for a DIFFERENT figure, net cash flow ÷ income
+      (`dashboard.ts`'s `savingsRateThisYear`, `ledger.ts`'s `cashFlowStats`).
+      The two aren't interchangeable — net cash flow also nets out
+      withdrawals spent and debt principal paid down, contributions don't —
+      so this renames the column rather than silently reusing their number
+      or their label for a different one. */
+  contributionRatePercent: number;
   contributions: number;
   withdrawals: number;
 }
@@ -28,7 +36,7 @@ export function buildExploreRows(result: PlanResult): ExploreRow[] {
       income: snapshot.totalIncome,
       expenses: snapshot.totalExpenses,
       taxes: snapshot.totalTaxes,
-      savingsRatePercent: snapshot.totalIncome > 0 ? (contributions / snapshot.totalIncome) * 100 : 0,
+      contributionRatePercent: snapshot.totalIncome > 0 ? (contributions / snapshot.totalIncome) * 100 : 0,
       contributions,
       withdrawals,
     };
@@ -41,7 +49,7 @@ export const EXPLORE_COLUMNS: { key: keyof ExploreRow; label: string; percent?: 
   { key: 'income', label: 'Income' },
   { key: 'expenses', label: 'Expenses' },
   { key: 'taxes', label: 'Taxes' },
-  { key: 'savingsRatePercent', label: 'Savings Rate', percent: true },
+  { key: 'contributionRatePercent', label: 'Contribution Rate', percent: true },
   { key: 'contributions', label: 'Contributions' },
   { key: 'withdrawals', label: 'Withdrawals' },
 ];

@@ -123,3 +123,129 @@ export function rubberBandYear(year: number, min: number, max: number): number {
   if (year > max) return max + overflow(year - max);
   return year;
 }
+
+// ---------------------------------------------------------------------------
+// Nice axis ticks (docs/REVIEW.md S2)
+// ---------------------------------------------------------------------------
+
+export interface AxisTick {
+  value: number;
+}
+
+/**
+ * Gridlines at a 1/2/2.5/5 × 10ⁿ step below `ceiling`, rather than the
+ * ceiling's own robotic quarters (which drew lines at $1.07M / $2.15M /
+ * $3.22M / $4.29M — numbers nobody would ever choose by hand). Always
+ * includes zero; targets `targetLines` steps above it, so 3-5 gridlines in
+ * practice depending on how `ceiling` falls between two nice steps.
+ *
+ * The ceiling itself only gets its own line when it sits more than 8% above
+ * the topmost nice one — close enough and that nice line already reads as
+ * "the top"; a second line a few pixels away would just be clutter.
+ */
+export function niceAxisTicks(ceiling: number, targetLines = 4): AxisTick[] {
+  if (ceiling <= 0) return [{ value: 0 }];
+
+  const rough = ceiling / Math.max(1, targetLines);
+  const exponent = Math.floor(Math.log10(rough));
+  const base = 10 ** exponent;
+  const fraction = rough / base;
+  const niceFractions = [1, 2, 2.5, 5, 10];
+  const niceFraction = niceFractions.find((f) => f >= fraction) ?? 10;
+  const step = niceFraction * base;
+
+  // Count-based rather than accumulating `v += step` — repeated float
+  // addition drifts just enough, over enough steps, to occasionally land a
+  // hair past `ceiling` or short of it.
+  const count = Math.floor(ceiling / step + 1e-9);
+  const ticks: AxisTick[] = Array.from({ length: count + 1 }, (_, i) => ({ value: i * step }));
+
+  const topNice = ticks[ticks.length - 1]?.value ?? 0;
+  if (ceiling - topNice > ceiling * 0.08) {
+    ticks.push({ value: ceiling });
+  }
+  return ticks;
+}
+
+// ---------------------------------------------------------------------------
+// Event label lane-packing (docs/REVIEW.md M7)
+// ---------------------------------------------------------------------------
+
+export interface LabelPackItem {
+  id: string;
+  /** Centre x, in the same unit space as `width`/`gap` (viewBox units,
+      already converted from real px by the caller — see
+      NetWorthChart.tsx's `unitsPerPx`). */
+  x: number;
+  width: number;
+}
+
+export interface LabelPackResult {
+  id: string;
+  /** The label's left edge, in the same units `x`/`width` were given in. */
+  left: number;
+  /** 0 = the top lane, 1 = the next one down, etc. */
+  lane: number;
+}
+
+/**
+ * Left-to-right lane packing for standing chart labels: a label drops to the
+ * next lane down only when it would overlap the last label already placed in
+ * its current lane. `items` must already be given in the order they should
+ * be considered (NetWorthChart.tsx passes them sorted by year).
+ *
+ * `minLeft` clamps a label's left edge so a centred pill near the plot's own
+ * left edge can never spill into the y-axis tick gutter — the first event in
+ * a plan commonly sits right at `startYear`, and without this its label
+ * drew over the top y-tick's own text (docs/REVIEW.md, top tick hidden under
+ * the first event label). Defaults to no clamp, so every existing caller
+ * that doesn't pass one sees byte-identical output.
+ *
+ * Pure geometry — no text measurement, no DOM, no viewBox-vs-pixel
+ * conversion — so the collision rule itself can be unit tested without a
+ * component tree; NetWorthChart.tsx is responsible for measuring real label
+ * widths and converting them to this function's unit space first.
+ */
+export function packLabelLanes(items: LabelPackItem[], gap: number, minLeft = -Infinity): LabelPackResult[] {
+  const laneRightEdges: number[] = [];
+  return items.map((item) => {
+    const left = Math.max(minLeft, item.x - item.width / 2);
+    let lane = laneRightEdges.findIndex((edge) => left >= edge);
+    if (lane === -1) lane = laneRightEdges.length;
+    laneRightEdges[lane] = left + item.width + gap;
+    return { id: item.id, left, lane };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Actual-vs-forecast domain (docs/REVIEW.md B1)
+// ---------------------------------------------------------------------------
+
+/**
+ * How far left the chart's x-domain must extend to fit every logged actual
+ * point, as a fractional year — never later than the projection's own start,
+ * since a projection with no actuals (or none earlier than today) never
+ * needs more room than it already has.
+ *
+ * Takes the actual points' dates already re-anchored onto the chart's own
+ * frame (`actualPointYear` below) rather than the dates themselves, so this
+ * module never has to import `progress.ts` just for that conversion.
+ */
+export function domainStartYear(actualYearFractions: number[], startYear: number): number {
+  if (actualYearFractions.length === 0) return startYear;
+  return Math.min(startYear, ...actualYearFractions);
+}
+
+/**
+ * Re-anchors a logged actual's raw calendar-year fraction (`progress.ts`'s
+ * `yearFraction`) onto the SAME frame the projection's own `years[0]` sits
+ * in: `startYear`, not the fraction's own value. `runPlan` prorates
+ * `years[0]` forward from the plan's `asOf` date, not from January 1st (see
+ * `progress.ts`'s `planAsOfFraction`), so a point logged exactly on `asOf`
+ * has to land exactly at `startYear` here too — plotting the raw fraction
+ * instead left a point logged today sitting to the right of the "Today"
+ * marker, with a backwards bridge connecting it to the projection's start.
+ */
+export function actualPointYear(dateFraction: number, asOf: number, startYear: number): number {
+  return startYear + (dateFraction - asOf);
+}

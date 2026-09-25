@@ -1,0 +1,660 @@
+/*
+ * Shared page-frame components (docs/REDESIGN-V3.md "Page frame + shared
+ * components"): Page, PageHeader, StatStrip/Stat, StatCard, SectionCard,
+ * Segmented, Select, Badge, DeltaTag, StackedBar, ProgressBar, EmptyState,
+ * Eyebrow. Every token referenced here (--border, --chip, --ink, --in-tint,
+ * --mix-1..6, etc.) is defined in planner.css, which this file is imported
+ * after (src/App.tsx) so nothing here needs its own theme blocks — light and
+ * dark both fall out of the tokens already flipping.
+ */
+
+/* --- page + header --------------------------------------------------------- */
+
+.ns-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 32px 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+/* 1023px, not 1024 (S10): matches `useBreakpoint.ts`'s tablet query, so the
+   page padding and the rail/top-bar swap change at the same width. */
+@media (max-width: 1023px) {
+  .ns-page {
+    padding: 24px 24px 72px;
+  }
+}
+@media (max-width: 640px) {
+  .ns-page {
+    padding: 16px 16px 64px;
+    gap: 20px;
+  }
+}
+
+.ns-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.ns-page-header-main {
+  min-width: 0;
+}
+.ns-page-title {
+  margin: 0;
+  font-size: clamp(22px, 2.4vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink-deep);
+}
+.ns-page-meta {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.ns-page-header-side {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* Goodcast's "● Claude · nightly forecast / Run #471 complete" idea — a
+   quiet, bordered chip rather than a colored badge, since a sync/run state
+   isn't itself the kind of value "colour is data" reserves saturation for. */
+.ns-page-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  color: var(--muted);
+  background: var(--chip);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.ns-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- eyebrow ---------------------------------------------------------------- */
+
+.ns-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  /* S7: 600 read heavier than the references for a mono small-caps label. */
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* --- badge / delta tag ------------------------------------------------------ */
+
+.ns-ui-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ns-ui-badge-neutral {
+  color: var(--muted);
+  background: var(--chip);
+}
+.ns-ui-badge-in {
+  color: var(--in-deep);
+  background: var(--in-tint);
+}
+.ns-ui-badge-out {
+  color: var(--out-deep);
+  background: var(--out-tint);
+}
+.ns-ui-badge-accent {
+  color: var(--accent);
+  background: var(--chip);
+}
+
+.ns-ui-delta {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ns-ui-delta-in {
+  color: var(--in-deep);
+  background: var(--in-tint);
+}
+.ns-ui-delta-out {
+  color: var(--out-deep);
+  background: var(--out-tint);
+}
+.ns-ui-delta-neutral {
+  color: var(--muted);
+  background: var(--chip);
+}
+
+/* --- stat strip -------------------------------------------------------------
+ * Divider-separated, not boxed: hairline vertical rules between stats, one
+ * `xl` figure and several quieter `md` ones (docs/REDESIGN-V3.md "Goodcast").
+ * ---------------------------------------------------------------------------*/
+
+/* Grid, not flex-wrap: a wrapped 4th flex item had no row gap and kept its
+   border-left (the exact collision the 721-1100px range used to show). A
+   grid's own row-gap and the 1100px reflow below both come for free once the
+   strip stops relying on wrapping to lay out its own children. */
+.ns-ui-stat-strip {
+  display: grid;
+  /* Not `auto`: an XL stat with a long `sub` sentence sized its own column
+     to fit that sentence, squeezing the other three stats down to ~150px
+     at 1440px. `1.4fr` gives it a bigger, but still bounded, share instead
+     of unlimited content-based growth. */
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  row-gap: 16px;
+}
+.ns-ui-stat {
+  display: flex;
+  flex-direction: column;
+  /* flex-start, not center: a stat with a `sub` line is taller than one
+     without, and centring made every eyebrow land on a different baseline
+     (docs/REVIEW.md M2). Flex-start keeps every label on the strip's own
+     top line, sub or no sub. */
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 28px;
+  border-left: 1px solid var(--rule);
+}
+.ns-ui-stat:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.ns-ui-stat-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A pressable stat (docs/REVIEW.md M3) — `Stat` renders as a real `<button>`
+   when it's given an `onClick`, so a stat that toggles something (Overview's
+   "Range P10-P90") keeps the strip's own divider/padding instead of a
+   wrapping `<button>` shifting `:first-child`/`:nth-child` counts out from
+   under every rule above and below. Reset to plain text chrome; the
+   border-left stays, since that's the strip's own divider, not button
+   chrome. Pressed/hover state is a neutral chip fill, never a data hue
+   (docs/REVIEW.md S16) — this is a UI affordance, not a value. */
+.ns-ui-stat-pressable {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  transition: background-color 140ms var(--ease-soft);
+}
+.ns-ui-stat-pressable:hover,
+.ns-ui-stat-pressable[aria-pressed='true'] {
+  background: var(--chip);
+  border-radius: 8px;
+}
+/* Deliberately not .ns-num — proportional figures, the same reason the old
+   hero figure stayed proportional (docs/REDESIGN-V3.md keeps "colour is
+   data" company): a display-size number should read as a number, not a
+   printout. Tabular-nums is for grids of small figures read as a column. */
+.ns-ui-stat-value {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: var(--ink-deep);
+}
+.ns-ui-stat-xl .ns-ui-stat-value {
+  font-size: clamp(34px, 4vw, 48px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.ns-ui-stat-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+/* Caps the XL stat's sub line to a readable measure so it wraps onto a
+   second line at a sane width instead of stretching wide enough to pull
+   `$4.05M` down 13px below the other stats' own value baseline. */
+.ns-ui-stat-xl .ns-ui-stat-sub {
+  max-width: 52ch;
+}
+
+@media (max-width: 1100px) {
+  .ns-ui-stat-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ns-ui-stat {
+    padding-bottom: 14px;
+  }
+  .ns-ui-stat:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .ns-ui-stat:nth-child(n + 3) {
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+  }
+}
+
+/* --- stat card ---------------------------------------------------------------
+ * A bordered compact card for a row of secondary figures — Goodcast's
+ * horizon cards. Plain by default; `-clickable` picks up the same flat
+ * hover/press language as `.ns-btn`.
+ * ---------------------------------------------------------------------------*/
+
+.ns-ui-statcard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.ns-ui-statcard-clickable {
+  cursor: pointer;
+  transition:
+    border-color 140ms var(--ease-soft),
+    background-color 140ms var(--ease-soft),
+    transform 100ms var(--ease-soft);
+}
+.ns-ui-statcard-clickable:hover {
+  background: var(--surface-sub);
+  border-color: var(--border-strong);
+}
+.ns-ui-statcard-clickable:active {
+  transform: scale(0.985);
+}
+.ns-ui-statcard-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.ns-ui-statcard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ns-ui-statcard-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.ns-ui-statcard-value {
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+.ns-ui-statcard-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+/* Default (desktop): the badge lives in the head, next to the label — see
+   the comment on `StatCard.tsx`'s two-copy render for why a page can swap
+   this at a breakpoint instead of reordering DOM. */
+.ns-ui-statcard-badge-foot {
+  display: none;
+}
+
+/* --- section card ------------------------------------------------------------
+ * A card with a header row: title, an eyebrow-style meta, actions, then a
+ * body — every page's primary chart/table and secondary cards reach for
+ * this instead of hand-rolling `.ns-card` + a bespoke title row.
+ * ---------------------------------------------------------------------------*/
+
+.ns-ui-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* S6: tightened a little from 18px 22px — Goodcast keeps the head close
+     to the body rather than floating a tall band above it. */
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+/* S6: the divider is opt-in (`SectionCard`'s `divider` prop, default true —
+   current look is unchanged unless a caller opts out, e.g. a chart card
+   that wants its title to sit closer to the plot with no rule between). */
+.ns-ui-section-head-flat {
+  border-bottom: 0;
+  padding-bottom: 10px;
+}
+.ns-ui-section-head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.ns-ui-section-title {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+.ns-ui-section-meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ns-ui-section-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ns-ui-section-body {
+  padding: 20px 22px;
+}
+.ns-ui-section-body-flush {
+  padding: 0;
+}
+
+@media (max-width: 640px) {
+  .ns-ui-section-head {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+  }
+  .ns-ui-section-body {
+    padding: 16px;
+  }
+  /* `flex: none` (above) can't shrink — on a 390px card a header action as
+     wide as the ledger toolbar (Select + window pager) clipped past the
+     card's own right edge. Letting it wrap onto its own full-width row
+     fixes that without touching the desktop layout. */
+  .ns-ui-section-actions {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
+/* --- segmented control -------------------------------------------------------
+ * A real radiogroup: one tab-stop, arrow keys move focus and the selection.
+ * ---------------------------------------------------------------------------*/
+
+.ns-ui-segmented {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--track);
+  border-radius: 8px;
+  padding: 3px;
+}
+.ns-ui-segment {
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-soft), color 140ms var(--ease-soft);
+}
+.ns-ui-segment:hover {
+  color: var(--ink);
+}
+.ns-ui-segment-active {
+  color: var(--ink-deep);
+  font-weight: 600;
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+.ns-ui-segmented-sm .ns-ui-segment {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* --- select (native-select replacement) --------------------------------------
+ * A trigger button + popover listbox: arrow keys move the highlighted
+ * option, Enter commits, Escape/outside-click closes without changing
+ * anything, typing jumps by label.
+ * ---------------------------------------------------------------------------*/
+
+.ns-ui-select {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ns-ui-select-label {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+/* M11: the muted prefix shown before the selected value ("Compare" before
+   "None") — the trigger's `placeholder` prop doubles as this prefix once a
+   value is chosen, so a caller gets a labeled control for free instead of
+   the bare value text a screen reader (and a sighted user) previously had
+   no way to identify. */
+.ns-ui-select-prefix {
+  color: var(--muted);
+  margin-right: 4px;
+}
+.ns-ui-select-trigger {
+  font: inherit;
+  font-size: var(--fs-body);
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 140px;
+  height: 34px;
+  padding: 0 10px 0 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease-soft), background-color 140ms var(--ease-soft);
+}
+.ns-ui-select-trigger:hover {
+  background: var(--surface-sub);
+}
+.ns-ui-select-trigger svg {
+  flex: none;
+  color: var(--muted);
+  transition: transform 140ms var(--ease-soft);
+}
+.ns-ui-select-trigger[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.ns-ui-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-ui-select-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(18, 48, 76, 0.16);
+}
+.ns-ui-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: var(--fs-body);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ns-ui-select-option svg {
+  flex: none;
+  /* S16: ink, not --accent — the checkmark is a chrome affordance ("this is
+     the selected one"), not a value being encoded. */
+  color: var(--ink);
+}
+.ns-ui-select-option-active {
+  background: var(--chip);
+}
+
+/* --- stacked bar (account-mix "classification" bar) ---------------------------
+ * One rounded, proportional bar with a 2px gap between segments, plus a dot
+ * legend. Segment colors come from the caller (`accountClassColor` below
+ * for the account-mix case) — this component only lays them out.
+ * ---------------------------------------------------------------------------*/
+
+.ns-ui-stackedbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ns-ui-stackedbar-track {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--track);
+}
+.ns-ui-stackedbar-seg {
+  height: 100%;
+}
+.ns-ui-stackedbar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+}
+.ns-ui-stackedbar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-meta);
+}
+.ns-ui-stackedbar-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.ns-ui-stackedbar-legend-label {
+  color: var(--muted);
+}
+.ns-ui-stackedbar-legend-value {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* --- progress bar -------------------------------------------------------------*/
+
+.ns-ui-progress-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--track);
+}
+.ns-ui-progress-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.ns-ui-progress-in .ns-ui-progress-fill {
+  background: var(--in);
+}
+.ns-ui-progress-out .ns-ui-progress-fill {
+  background: var(--out);
+}
+.ns-ui-progress-neutral .ns-ui-progress-fill {
+  background: var(--muted-light);
+}
+.ns-ui-progress-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--ink);
+  transform: translateX(-1px);
+}
+
+/* --- empty state --------------------------------------------------------------*/
+
+.ns-ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  text-align: center;
+}
+.ns-ui-empty-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--chip);
+  color: var(--muted);
+}
+.ns-ui-empty-title {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+.ns-ui-empty-body {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.ns-ui-empty-action {
+  margin-top: 6px;
+  display: flex;
+  gap: 8px;
+}

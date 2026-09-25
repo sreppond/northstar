@@ -12,8 +12,14 @@ import { eventDetail } from "./detail";
 import { HoverCard } from "./HoverCard";
 import type { Detail } from "./detail";
 import { axisMoney, money, signedMoney } from "./format";
+import type { ProgressPoint } from "./progress";
+import { planAsOfFraction, yearFraction } from "./progress";
 import {
+  actualPointYear,
   clampYear,
+  domainStartYear as computeDomainStartYear,
+  niceAxisTicks,
+  packLabelLanes,
   quantiseYear,
   rubberBandYear,
   xForYear,
@@ -43,6 +49,10 @@ const PLOT_BOTTOM = 336;
 // planner.css's `.ns-event-dot-mark` (real px, not a viewBox unit — see why
 // in that rule's comment).
 const TOP_LABEL_COUNT = 4;
+/** Below this measured render width, four standing labels have nowhere to
+    go — drop to the top two by impact instead (docs/REVIEW.md M7). */
+const NARROW_LABEL_COUNT = 2;
+const NARROW_CHART_PX = 640;
 const LABEL_TOP = PLOT_TOP + 8;
 const LABEL_LANE_H = 20;
 const LABEL_GAP = 14;
@@ -119,10 +129,18 @@ export interface FanSeries {
 interface Props {
   result: PlanResult;
   /** The whole plan, not just its events — ranking a dot's label needs to
-      re-run the projection with that one event excluded (see `rankImpact`). */
+      re-run the projection with that one event excluded (see `rankImpact`),
+      and the TODAY marker reads `plan.settings.asOfDate` off it. */
   plan: Plan;
   rateLabel: string;
   selected: ChartSelection | null;
+  /** Suppresses this component's own title/legend row. `OverviewPage.tsx`
+      sets this so the chart can live inside a `SectionCard` whose header
+      carries the title, an eyebrow meta line and the range toggle instead
+      (docs/REDESIGN-V3.md "legend/range toggle moved into the card header
+      actions"). `ComparePage.tsx` doesn't pass it, so its own bare `.ns-card`
+      layout — which has no header of its own — keeps working unchanged. */
+  hideHead?: boolean;
   /** A second plan drawn alongside, clipped to this plan's horizon. */
   compare?: CompareSeries;
   fan?: FanSeries;
@@ -130,6 +148,12 @@ interface Props {
   markers: PathMarkers;
   /** False when nothing in the plan has a market return to flex. */
   canFan: boolean;
+  /** Logged historical net worth (docs/REVIEW.md B1, `progress.ts`). Absent
+      or empty leaves the chart exactly as it was: a pure projection with
+      nothing to its left. When present, the x-domain extends back to the
+      earliest one, drawn as a solid line with dots up to a dotted, labelled
+      TODAY rule; the projection itself turns dashed from today on. */
+  actuals?: ProgressPoint[];
   onToggleFan(): void;
   onSelect(selection: ChartSelection | null): void;
   /** The year under the pointer while scrubbing, continuously, or `null`
@@ -160,6 +184,8 @@ export function NetWorthChart({
   fan,
   markers,
   canFan,
+  actuals,
+  hideHead,
   onToggleFan,
   onSelect,
   onScrubYear,
@@ -174,6 +200,27 @@ export function NetWorthChart({
   // nothing else; not read for any layout or interaction decision.
   const [justLandedId, setJustLandedId] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Real rendered width, in px (docs/REVIEW.md M7) — label lane-packing has
+  // to measure against the chart's ACTUAL box, not the viewBox's own fixed
+  // 1176 units, because `preserveAspectRatio="none"` (see `.ns-chart svg` in
+  // planner.css) stretches the svg to fill whatever the page gives it. 800
+  // is a reasonable pre-measurement default: close to the phone-breakpoint
+  // scroll width, so there's no label-collision flash before the first
+  // measurement lands.
+  const [chartWidthPx, setChartWidthPx] = useState(800);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) setChartWidthPx(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const unitsPerPx = chartWidthPx > 0 ? VB_W / chartWidthPx : 1;
+  const topLabelCount = chartWidthPx < NARROW_CHART_PX ? NARROW_LABEL_COUNT : TOP_LABEL_COUNT;
   // A click follows a real drag's pointerup practically for free (see the
   // comment on `handleDragEnd`); this swallows that one click so releasing a
   // drag never also toggles the chart's selection footer.
@@ -197,9 +244,29 @@ export function NetWorthChart({
   // element stays mounted and interactive throughout, just hidden with
   // CSS (`.ns-event-hide-source`, opacity only, `pointer-events` untouched)
   // once the drag has moved — see that class and the ghost/live marks below.
+  // Where the plan's own "today" sits as a fractional year — `years[0]` is
+  // prorated forward from this date, not from January 1st (`progress.ts`'s
+  // `planAsOfFraction`), so every actual point below has to be re-anchored
+  // against it rather than plotted at its own raw calendar fraction, or a
+  // point logged today lands to the right of `result.startYear` instead of
+  // on top of it.
+  const asOf = planAsOfFraction(plan.settings);
+
+  // The x-domain's left edge — pushed back to the earliest logged actual
+  // point when there is one (docs/REVIEW.md B1), otherwise identical to
+  // `result.startYear` and every existing pixel-for-pixel behaviour holds.
+  const domainStartYear = useMemo(
+    () =>
+      computeDomainStartYear(
+        (actuals ?? []).map((p) => actualPointYear(yearFraction(p.date), asOf, result.startYear)),
+        result.startYear,
+      ),
+    [actuals, result.startYear, asOf],
+  );
+
   const geometry = useMemo(
-    () => build(result, plan.events, impactByEventId, compare, fan),
-    [result, plan.events, impactByEventId, compare, fan],
+    () => build(result, plan.events, impactByEventId, compare, fan, domainStartYear, unitsPerPx, topLabelCount, actuals, asOf),
+    [result, plan.events, impactByEventId, compare, fan, domainStartYear, unitsPerPx, topLabelCount, actuals, asOf],
   );
   const hover =
     hoverYear === null ? null : (geometry.pointByYear.get(hoverYear) ?? null);
@@ -208,6 +275,21 @@ export function NetWorthChart({
       ? null
       : (result.years.find((y) => y.year === hoverYear) ?? null);
 
+  // The dotted TODAY marker (docs/REDESIGN-V3.md "Overview"): the one year on
+  // this line that is a fact rather than a projection. Read straight off the
+  // plan rather than passed as a prop — `asOfDate` (a calendar date) or,
+  // lacking one, the plan's own start year, exactly the fallback
+  // `format.ts`'s `planMetaLine` uses for the same field. Clamped into the
+  // plotted range so a stale `asOfDate` outside a re-windowed plan can never
+  // draw the line off the edge of the chart.
+  const parsedAsOfYear = plan.settings.asOfDate ? Number(plan.settings.asOfDate.slice(0, 4)) : NaN;
+  const todayYear = clampYear(
+    Number.isFinite(parsedAsOfYear) ? parsedAsOfYear : plan.settings.startYear,
+    result.startYear,
+    result.endYear,
+  );
+  const todayX = geometry.xFor(todayYear);
+
   // --- scrub (docs/REDESIGN.md §4.1, design-direction move 4) --------------
   // Screen -> year goes through the chart's OWN rendered box, not any fixed
   // ratio, because `preserveAspectRatio="none"` (see `.ns-chart svg` in
@@ -215,7 +297,15 @@ export function NetWorthChart({
   const yearFromClientX = (clientX: number): number => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return result.startYear;
-    return yearForClientX(clientX, rect, CHART_BOUNDS, result.startYear, result.endYear);
+    // The domain's left edge, not `result.startYear` — with actuals present
+    // that edge sits further left, and every x on the rendered box has to be
+    // read against the SAME domain `build()` used to place the line, or a
+    // scrub/drag would silently disagree with where the curve actually is.
+    // Scrub and drag both still clamp their OWN result to
+    // `result.startYear`/`endYear` right after calling this (a plan year can
+    // never move earlier than the projection starts) — only this raw
+    // conversion needs the wider domain.
+    return yearForClientX(clientX, rect, CHART_BOUNDS, domainStartYear, result.endYear);
   };
 
   const scrubTo = (clientX: number) => {
@@ -364,6 +454,7 @@ export function NetWorthChart({
 
   return (
     <>
+      {!hideHead && (
       <div className="ns-chart-head">
         <h2>Projected net worth</h2>
         <div className="ns-legend">
@@ -421,6 +512,7 @@ export function NetWorthChart({
           )}
         </div>
       </div>
+      )}
 
       {/* A plan that runs out of money is the single most important thing this
           screen can say, and it used to say it only as a table row you had to
@@ -483,6 +575,19 @@ export function NetWorthChart({
               />
             ))}
 
+            {/* The one year on this line that is a fact rather than a
+                projection (docs/REDESIGN-V3.md "Overview"). Dotted and
+                behind everything else — it is a reference mark, not a
+                finding, so it should read quieter than the gridlines it
+                crosses. */}
+            <line
+              x1={todayX}
+              x2={todayX}
+              y1={PLOT_TOP}
+              y2={PLOT_BOTTOM}
+              className="ns-today-line"
+            />
+
             {/* With the fan on, the band is the fill that means something. The
                 area gradient stacks with it and makes the lower edge read as a
                 crossing, so it steps back to a faint grounding wash. */}
@@ -505,14 +610,18 @@ export function NetWorthChart({
                 style={{ opacity: hotEdge ? 0.35 : 1 }}
               />
             )}
+            {/* Both edges in the net-worth hue (docs/REVIEW.md S3) — the fan is
+                one plan under two assumptions, not two different things,
+                and drawing P90/P10 in green/orange read as if they were
+                separate series. */}
             {geometry.highEdge && (
               <path
                 className="ns-fan-edge"
                 d={geometry.highEdge.d}
                 fill="none"
-                stroke="var(--green)"
+                stroke="var(--data-nw)"
                 strokeWidth={hotEdge === "high" ? 2.4 : 1.6}
-                strokeOpacity={hotEdge === "low" ? 0.28 : 0.85}
+                strokeOpacity={hotEdge === "low" ? 0.2 : 0.55}
                 strokeDasharray="3 5"
                 strokeLinecap="round"
               />
@@ -522,9 +631,9 @@ export function NetWorthChart({
                 className="ns-fan-edge"
                 d={geometry.lowEdge.d}
                 fill="none"
-                stroke="var(--out-strong)"
+                stroke="var(--data-nw)"
                 strokeWidth={hotEdge === "low" ? 2.4 : 1.6}
-                strokeOpacity={hotEdge === "high" ? 0.28 : 0.85}
+                strokeOpacity={hotEdge === "high" ? 0.2 : 0.55}
                 strokeDasharray="3 5"
                 strokeLinecap="round"
               />
@@ -544,6 +653,24 @@ export function NetWorthChart({
               />
             )}
 
+            {/* Actual vs forecast (docs/REVIEW.md B1): a solid ink line for
+                what net worth actually was, bridged straight into the
+                projection's own first point so the two visibly join at
+                "today" rather than leaving a gap. Absent entirely with no
+                logged points — `geometry.actualLine` is `undefined` and
+                nothing here changes from before. */}
+            {geometry.actualLine && (
+              <path
+                className="ns-actual-line"
+                d={geometry.actualLine}
+                fill="none"
+                stroke="var(--ink)"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+
             <path
               className="ns-nw-line"
               d={geometry.line}
@@ -553,6 +680,10 @@ export function NetWorthChart({
               strokeLinecap="round"
               strokeLinejoin="round"
               filter="url(#ns-line-lift)"
+              // Dashed from today on, once there's an actual line to its
+              // left to contrast with (docs/REVIEW.md B1) — with no actuals
+              // this stays a solid line exactly as before.
+              strokeDasharray={geometry.actualLine ? "7 5" : undefined}
             />
 
             {/* The leader is the only part of an event's mark still drawn in
@@ -573,33 +704,19 @@ export function NetWorthChart({
               />
             ))}
 
+            {/* The ring itself is HTML now, not an svg circle (docs/REVIEW.md
+                S4) — see `.ns-hover-ring` below. Only the vertical guide
+                line stays here: a 1px line barely shows the couple-percent
+                non-uniform `preserveAspectRatio="none"` stretch, the same
+                call already made for the event leader lines above. */}
             {hover && (
-              <>
-                <line
-                  x1={hover.x}
-                  x2={hover.x}
-                  y1={PLOT_TOP}
-                  y2={PLOT_BOTTOM}
-                  stroke="var(--accent)"
-                  strokeWidth={1}
-                />
-                <circle
-                  cx={hover.x}
-                  cy={hover.y}
-                  r={5.5}
-                  fill="var(--surface)"
-                  stroke="var(--accent)"
-                  strokeWidth={2.5}
-                />
-              </>
-            )}
-
-            {geometry.first && (
-              <circle
-                cx={geometry.first.x}
-                cy={geometry.first.y}
-                r={4.5}
-                fill="var(--data-nw)"
+              <line
+                x1={hover.x}
+                x2={hover.x}
+                y1={PLOT_TOP}
+                y2={PLOT_BOTTOM}
+                stroke="var(--accent)"
+                strokeWidth={1}
               />
             )}
           </svg>
@@ -615,15 +732,58 @@ export function NetWorthChart({
               </div>
             ))}
 
+            {/* The tick at the TODAY year gets a name instead of its number
+                (docs/REDESIGN-V3.md "Overview") — a standalone "TODAY" label
+                up near the plot's top edge collided with the first lane of
+                standing event labels whenever an event started in the same
+                year the plan does (a common case: the first job or account
+                often opens on day one). Marking the axis instead keeps the
+                dotted line's meaning legible with nothing else to dodge. */}
             {geometry.xTicks.map((t) => (
               <div
                 key={t.year}
-                className="ns-x-tick"
+                className={`ns-x-tick${t.year === todayYear ? " ns-x-tick-today" : ""}`}
                 style={{ left: pct(t.x, VB_W), top: "93%" }}
               >
-                {t.year}
+                {t.year === todayYear ? "Today" : t.year}
               </div>
             ))}
+
+            {/* A standalone labelled TODAY rule (docs/REVIEW.md B1) — only
+                needed once there's history to its left; the x-axis's own
+                "Today" tick already carries this meaning on its own
+                otherwise (see the comment above). */}
+            {geometry.actualLine && (
+              <div className="ns-today-label" style={{ left: pct(todayX, VB_W), top: pct(PLOT_TOP, VB_H) }}>
+                TODAY
+              </div>
+            )}
+
+            {/* Logged actual points (docs/REVIEW.md B1) — small solid ink
+                dots along `geometry.actualLine`, the same treatment
+                `.ns-first-dot` gets for the projection's own start. */}
+            {geometry.actualPoints.map((p) => (
+              <div
+                key={`actual-${p.id}`}
+                className="ns-actual-dot"
+                style={{ left: pct(p.x, VB_W), top: pct(p.y, VB_H) }}
+              />
+            ))}
+
+            {/* The projection's own start ("today") and the scrub hover ring
+                — HTML, not svg circles (docs/REVIEW.md S4): the same
+                non-uniform `preserveAspectRatio="none"` stretch that turns
+                event dots oval as an svg circle does exactly the same thing
+                here, just less noticeably at r=4.5/5.5. */}
+            {geometry.first && (
+              <div
+                className="ns-first-dot"
+                style={{ left: pct(geometry.first.x, VB_W), top: pct(geometry.first.y, VB_H) }}
+              />
+            )}
+            {hover && (
+              <div className="ns-hover-ring" style={{ left: pct(hover.x, VB_W), top: pct(hover.y, VB_H) }} />
+            )}
 
             {/* One pointer-capture surface spans the whole plot, replacing
                 the old per-year hover bands with continuous 1:1 scrubbing
@@ -755,6 +915,24 @@ export function NetWorthChart({
                   onHover={setHotEdge}
                 />
               </>
+            )}
+            {/* The base line's own end point, labelled to match — with the
+                two edge chips reading "P90"/"P10" a bare number would read
+                as unlabelled by comparison (docs/REDESIGN-V3.md "Goodcast":
+                direct end labels "P90 … / P50 … / P10 …"). Shown in Plan
+                mode too, not just alongside the fan (docs/REVIEW.md S3) — the
+                base line always has an end worth naming. Static, not a
+                HoverCard trigger: it's the plan's own line, already fully
+                described by the hero reading above it. */}
+            {geometry.last && (
+              <div
+                className="ns-fan-slot"
+                style={{ right: pct(VB_W - geometry.last.x, VB_W), top: pct(geometry.last.y, VB_H) }}
+              >
+                <span className="ns-fan-chip ns-fan-chip-mid">
+                  P50 {money(geometry.last.value)}
+                </span>
+              </div>
             )}
 
             {/* Notable points. Everything else on this line is gentle curve;
@@ -1079,8 +1257,12 @@ function FanChip({
       onMouseLeave={() => onHover(null)}
     >
       <HoverCard detail={detail} side={high ? "bottom" : "top"}>
+        {/* "P90"/"P10", not an arrow — the direct-label idiom this replaces
+            (docs/REDESIGN-V3.md "Goodcast": "P90 $67.1M / P50 $64.2M /
+            P10 $61.4M") names which percentile this edge is, which an arrow
+            only gestured at. */}
         <span className={`ns-fan-chip ns-fan-chip-${side}`}>
-          <span className="ns-fan-chip-mark">{high ? "▲" : "▼"}</span>
+          {high ? "P90 " : "P10 "}
           {money(value)}
         </span>
       </HoverCard>
@@ -1104,7 +1286,7 @@ function FanChip({
  * (`run.ts` reads it to set `endYear`), which would compare two different
  * years rather than the same year with and without the event.
  */
-function rankImpact(plan: Plan, result: PlanResult): Map<string, number> {
+export function rankImpact(plan: Plan, result: PlanResult): Map<string, number> {
   const baseEnd =
     result.years.find((y) => y.year === result.endYear)?.netWorth ??
     result.years[result.years.length - 1]?.netWorth ??
@@ -1142,15 +1324,23 @@ function build(
   result: PlanResult,
   events: PlanEvent[],
   impactByEventId: Map<string, number>,
-  compare?: CompareSeries,
-  fan?: FanSeries,
+  compare: CompareSeries | undefined,
+  fan: FanSeries | undefined,
+  domainStartYear: number,
+  unitsPerPx: number,
+  topLabelCount: number,
+  actuals: ProgressPoint[] | undefined,
+  asOf: number,
 ) {
   const years = result.years;
   const span = Math.max(1, result.endYear - result.startYear);
   // Delegates to the SAME formula chartMath.ts's live scrub/drag math uses
   // (`xForYear`), so the static line and a dragged dot's live position can
-  // never quietly disagree about where a year sits.
-  const xFor = (year: number) => xForYear(year, result.startYear, result.endYear, CHART_BOUNDS);
+  // never quietly disagree about where a year sits. `domainStartYear` is
+  // `result.startYear` unless actuals push it earlier (docs/REVIEW.md B1) —
+  // every existing caller (no actuals) sees byte-identical geometry to
+  // before.
+  const xFor = (year: number) => xForYear(year, domainStartYear, result.endYear, CHART_BOUNDS);
 
   // Clipped to the active plan's horizon: the comparison is "how does the other
   // plan do over MY window", not a merged timeline.
@@ -1169,6 +1359,10 @@ function build(
     ...years.map((y) => y.netWorth),
     ...compareYears.map((y) => y.netWorth),
     ...fanYears(fan?.high).map((y) => y.netWorth),
+    // A logged actual can be the plan's own high point (a market run-up
+    // since the last projection, say) — it has to be in the ceiling
+    // calculation too, or its dot would draw above the plot's top edge.
+    ...(actuals ?? []).map((p) => p.netWorth),
   );
   const top = honestCeiling(maxNetWorth);
   const yFor = (value: number) =>
@@ -1190,14 +1384,21 @@ function build(
       ? `${line} L${points[points.length - 1].x.toFixed(2)},${PLOT_BOTTOM} L${points[0].x.toFixed(2)},${PLOT_BOTTOM} Z`
       : "";
 
-  const gridStep = top / 4;
-  const gridlines = Array.from({ length: 5 }, (_, i) => {
-    const value = gridStep * i;
-    return { value, y: yFor(value) };
-  }).reverse();
+  // Nice 1/2/2.5/5 x 10^n steps rather than four robotic quarters of the
+  // ceiling (docs/REVIEW.md S2) — see chartMath.ts's `niceAxisTicks`.
+  const gridlines = niceAxisTicks(top)
+    .map((t) => ({ value: t.value, y: yFor(t.value) }))
+    .reverse();
 
-  // Roughly every other year, always including both endpoints.
-  const tickEvery = Math.max(1, Math.round(span / 10));
+  // Roughly every other year, always including both endpoints — every 5
+  // years instead on a narrow (phone-width) chart (docs/REVIEW.md B3),
+  // where a tick every 2 years is too dense to read once the chart fits the
+  // viewport instead of scrolling sideways. Still spans only the PROJECTED
+  // years — the actual-history stretch to the left of `result.startYear`
+  // (when there is one) reads off its own dots/leader line rather than
+  // numbered ticks.
+  const narrow = topLabelCount <= NARROW_LABEL_COUNT;
+  const tickEvery = narrow ? 5 : Math.max(1, Math.round(span / 10));
   const xTicks: { year: number; x: number }[] = [];
   for (let year = result.startYear; year <= result.endYear; year += tickEvery) {
     xTicks.push({ year, x: xFor(year) });
@@ -1205,6 +1406,28 @@ function build(
   if (xTicks[xTicks.length - 1]?.year !== result.endYear) {
     xTicks.push({ year: result.endYear, x: xFor(result.endYear) });
   }
+
+  // --- actual vs forecast (docs/REVIEW.md B1) -------------------------------
+  // Purely additive: with no actuals this whole section produces `undefined`
+  // and every other pixel in the chart is exactly what it was before.
+  const sortedActuals = (actuals ?? [])
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const actualPoints = sortedActuals.map((p) => ({
+    id: p.id,
+    x: xFor(actualPointYear(yearFraction(p.date), asOf, result.startYear)),
+    y: yFor(p.netWorth),
+  }));
+  // Bridged into the projection's own first point (`points[0]`, "today") so
+  // the solid actual line visually continues straight into the dashed
+  // projection rather than leaving a gap between the last real balance and
+  // the line that picks up from it.
+  const actualLine =
+    actualPoints.length > 0 && points.length > 0
+      ? [...actualPoints, { x: points[0].x, y: points[0].y }]
+          .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
+          .join(" ")
+      : undefined;
 
   // Every included event becomes a dot sitting AT the curve's own value in its
   // year — not a detached row above the plot (docs/REDESIGN.md §4.1). The
@@ -1230,44 +1453,51 @@ function build(
   }
 
   // Rank by |Δ net worth at horizon| and label the top few — a cluster of
-  // small early events no longer wins the label just by being first.
+  // small early events no longer wins the label just by being first. Drops
+  // to two on a narrow chart (`topLabelCount`, see `NARROW_CHART_PX` above).
   const topIds = new Set(
     dots
       .slice()
       .sort((a, b) => (impactByEventId.get(b.eventId) ?? 0) - (impactByEventId.get(a.eventId) ?? 0))
-      .slice(0, TOP_LABEL_COUNT)
+      .slice(0, topLabelCount)
       .map((d) => d.eventId),
   );
 
   // Labels pack into lanes near the top of the plot, left to right in time
-  // order, same collision rule the old pin row used: a label drops to the
-  // next lane down only when it would overlap the last one placed in its
-  // current lane. With at most four of them the lanes rarely go past one or
-  // two deep even when the events themselves are bunched in the same year.
-  const laneRightEdges: number[] = [];
-  const labels: EventLabel[] = [];
-  for (const d of dots) {
-    if (!topIds.has(d.eventId)) continue;
-    const width = estimateLabelWidth(d.event.name);
-    const left = d.x - width / 2;
-    let lane = laneRightEdges.findIndex((edge) => left >= edge);
-    if (lane === -1) lane = laneRightEdges.length;
-    laneRightEdges[lane] = left + width + LABEL_GAP;
-    const top = LABEL_TOP + lane * LABEL_LANE_H;
-
-    labels.push({
+  // order (chartMath.ts's `packLabelLanes`) — a label drops to the next lane
+  // down only when it would overlap the last one placed in its current
+  // lane. Widths are measured in real px (`estimateLabelWidth`, the same
+  // approximation the old pin row made) and converted to this geometry's
+  // viewBox units via `unitsPerPx`, since the chart's rendered width rarely
+  // matches its 1176-unit viewBox exactly (docs/REVIEW.md M7) — without that
+  // conversion the packing pass was comparing real-px label footprints
+  // against a viewBox that could be significantly narrower, which is what
+  // let labels overlap below 1440px.
+  const labelledDots = dots.filter((d) => topIds.has(d.eventId));
+  const packed = packLabelLanes(
+    labelledDots.map((d) => ({ id: d.eventId, x: d.x, width: estimateLabelWidth(d.event.name) * unitsPerPx })),
+    LABEL_GAP * unitsPerPx,
+    // Keeps a label centred on an event right at the plot's left edge from
+    // spilling into the y-axis tick gutter (docs/REVIEW.md: top tick hidden
+    // under the first event label).
+    PLOT_LEFT + 4,
+  );
+  const labels: EventLabel[] = labelledDots.map((d, i) => {
+    const pack = packed[i];
+    const top = LABEL_TOP + pack.lane * LABEL_LANE_H;
+    return {
       eventId: d.eventId,
       event: d.event,
       tone: d.tone,
-      left,
+      left: pack.left,
       top,
       leaderX: d.x,
       leaderY: top + 10,
       dotX: d.x,
       dotY: d.y,
       text: d.event.name,
-    });
-  }
+    };
+  });
 
   const compareLine =
     compareYears.length > 1
@@ -1325,6 +1555,12 @@ function build(
     // (rubber-banded, not-yet-quantised) year using the exact same mapping
     // the rest of this geometry was built from.
     xFor,
+    // Exposed for the same reason — the actual-vs-forecast overlay (below)
+    // needs the identical value scale the projection line itself used, or
+    // the two would visibly kink where they meet at "today."
+    yFor,
+    actualLine,
+    actualPoints,
   };
 }
 

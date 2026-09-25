@@ -6,6 +6,8 @@ import '@fontsource/ibm-plex-sans/700.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './planner/planner.css';
+import './planner/ui/ui.css';
+import './planner/pages/analysis.css';
 
 import { usePlanStore } from './planner/store/planStore';
 import { PlannerProvider, usePlanner } from './planner/PlannerContext';

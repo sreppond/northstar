@@ -60,14 +60,26 @@
      display number reads as a number rather than a printout. -- */
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* -- the persistent nav rail: a fixed dark surface in EITHER theme,
-     borrowed whole from Northstar v2's "genuine desktop IA" (design decision
-     #8 there) — real app chrome doesn't reskin with the content, so this is
-     deliberately NOT redefined in the dark-mode blocks below. -- */
-  --rail-bg: #14161f;
-  --rail-ink: rgba(255, 255, 255, 0.62);
-  --rail-ink-active: #ffffff;
-  --rail-accent: #345fd8;
+  /* -- type scale (docs/REDESIGN-V3.md review S7): the redesign's CSS had
+     accreted 15 distinct font sizes across ui.css and the page stylesheets.
+     These six are the canonical steps; ui.css consumes them below, and the
+     literal px values they replace should not come back piecemeal. -- */
+  --fs-eyebrow: 11px;
+  --fs-meta: 12.5px;
+  --fs-body: 13.5px;
+  --fs-title: 15px;
+  --fs-card: 21px;
+  --fs-stat: 26px;
+
+  /* -- the persistent nav rail. v3 (docs/REDESIGN-V3.md "Rail") drops the
+     always-dark rail: a light theme now gets a light rail (surface bg, 1px
+     right border) so the whole app commits to one theme rather than
+     wearing a permanently-dark strip down its left edge. Redefined in both
+     dark-mode blocks below, unlike the old always-dark version. -- */
+  --rail-bg: var(--surface);
+  --rail-border: var(--border);
+  --rail-ink: var(--muted);
+  --rail-ink-active: var(--ink);
 
   /* -- chrome: ground & surface. Values borrowed from Northstar v2's
      neutral ramp (Northstar-v2/src/index.css) — same slots, new tint. The
@@ -102,6 +114,33 @@
   /* -- data: net worth (slot 1) -- */
   --data-nw: #2a78d6;
   --fan-band: rgba(42, 120, 214, 0.08);
+
+  /* -- account-mix hues (docs/REDESIGN-V3.md "StackedBar"): a restrained,
+     desaturated set for the classification bar's account classes. This is
+     NOT one of the four validated data hues above — it is decorative
+     encoding for a fixed small set of categories, not a value someone
+     reads a magnitude off of, so it gets its own quiet ramp rather than
+     borrowing --in/--out/--cmp (which would make "type of account" look
+     like "money in vs. money out") or --danger (reserved for destructive
+     actions only). -- */
+  /* Re-stepped for docs/REDESIGN-V3.md review S18: the original six read as
+     gray (all below the OKLCH chroma floor) and the gold/green pair failed
+     the normal-vision separation floor outright. Validated with the dataviz
+     skill's `validate_palette.js` (adjacent AND all-pairs, both modes): all
+     six now clear the lightness band and chroma floor, adjacent pairs clear
+     CVD separation and the normal-vision floor with a wide margin (~17-21 ΔE
+     normal, vs. a 15 floor), and all-pairs clears the normal-vision floor too
+     (the harder CVD-simulated all-pairs check still flags one hardest pair
+     per mode — legal here since `StackedBar` always ships a text+value
+     legend as the secondary encoding). Chroma is capped well below the four
+     validated data hues (--in/--out/--data-nw/--cmp sit at C .14-.175) so
+     this still reads as a quieter, decorative ramp, not a fifth data hue. */
+  --mix-1: #005ba1;
+  --mix-2: #00631e;
+  --mix-3: #bf8c10;
+  --mix-4: #b97ed2;
+  --mix-5: #90332c;
+  --mix-6: #00a5aa;
 
   /* -- data: money in (slot 2) -- */
   --in: #1baf7a;
@@ -143,8 +182,12 @@
   --lit-a: 0.92;
   --lit-k: 1;
   --gloss-a: 0.26;
-  --glow-1: #e9f2fb;
-  --glow-2: #f1f7fc;
+  /* Neutralised per docs/REDESIGN-V3.md review S16 ("chrome is neutral") —
+     these were tinted blue, the same hue as --accent/--data-nw, which reads
+     as the page chrome quietly encoding a value it isn't. Flat warm-neutral
+     grays instead, re-stepped (not removed) in both dark blocks below. */
+  --glow-1: #f3f4f6;
+  --glow-2: #f5f6f8;
 
   --shadow-card: 0 1px 3px rgb(var(--sh) / calc(5% * var(--sh-k)));
   --shadow-control: 0 1px 2px rgb(var(--sh) / calc(6% * var(--sh-k)));
@@ -256,12 +299,28 @@
     --rule-light: #1e2229;
     --pill-border: #3a4048;
 
+    /* A real dark rail here, one step darker than --surface rather than
+       equal to it — the same "genuine chrome, not a reskinned card" reason
+       the old always-dark rail existed, just theme-aware now. */
+    --rail-bg: var(--surface-sub);
+    --rail-border: var(--border);
+    --rail-ink: var(--muted);
+    --rail-ink-active: var(--ink);
+
     --accent: #3987e5;
     --accent-press: #4e97ed;
     --accent-line: #2c4a6b;
 
     --data-nw: #3987e5;
     --fan-band: rgba(57, 135, 229, 0.12);
+
+    /* See the light :root block above for the S18 re-step rationale. */
+    --mix-1: #1469b0;
+    --mix-2: #197934;
+    --mix-3: #be8b0d;
+    --mix-4: #b379cc;
+    --mix-5: #a8443b;
+    --mix-6: #00aaae;
 
     --in: #199e70;
     --in-tint: #10291f;
@@ -291,8 +350,9 @@
     --lit-a: 0.055;
     --lit-k: 0.07;
     --gloss-a: 0.13;
-    --glow-1: #0e1a26;
-    --glow-2: #0d161f;
+    /* See the light :root block above for the S16 neutralisation rationale. */
+    --glow-1: #16181d;
+    --glow-2: #131519;
   }
 }
 
@@ -318,12 +378,24 @@
   --rule-light: #1e2229;
   --pill-border: #3a4048;
 
+  --rail-bg: var(--surface-sub);
+  --rail-border: var(--border);
+  --rail-ink: var(--muted);
+  --rail-ink-active: var(--ink);
+
   --accent: #3987e5;
   --accent-press: #4e97ed;
   --accent-line: #2c4a6b;
 
   --data-nw: #3987e5;
   --fan-band: rgba(57, 135, 229, 0.12);
+
+  --mix-1: #7fa1c4;
+  --mix-2: #93b98d;
+  --mix-3: #cbaf70;
+  --mix-4: #ad93bd;
+  --mix-5: #c68f79;
+  --mix-6: #8ab3b3;
 
   --in: #199e70;
   --in-tint: #10291f;
@@ -510,17 +582,24 @@
 }
 
 /* --- page frame -----------------------------------------------------------
- * A persistent left nav rail (Northstar v2's information architecture,
- * borrowed whole — docs/BORROW.md-style port) replaces the old floating
- * header: primary navigation, the plan switcher and the utility cluster
- * (⌘K, theme, overflow) all live in one fixed-width column; the routed page
- * fills the rest. Below the `tablet` breakpoint (`useBreakpoint.ts`) the
- * rail collapses into a horizontal scroll strip pinned to the top instead —
- * matches v2's own mobile treatment rather than a drawer/hamburger. */
+ * A persistent left nav rail: primary navigation, the plan switcher and the
+ * utility cluster (search/⌘K, theme, overflow) all live in one fixed-width
+ * column; the routed page fills the rest.
+ *
+ * v3 (docs/REDESIGN-V3.md "Rail + IA") replaces the old always-dark rail
+ * and its ≤1024px horizontal-scroll-strip fallback with two real layouts:
+ * a persistent column on desktop, and a 56px top bar + full-rail-as-sheet
+ * on mobile (`Sidebar.tsx` picks one over the other via `useBreakpoint`,
+ * rather than one flexbox trying to be both). ------------------------- */
 .ns {
   display: grid;
   grid-template-columns: 240px 1fr;
   align-items: start;
+  /* M5 (docs/REDESIGN-V3.md review): the grid's two rows (top bar/rail +
+     main) otherwise share `.ns`'s min-height:100vh as leftover space, which
+     pushes a short page's content down the screen instead of pinning it to
+     the top. */
+  align-content: start;
 }
 
 .ns-rail {
@@ -530,6 +609,7 @@
   display: flex;
   flex-direction: column;
   background: var(--rail-bg);
+  border-right: 1px solid var(--rail-border);
   color: var(--rail-ink);
   padding: 18px 14px;
   gap: 4px;
@@ -558,29 +638,94 @@
 
 /* The plan switcher — the single place the plan name lives (fixes the "shown
    twice" redundancy the old card title + header badge had). Opens the
-   existing plan-management overlay (`PlanSwitcher.tsx`), unchanged. */
+   existing plan-management overlay (`PlanSwitcher.tsx`), unchanged. A mono
+   sub-label ("2026–2046 · 21 yrs") stands in for the metadata line the old
+   single-row button had no room for — the data voice, because it's a
+   figure the plan computed, not a label someone wrote. */
 .ns-rail-plan {
   font: inherit;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
+  color: var(--rail-ink-active);
+  background: var(--chip);
+  border: 1px solid var(--rail-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-soft), border-color 140ms var(--ease-soft);
+}
+.ns-rail-plan:hover {
+  background: var(--track);
+}
+.ns-rail-plan-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ns-rail-plan-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--rail-ink);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 8px 10px;
-  margin-bottom: 14px;
-  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-soft), color 140ms var(--ease-soft);
 }
-.ns-rail-plan:hover {
+.ns-rail-plan-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--rail-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-rail-plan-chevron {
+  flex: none;
+  color: var(--rail-ink);
+}
+
+/* The search field standing in for the old bare "⌘K" stub — a real
+   affordance ("Search or jump…") rather than a keycap someone has to
+   already know the meaning of, with the keycap now a hint at its right
+   edge instead of the whole control. */
+.ns-rail-search {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  color: var(--rail-ink);
+  background: transparent;
+  border: 1px solid var(--rail-border);
+  border-radius: 8px;
+  padding: 7px 8px 7px 10px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-soft), color 140ms var(--ease-soft), border-color 140ms var(--ease-soft);
+}
+.ns-rail-search:hover {
   color: var(--rail-ink-active);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--chip);
+}
+.ns-rail-search svg {
+  flex: none;
+}
+.ns-rail-search span {
+  flex: 1;
+  text-align: left;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-rail-search kbd {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .ns-rail-nav {
@@ -589,22 +734,37 @@
   gap: 2px;
 }
 
-/* The one hairline in the rail — separates "the plan" (Overview…Annuity)
-   from "reading about the plan" (Progress/Compare/Reports) now that the
-   list is ten items. Chrome-neutral, the same rule the rest of the app
-   uses for a divider, just on the dark rail's own ink. */
-.ns-rail-divider {
-  height: 1px;
-  margin: 8px 10px;
-  background: rgba(255, 255, 255, 0.08);
+/* Eyebrow group labels (PLAN / GOALS / ANALYSIS) replace the single mid-list
+   hairline the old ten-flat-row rail used — three groups answer "author it"
+   (Plan), "how am I doing against a goal" (Goals) and "read about the plan"
+   (Analysis) as three different questions, not two. Overview sits above all
+   of them with no label of its own: it isn't a member of any group. */
+.ns-rail-eyebrow {
+  margin: 12px 10px 4px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  /* S7: 600 read heavier than the references for a mono small-caps label —
+     matches the same drop on `.ns-eyebrow` in ui.css. */
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rail-ink);
+  opacity: 0.7;
+}
+.ns-rail-nav > .ns-rail-eyebrow:first-child {
+  margin-top: 4px;
 }
 
+/* Active row: --chip background + ink text + medium weight — no saturated
+   fill. The old active state was a solid accent-blue slab, the loudest
+   element on every single page and a direct violation of "colour is data"
+   (docs/REDESIGN-V3.md item 7). */
 .ns-rail-link {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
-  border-radius: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
   font-size: 13.5px;
   font-weight: 500;
   color: var(--rail-ink);
@@ -617,14 +777,26 @@
 }
 .ns-rail-link:hover {
   color: var(--rail-ink-active);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--chip);
 }
 .ns-rail-link.active {
   color: var(--rail-ink-active);
-  background: var(--rail-accent);
+  background: var(--chip);
+  font-weight: 600;
 }
 .ns-rail-link.active svg {
   opacity: 1;
+}
+/* The muted "Add" hint on Annuity when the plan has none yet — points at
+   the page's own EmptyState action rather than duplicating its copy. */
+.ns-rail-link-hint {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--rail-ink);
+  opacity: 0.6;
 }
 
 .ns-rail-footer {
@@ -633,53 +805,17 @@
   align-items: center;
   gap: 4px;
   padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--rail-border);
 }
 .ns-rail-footer .ns-theme,
-.ns-rail-footer .ns-head-icon-btn,
-.ns-rail-footer .ns-cmdk-stub {
+.ns-rail-footer .ns-head-icon-btn {
   color: var(--rail-ink);
 }
 .ns-rail-footer .ns-theme:hover,
-.ns-rail-footer .ns-head-icon-btn:hover,
-.ns-rail-footer .ns-cmdk-stub:hover {
+.ns-rail-footer .ns-head-icon-btn:hover {
   color: var(--rail-ink-active);
-  background: rgba(255, 255, 255, 0.1);
-  border-color: transparent;
-}
-.ns-rail-footer .ns-cmdk-stub {
-  flex: 1;
-  justify-content: center;
-}
-
-/* ⌘K, the theme toggle and the overflow menu read as one quiet utility
-   cluster: same footprint, same hover treatment, neutral until touched. Reused
-   verbatim from the old header — just re-parented into the rail footer. */
-.ns-cmdk-stub {
-  font: inherit;
-  display: inline-flex;
-  align-items: center;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted-light);
-  cursor: pointer;
-  transition:
-    background-color 140ms var(--ease-soft),
-    color 140ms var(--ease-soft),
-    border-color 140ms var(--ease-soft);
-}
-.ns-cmdk-stub:hover {
-  color: var(--ink);
   background: var(--chip);
-  border-color: var(--border);
-}
-.ns-cmdk-stub kbd {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.03em;
+  border-color: transparent;
 }
 
 .ns-theme,
@@ -695,7 +831,7 @@
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   transition:
     background-color 140ms var(--ease-soft),
@@ -731,6 +867,96 @@
   color: var(--muted-light);
 }
 
+/* --- mobile top bar + rail-as-sheet ---------------------------------------
+ * Below 1024px `Sidebar.tsx` renders this instead of the persistent
+ * `.ns-rail` — a 56px bar (brand mark, plan switcher, menu button) with the
+ * full rail available as a left sheet over a scrim. Replaces the old
+ * horizontal icon-strip, which scrolled the plan name and half the
+ * destinations off-screen (docs/REDESIGN-V3.md audit item 11). */
+.ns-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--rail-bg);
+  border-bottom: 1px solid var(--rail-border);
+  color: var(--rail-ink-active);
+}
+.ns-topbar-brand {
+  flex: none;
+  display: flex;
+  padding: 6px;
+}
+.ns-topbar-brand img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.ns-topbar .ns-rail-plan {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  /* S10: unconstrained, this stretched to ~920px at the 1024px width the
+     old (max-width:1024px) tablet breakpoint let slip through to the mobile
+     top bar. */
+  max-width: 360px;
+}
+.ns-topbar-menu {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rail-ink-active);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-soft), border-color 140ms var(--ease-soft);
+}
+.ns-topbar-menu:hover {
+  background: var(--chip);
+  border-color: var(--rail-border);
+}
+
+.ns-rail-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(18, 48, 76, 0.26);
+  backdrop-filter: blur(3px) saturate(0.92);
+  animation: ns-fade-in 200ms var(--ease-soft) both;
+}
+/* The rail rendered as a sheet reuses every `.ns-rail-*` rule above — only
+   its own positioning, width and entrance differ from the persistent
+   column, so this stays a modifier rather than a parallel set of classes
+   that could drift from the desktop rail. */
+.ns-rail-sheet {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 46;
+  width: 280px;
+  max-width: 84vw;
+  height: auto;
+  box-shadow: 8px 0 32px rgba(18, 48, 76, 0.2);
+  animation: ns-sheet-in 220ms var(--ease-soft) both;
+}
+@keyframes ns-sheet-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 .ns-main {
   /* `width: 100%` is load-bearing, not decoration: as a direct CSS Grid
      item, `width: auto` + `margin: 0 auto` shrink-to-fits the content
@@ -749,97 +975,87 @@
      override; the inner `overflow-x: auto` surfaces then do their job of
      scrolling their own wide content instead of stretching this column. */
   min-width: 0;
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 32px 34px 88px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  /* v3: no longer imposes the page's own max-width/padding/gap — every
+     route now wraps its content in `<Page>` (src/planner/ui/Page.tsx),
+     which owns that rhythm so it can vary by breakpoint independently of
+     the grid column that holds it. */
 }
 
 /* A card is read, not pressed — a hairline and one soft shadow, no jelly
    highlight (docs/REDESIGN.md §5.2: depth is a signal of interactivity, not
    a texture applied everywhere). No hover state either — a card is a
-   surface, not a control. */
+   surface, not a control.
+   v3 (docs/REDESIGN-V3.md "Chrome goes crisp") tightens the radius from 22
+   to 14 — the Goodcast/Fenisco references' cards read as crisp rectangles,
+   not domes, and 22px was the last visible trace of the jelly geometry. */
 .ns-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: 14px;
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
 /* --- controls ------------------------------------------------------------ */
 
+/* v3 (docs/REDESIGN-V3.md "Chrome goes crisp"): flat, 1px border, 8px
+   radius, 32-36px tall. The jelly dome (rise/hover-lift/press box-shadows,
+   the ::after gloss sheen) is gone; all that survives of the press
+   choreography is a plain scale(0.98) on :active, and even that yields to
+   `prefers-reduced-motion` via the global transition-duration override
+   above. */
 .ns-btn {
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 13px;
-  padding: 10px 16px;
+  border-radius: 8px;
+  height: 34px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
-  box-shadow: var(--jelly-rise);
+  box-shadow: var(--shadow-control);
+  transition:
+    background-color 140ms var(--ease-soft),
+    border-color 140ms var(--ease-soft),
+    transform 100ms var(--ease-soft);
 }
 .ns-btn:hover:not(:disabled) {
   background: var(--surface-sub);
-  box-shadow: var(--jelly-rise-hi);
+  border-color: var(--border-strong);
 }
 .ns-btn:active:not(:disabled) {
-  box-shadow: var(--jelly-press);
+  transform: scale(0.98);
 }
 
-/* The primary action is a dome of INK, not of colour. It used to be a blue
-   gradient, which put the loudest hue on screen on a button rather than on
-   the projection — and made the app look like every other one. Ink outranks
-   every neutral around it without spending the colour budget. */
+/* The primary action is solid ink, not a dome of it. It used to be a blue
+   gradient, then a lit dome — both put more visual weight on a button than
+   on the projection it sits above. Ink outranks every neutral around it
+   without spending the colour budget: --ink/--surface already flip with the
+   theme (near-black on white in light, near-white on dark ink in dark), so
+   this one rule reads correctly in both without a dark-mode override. */
 .ns-btn-primary {
-  position: relative;
   color: var(--surface);
   background-color: var(--ink);
   border-color: var(--ink);
-  padding: 10px 18px;
-  overflow: hidden;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / calc(0.22 * var(--lit-k) + 0.04)),
-    inset 0 -2px 5px rgb(0 0 0 / 0.22),
-    0 1px 2px rgb(var(--sh) / calc(14% * var(--sh-k))),
-    0 5px 12px -4px rgb(var(--sh) / calc(26% * var(--sh-k)));
-}
-.ns-btn-primary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--jelly-gloss);
-  pointer-events: none;
 }
 .ns-btn-primary:hover:not(:disabled) {
   background-color: var(--ink-deep);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / calc(0.26 * var(--lit-k) + 0.05)),
-    inset 0 -3px 7px rgb(0 0 0 / 0.24),
-    0 2px 4px rgb(var(--sh) / calc(14% * var(--sh-k))),
-    0 12px 22px -8px rgb(var(--sh) / calc(32% * var(--sh-k)));
+  border-color: var(--ink-deep);
 }
-.ns-btn-primary:active:not(:disabled) {
-  box-shadow:
-    inset 0 3px 7px rgb(0 0 0 / 0.4),
-    inset 0 -1px 0 rgb(255 255 255 / 0.14),
-    0 1px 1px rgb(var(--sh) / calc(10% * var(--sh-k)));
+.ns-btn-primary:disabled:hover {
+  background-color: var(--ink);
 }
 
 .ns-btn-square {
   width: 34px;
   height: 34px;
   padding: 0;
-  border-radius: 12px;
-}
-.ns-btn-square:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .ns-btn-ghost {
@@ -848,13 +1064,17 @@
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 6px 10px;
   cursor: pointer;
+  transition: background-color 140ms var(--ease-soft), color 140ms var(--ease-soft), transform 100ms var(--ease-soft);
 }
 .ns-btn-ghost:hover {
   background: var(--chip);
   color: var(--ink);
+}
+.ns-btn-ghost:active {
+  transform: scale(0.98);
 }
 
 /* Disabled controls stay flat on the page — nothing to press, nothing to
@@ -868,61 +1088,10 @@
 .ns-btn:disabled:hover {
   background: var(--surface);
 }
-.ns-btn-primary:disabled {
-  box-shadow: none;
-}
-.ns-btn-primary:disabled:hover {
-  background-color: var(--ink);
-}
-
-/* --- plan card ----------------------------------------------------------- */
-
-/* What used to be the card's title row now that the title itself lives in
-   the header (docs/REDESIGN.md §3.2): just the two actions someone actually
-   reaches for every session. Import / Sign out / Undo / Redo moved to the
-   header's overflow menu — see `HeaderMenu.tsx`. */
-.ns-hero-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 20px 24px 14px;
-}
 
 .ns-subtle {
   font-size: 13px;
   color: var(--muted);
-}
-
-/* --- the hero reading -----------------------------------------------------
- * This replaced a strip of four equally-weighted KPI tiles. The tiles were
- * the most recognisable generated-dashboard component there is, they sat
- * above the chart competing with it, and three of the four numbers were
- * things nobody acts on.
- *
- * Cut further for docs/REDESIGN.md §4.1: the figure and one reading line are
- * all that's left standing. The spread is a tappable phrase now, not a
- * permanent second sentence, and the `2026–2046 · N events` metadata line is
- * gone outright — the year range is already the chart's x-axis, and the
- * event count told nobody anything they could act on.
- * ------------------------------------------------------------------------ */
-
-.ns-hero {
-  padding: 4px 24px 22px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-/* Deliberately NOT .ns-num. Tabular figures line up in a column; at display
-   size they only make the number look loose and gappy. Proportional here,
-   tabular in the grids — see .ns-num. */
-.ns-hero-figure {
-  font-size: clamp(2.6rem, 6.2vw, 4.1rem);
-  font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: -0.032em;
-  color: var(--ink-deep);
 }
 
 /* Each character replays this on mount — remounted by AnimatedFigure via a
@@ -944,61 +1113,6 @@
     transform: translateY(0);
     filter: blur(0);
   }
-}
-
-.ns-hero-read {
-  font-size: 17px;
-  line-height: 1.45;
-  color: var(--child-ink);
-  max-width: 54ch;
-  text-wrap: pretty;
-}
-
-/* The spread is the honest half of the reading: the headline figure is a
-   point estimate of something that genuinely is not a point. Now a button —
-   tapping it toggles the same fan band the chart's own "Range" pill drives
-   (docs/REDESIGN.md §4.1) — styled as a quiet dotted-underline phrase rather
-   than a pill, so it still reads as a sentence first and a control second. */
-.ns-hero-risk {
-  font: inherit;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--muted);
-  max-width: 54ch;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--border-strong);
-  text-underline-offset: 3px;
-  transition: color 140ms var(--ease-soft), text-decoration-color 140ms var(--ease-soft);
-}
-.ns-hero-risk:hover,
-.ns-hero-risk[aria-pressed='true'] {
-  color: var(--child-ink);
-  text-decoration-color: var(--muted);
-}
-.ns-hero-risk b {
-  font-weight: 500;
-  color: var(--child-ink);
-  font-variant-numeric: tabular-nums;
-}
-
-/* --- the spine ------------------------------------------------------------
- * The chart, unboxed (docs/REDESIGN.md §4.1): no card background, border or
- * padding around it, so it reads as the instrument the page is organised
- * around rather than one card among several. The selection footer and any
- * warning band still belong to it, so they stay inside this section and
- * pick up a matching bottom radius instead of the card's.
- * ------------------------------------------------------------------------ */
-.ns-spine {
-  position: relative;
-}
-.ns-spine .ns-selection {
-  border-radius: 0 0 16px 16px;
 }
 
 /* --- chart --------------------------------------------------------------- */
@@ -1073,7 +1187,11 @@
 
 .ns-chart-overlay {
   position: absolute;
-  inset: 0 24px;
+  /* Matches `.ns-chart`'s own `padding: 0 24px 8px` exactly (docs/REVIEW.md
+     M6) — without the bottom 8px this box was taller than the svg it
+     overlays, which pushed every `top: N%` position (event dots, ticks,
+     marks) 6-7px below where the line actually is. */
+  inset: 0 24px 8px;
   pointer-events: none;
 }
 .ns-y-tick,
@@ -1123,6 +1241,65 @@
   background: var(--out-deep);
 }
 
+/* Actual vs forecast (docs/REVIEW.md B1). Logged points draw as small solid
+   ink dots along a solid line, distinct from the coloured income/cost event
+   dots above — an actual balance isn't a life event, it's a fact. HTML for
+   the same reason the event dots are: an svg circle would show the chart's
+   non-uniform `preserveAspectRatio="none"` stretch. */
+.ns-actual-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 1.5px solid var(--surface);
+  pointer-events: none;
+}
+
+/* The TODAY rule's own label (docs/REVIEW.md B1) — only rendered once
+   there's an actual line to its left; the x-axis's plain "Today" tick
+   already carries this meaning when there isn't (see NetWorthChart.tsx). */
+.ns-today-label {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  margin-top: -6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The projection's own start dot and the scrub hover ring (docs/REVIEW.md
+   S4) — HTML circles rather than svg `<circle>`s, which the chart's
+   non-uniform stretch (see `.ns-chart svg` above) would visibly oval. */
+.ns-first-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--data-nw);
+  pointer-events: none;
+}
+.ns-hover-ring {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2.5px solid var(--accent);
+  pointer-events: none;
+}
+
 /* Drag through time (docs/REDESIGN.md §4.1, design-direction move 5). The
    dragged event's normal dot is excluded from the pass above while a drag
    is live (NetWorthChart.tsx's `build()` `excludeEventId`) — these two
@@ -1164,6 +1341,25 @@
 .ns-event-leader {
   stroke: var(--border-strong);
   stroke-width: 1;
+}
+
+/* The TODAY marker (docs/REDESIGN-V3.md "Overview") — a dotted vertical rule
+   at the plan's `asOfDate` year, the one point on this line that is a fact
+   rather than a projection. Quieter than the gridlines it crosses: `--muted`
+   at partial opacity, not `--border` or `--accent`, since this is context
+   for reading the line, not a value in its own right. */
+.ns-today-line {
+  stroke: var(--muted-light);
+  stroke-width: 1;
+  stroke-dasharray: 1.5 4;
+  opacity: 0.7;
+}
+/* The x-axis tick at the TODAY year reads "Today" instead of its year
+   number, bolder than its neighbours — see the comment above where
+   NetWorthChart.tsx renders it. */
+.ns-x-tick-today {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 /* The top few by |Δ net worth at horizon| get a standing name instead of
@@ -1267,9 +1463,7 @@
   cursor: grab;
   /* Claim horizontal touch gestures unconditionally, at every breakpoint —
      grabbing a specific small dot is a deliberate gesture, distinct enough
-     from a general swipe that it should start a drag even on a phone,
-     where `.ns-scrub-surface` below cedes horizontal touch to the chart's
-     own sideways scroll. */
+     from a general swipe that it should start a drag even on a phone. */
   touch-action: none;
 }
 .ns-event-hit[aria-pressed='true'] {
@@ -1285,8 +1479,10 @@
   inset: 0;
   pointer-events: auto;
   /* Claim horizontal drags for scrubbing; let vertical page-scroll through
-     untouched. Below 700px this flips — see the override in the phone
-     media query further down, next to `.ns-chart-scroll`'s own rule. */
+     untouched — at EVERY width, including phones (docs/REVIEW.md B3): the
+     chart now fits the viewport rather than scrolling sideways at a fixed
+     800px, so there's no competing horizontal scroll to cede this to
+     anymore. */
   touch-action: pan-y;
 }
 
@@ -1295,6 +1491,11 @@
    to feel like lag. */
 .ns-tooltip {
   position: absolute;
+  /* Above the fan's end chip (`.ns-fan-slot`, z-index 3) and event labels
+     (`.ns-event-label-slot-live`, z-index 3) — without this the scrub
+     tooltip painted UNDER them on phones, where the plot is narrow enough
+     for a chip to sit right on top of it. */
+  z-index: 4;
   transform: translateX(-50%);
   transform-origin: top center;
   pointer-events: none;
@@ -1356,52 +1557,6 @@
   font-size: 15px;
   font-weight: 500;
 }
-.ns-hint {
-  font-size: 13px;
-  color: var(--muted-light);
-}
-
-/* --- tabs ---------------------------------------------------------------- */
-
-.ns-tabbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--rule);
-}
-/* A groove, so the active tab reads as a bead sitting in a channel. */
-.ns-segmented {
-  display: flex;
-  gap: 4px;
-  background: var(--track);
-  border-radius: 999px;
-  padding: 4px;
-  box-shadow:
-    inset 0 2px 4px rgba(18, 48, 76, 0.07),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
-}
-.ns-tab {
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  padding: 8px 20px;
-  cursor: pointer;
-}
-.ns-tab:hover {
-  color: var(--ink);
-}
-.ns-tab[aria-selected='true'] {
-  font-weight: 700;
-  color: var(--ink-deep);
-  background: var(--surface);
-  box-shadow: var(--jelly-rise);
-  animation: ns-squish var(--t-settle) var(--ease-soft);
-}
 .ns-window {
   margin-left: auto;
   display: flex;
@@ -1422,6 +1577,15 @@
 .ns-grid {
   display: grid;
   grid-template-columns: 268px repeat(var(--cols, 8), 1fr);
+}
+/* A long event or account label ("Buy a home — down payment") still
+   truncated at 1440 even though the card had plenty of room to spare
+   (REVIEW.md S15) — once there's space to give, let the column take some of
+   it rather than holding a fixed 268px at every width above phone/tablet. */
+@media (min-width: 1280px) {
+  .ns-grid {
+    grid-template-columns: minmax(268px, 320px) repeat(var(--cols, 8), 1fr);
+  }
 }
 .ns-row-head {
   border-bottom: 1px solid var(--rule);
@@ -1473,6 +1637,12 @@
   padding: 11px 16px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  /* Cash Flow's "Savings" row is a `group`-kind row carrying a magnitude bar
+     (docs/REDESIGN-V3.md "Cash Flow") — this is its containing block, the
+     same reason `.ns-row-total > div + div` and `.ns-row-child > div + div`
+     already have it. A no-op for every other group row (Assets/Liabilities,
+     Income/Expenses), which never set one. */
+  position: relative;
 }
 
 .ns-row-child {
@@ -1689,17 +1859,25 @@
   box-shadow: var(--shadow-control);
   transition: border-color 140ms var(--ease-soft);
 }
-.ns-fan-chip-mark {
-  font-size: 8px;
-  opacity: 0.8;
-}
+/* Ink plus muted, not green/orange (docs/REVIEW.md S3) — the fan is one
+   plan's line under two return assumptions, not two competing series, so
+   its end chips read as wayfinding labels ("which edge is which") rather
+   than as a second and third data hue next to the line's own. */
 .ns-fan-chip-high {
-  color: var(--green);
-  border: 1px solid color-mix(in srgb, var(--green) 34%, transparent);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
 }
 .ns-fan-chip-low {
-  color: var(--out-deep);
-  border: 1px solid var(--out-line);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+/* The base line's own end label (docs/REDESIGN-V3.md "Goodcast": "P90 … /
+   P50 … / P10 …") — plain ink rather than a data hue, since the line it
+   labels already carries the colour; this chip is wayfinding, the same call
+   `.ns-event-label` makes for a standing event name. */
+.ns-fan-chip-mid {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .ns-legend-swatch-fan {
@@ -1931,6 +2109,7 @@
   cursor: pointer;
   overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -1967,19 +2146,6 @@
   color: var(--on-inverse);
   border: 1px solid var(--inverse);
   cursor: default;
-}
-
-/* --- warnings ------------------------------------------------------------ */
-
-.ns-warning {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 24px;
-  font-size: 13px;
-  color: var(--out-deep);
-  background: var(--out-tint);
-  border-top: 1px solid var(--out-line);
 }
 
 /* --- event drawer -------------------------------------------------------- */
@@ -2190,22 +2356,22 @@
   color: var(--out-deep);
 }
 
-/* Inputs are wells: pressed into the surface, the inverse of a button. That
-   contrast is what makes the form legible at a glance. */
+/* v3: flat, same crisp-chrome family as .ns-btn — a 1px border rather than
+   an inset well. The field still reads as "different from a button" through
+   background alone (--surface-sub vs. --surface), not through jelly depth. */
 .ns-input {
   font: inherit;
   font-size: 14px;
   color: var(--ink);
   background: var(--surface-sub);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 9px 12px;
   width: 100%;
-  box-shadow: var(--jelly-well);
   transition:
-    box-shadow 170ms var(--ease-soft),
-    border-color 170ms var(--ease-soft),
-    background-color 170ms var(--ease-soft);
+    border-color 140ms var(--ease-soft),
+    background-color 140ms var(--ease-soft),
+    box-shadow 140ms var(--ease-soft);
 }
 .ns-input:hover {
   background: var(--surface);
@@ -2217,9 +2383,7 @@
   background: var(--surface);
   border-color: var(--accent);
   outline: none;
-  box-shadow:
-    inset 0 2px 4px rgba(18, 48, 76, 0.04),
-    0 0 0 3.5px rgba(46, 139, 208, 0.18);
+  box-shadow: 0 0 0 3.5px var(--accent-line);
 }
 
 .ns-input-wrap {
@@ -2303,15 +2467,11 @@
 .ns-btn-danger {
   color: #fff;
   background-color: var(--danger-btn);
-  border-color: #a93226;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -2px 5px rgba(90, 22, 15, 0.28),
-    0 1px 2px rgba(18, 48, 76, 0.12),
-    0 5px 12px -4px rgba(192, 57, 43, 0.45);
+  border-color: var(--danger-btn);
 }
 .ns-btn-danger:hover:not(:disabled) {
-  background-color: #a93226;
+  background-color: var(--danger);
+  border-color: var(--danger);
 }
 .ns-btn-danger-ghost {
   color: #c0392b;
@@ -2627,9 +2787,6 @@
   white-space: nowrap;
 }
 
-.ns-row-add > div:first-child {
-  padding-left: 34px;
-}
 .ns-add-cell {
   display: flex;
   align-items: center;
@@ -2971,11 +3128,13 @@
 }
 /* The keyboard-active row (both ArrowUp/Down and mouse hover keep the same
    index in sync, so there is no separate :hover rule to fall out of step).
-   --accent marks it, per REDESIGN.md §5.1 ("the single system accent is for
-   focus, selection, caret") -- exactly that, here. */
+   Ink, not --accent (docs/REDESIGN-V3.md review S16): this is a hover/active
+   chrome state, not a value being encoded, so it stays in the chrome/ink
+   family — --chip + weight already carry the "this one" signal on their
+   own, the same as `.ns-rail-link.active`. */
 .ns-palette-item-active {
   background: var(--chip);
-  color: var(--accent);
+  color: var(--ink-deep);
   font-weight: 600;
 }
 .ns-palette-hint {
@@ -3020,12 +3179,6 @@
 }
 .ns-compare-whatif-link:hover {
   background: var(--bg);
-}
-
-/* The year window sits after the compare picker, so it no longer needs to
-   claim the free space itself. */
-.ns-window {
-  margin-left: 0;
 }
 
 /* --- compare diff — "two lines on a chart" turned into an answer ---------- */
@@ -3139,80 +3292,30 @@
   background: var(--surface-sub);
 }
 
-@media (max-width: 1024px) {
-  /* The rail collapses to a horizontal scroll strip pinned to the top,
-     matching Northstar v2's own mobile treatment — no drawer, no
-     hamburger. */
+/* S10 (docs/REDESIGN-V3.md review): `useBreakpoint.ts`'s tablet query is
+   `(max-width:1023px)`, not 1024 — a 1024px iPad-landscape viewport must
+   read as desktop (persistent rail), matching `Sidebar.tsx`'s choice of
+   layout, or the grid collapses to one column under a rail that never
+   renders. Everything that used to key off a separate 1024px block lives
+   here now too, so this is the one narrow-desktop/tablet threshold. */
+@media (max-width: 1023px) {
+  /* Below this width `Sidebar.tsx` swaps the persistent rail for the
+     56px top bar + sheet (`.ns-topbar` / `.ns-rail-sheet` above), so the
+     grid only ever holds one real column here. */
   .ns {
     grid-template-columns: 1fr;
   }
-  .ns-rail {
-    position: sticky;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 8px 12px;
-    gap: 10px;
-  }
-  .ns-rail-brand {
-    padding: 4px 6px;
-    flex: none;
-  }
-  .ns-rail-plan {
-    flex: none;
-    width: auto;
-    max-width: 220px;
-    margin-bottom: 0;
-  }
-  .ns-rail-nav {
-    flex-direction: row;
-    flex: none;
-  }
-  .ns-rail-link {
-    white-space: nowrap;
-  }
-  .ns-rail-footer {
-    margin-top: 0;
-    margin-left: auto;
-    flex: none;
-    padding-top: 0;
-    padding-left: 14px;
-    border-top: 0;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-  }
 
-  .ns-main {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-
-  .ns-hero-actions {
-    flex-wrap: wrap;
-    padding: 16px 18px 14px;
-  }
-
-  .ns-kpis {
-    grid-template-columns: repeat(2, 1fr);
-    margin: 0 18px;
-  }
-  /* With two per row the left border must restart each row, and the seam
-     between rows needs a top border instead. */
-  .ns-kpi:nth-child(odd) {
-    border-left: 0;
-  }
-  .ns-kpi:nth-child(n + 3) {
-    border-top: 1px solid #e9eef3;
-  }
-
-  .ns-chart,
-  .ns-chart-overlay {
+  .ns-chart {
     padding-left: 14px;
     padding-right: 14px;
   }
+  /* Not grouped with `.ns-chart` above: `.ns-chart-overlay`'s children are
+     absolutely positioned, so a left/right PADDING on it does nothing —
+     only its `inset` moves them. The missing bottom inset here is what let
+     event dots sit 6-7px below the line at this width (docs/REVIEW.md M6). */
   .ns-chart-overlay {
-    inset: 0 14px;
+    inset: 0 14px 8px;
   }
   .ns-chart-head {
     flex-wrap: wrap;
@@ -3224,14 +3327,6 @@
     gap: 10px;
   }
 
-  .ns-tabbar {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .ns-compare {
-    margin-left: auto;
-  }
-
   .ns-selection {
     flex-wrap: wrap;
     padding: 12px 18px;
@@ -3239,66 +3334,6 @@
 }
 
 @media (max-width: 640px) {
-  /* Icons only past this width — the rail strip has no room for both a
-     glyph and a label on every destination. */
-  .ns-rail {
-    padding: 8px 10px;
-    gap: 8px;
-  }
-  .ns-rail-brand-word {
-    display: none;
-  }
-  .ns-rail-plan {
-    max-width: 130px;
-    font-size: 12px;
-  }
-  .ns-rail-link span {
-    display: none;
-  }
-  .ns-main {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .ns-card {
-    border-radius: 14px;
-  }
-
-  .ns-kpis {
-    grid-template-columns: 1fr;
-    margin: 0 14px;
-  }
-  .ns-kpi {
-    border-left: 0;
-  }
-  .ns-kpi + .ns-kpi {
-    border-top: 1px solid #e9eef3;
-  }
-  .ns-kpi-value {
-    font-size: 26px;
-  }
-
-  .ns-hero-actions {
-    gap: 8px;
-    padding: 14px 14px 12px;
-  }
-  /* Buttons go full-width rather than crowding into a strip. */
-  .ns-hero-actions .ns-btn {
-    flex: 1;
-    padding: 10px 12px;
-    text-align: center;
-  }
-
-  .ns-tabbar {
-    padding: 12px 14px;
-  }
-  .ns-tab {
-    padding: 8px 14px;
-  }
-  .ns-compare {
-    margin-left: 0;
-    width: 100%;
-  }
   .ns-select {
     flex: 1;
   }
@@ -3310,16 +3345,42 @@
     border-left: 0;
   }
 
-  /* The label column gives up width before the figures do. */
+  /* The label column giving up width before the figures did used to
+     truncate account names at 390px (docs/REDESIGN-V3.md "Accounts" —
+     "wider name column, no truncation at 390"); keeping it at its full
+     268px desktop width at every breakpoint fixed that, but on a 324px
+     card that just left one value column visible instead (REVIEW.md M10).
+     132px is the actual floor: still readable at a glance, and every
+     label this narrows (`.ns-type-name`, `.ns-gantt-name`, `.ns-line-name`)
+     already truncates with an ellipsis and carries a `title`, so nothing
+     un-attributable is lost — `.ns-table-scroll`'s horizontal scroll (label
+     column pinned via `position: sticky`, below) still makes room to read
+     it in full. */
   .ns-grid {
-    grid-template-columns: 150px repeat(var(--cols, 8), 1fr);
-  }
-  .ns-row-child > div:first-child {
-    padding-left: 22px;
+    grid-template-columns: 132px repeat(var(--cols, 8), 1fr);
   }
   .ns-gantt-head,
   .ns-gantt-row {
-    grid-template-columns: 170px minmax(380px, 1fr);
+    grid-template-columns: 132px minmax(240px, 1fr);
+  }
+  /* At 132px the label's own icon + 20px padding left almost nothing for
+     the name itself ("A…", "Fi…" — docs/REVIEW.md M10). Dropping the icon
+     — the row's colour/tone still carries on the bar itself — and tightening
+     the padding gives the name back roughly 100px to work with. */
+  .ns-gantt-label {
+    padding: 10px 8px 10px 14px;
+    gap: 6px;
+  }
+  .ns-gantt-label .ns-code {
+    display: none;
+  }
+  /* The 34px hanging indent that sets a child row off from its Assets/
+     Liabilities group header was sized for a 268px column; against 132px
+     it left barely two letters of the name before the ellipsis ("Ca…" for
+     Cash). The icon already carries that hierarchy on its own, so the
+     indent only needs to be enough to clear it. */
+  .ns-row-child > div:first-child {
+    padding-left: 14px;
   }
 
   .ns-hovercard {
@@ -3327,40 +3388,17 @@
   }
 }
 
-/* Below the tablet breakpoint the chart keeps its proportions and scrolls,
-   rather than compressing until the dots collide and the axis clips. Height
-   reverts to auto here too: full-bleed's viewport-height sizing assumes a
-   viewport-width svg, and forcing 58vh onto a fixed 800px-wide strip would
-   stretch the viewBox far off its own ratio — line and gridline stroke
-   widths scale unevenly under a non-uniform transform, the line thinner one
-   way than the other, same trouble a distorted circle would have been before
-   the dots moved to html. Auto lets the svg's intrinsic 1176:372 ratio size
-   it from the 800px width instead, the same way it did before full-bleed. */
-@media (max-width: 700px) {
-  .ns-chart-scroll {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-  }
+/* Below the tablet breakpoint the chart now FITS the viewport's own width
+   rather than scrolling sideways at a fixed 800px (docs/REVIEW.md B3) — the
+   `ResizeObserver` NetWorthChart.tsx already uses for label lane-packing
+   (docs/REVIEW.md M7) measures whatever width this box actually renders at
+   and re-packs labels/dots against it, so the svg no longer needs an
+   intrinsic 800px to keep its 1176:372 ratio sane. A shorter height than
+   the desktop 58vh, since a phone's viewport is mostly width-, not
+   height-constrained. */
+@media (max-width: 720px) {
   .ns-chart {
-    height: auto;
-    min-width: 800px;
-  }
-  .ns-chart svg {
-    height: auto;
-  }
-
-  /* The chart is now wider than the viewport and needs a native horizontal
-     scroll to see all of it — `.ns-scrub-surface` has to cede horizontal
-     touch gestures to that scroll rather than claiming them for scrubbing,
-     or a swipe could never reach the sideways-scrolling container beneath
-     it. The tradeoff: continuous drag-to-scrub by swiping open background
-     doesn't work at this width. A plain TAP still sets the scrubbed year
-     (pointerdown fires immediately, before the browser decides a drag is a
-     scroll), and grabbing a specific event dot/label to drag it still works
-     regardless of width — `.ns-event-hit`/`.ns-event-label` claim
-     `touch-action: none` unconditionally, above. */
-  .ns-scrub-surface {
-    touch-action: pan-x pan-y;
+    height: clamp(240px, 52vw, 320px);
   }
 }
 
@@ -3649,16 +3687,6 @@
  * FOCUSED FORECAST VIEWS — Retirement, House, Annuity, SEPP
  * ------------------------------------------------------------------------- */
 
-/* `.ns-card` itself carries no padding — Accounts/Cash Flow/Events want
-   their table cells flush to the card edge and manage their own inset.
-   These four views don't have that internal structure, so without this
-   modifier their prose and stat rows render flush against all four card
-   edges with zero breathing room (visible as a headline that reads as
-   clipped against the rail). */
-.ns-card-view {
-  padding: 28px 32px 32px;
-}
-
 .ns-view-head {
   display: flex;
   flex-direction: column;
@@ -3800,14 +3828,53 @@
   stroke: var(--rule);
   stroke-width: 1;
 }
+/* The actual data ceiling, drawn only when it sits >8% above the topmost
+   "nice" gridline (S2) — dashed so it reads as the real top of the data,
+   distinct from the rounded reference lines below it. */
+.ns-mini-grid-ceiling {
+  stroke-dasharray: 3 3;
+}
 .ns-mini-zero {
   stroke: var(--border-strong);
   stroke-width: 1;
+}
+/* B2's "beyond plan horizon" marker — a lighter band, not a new hue (colour
+   stays reserved for data), over the region Retirement extended the plan
+   into just for this view. */
+.ns-mini-band {
+  fill: var(--surface-sub);
+}
+/* A solid backing behind the band's eyebrow text, since it renders on top of
+   the series lines (so a line crossing that corner doesn't erase it) — a
+   plain card-coloured chip, not a new hue. */
+.ns-mini-band-label-chip {
+  fill: var(--surface-sub);
+}
+.ns-mini-band-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  fill: var(--muted-light);
 }
 .ns-mini-axis {
   font-size: 11px;
   fill: var(--muted-light);
   font-variant-numeric: tabular-nums;
+}
+
+/* Direct end labels (docs/REDESIGN-V3.md "Goodcast" — a forecast chart with
+   direct end labels instead of a legend): plain ink text, never the series
+   colour (dataviz rule) — the colour lives only in the small dot beside it. */
+.ns-mini-endlabel {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+.ns-mini-endlabel-lead {
+  stroke: var(--border-strong);
+  stroke-width: 1;
 }
 
 .ns-mini-legend {
@@ -3835,8 +3902,10 @@
    income green, expense orange, the savings/shortfall balancing flow in the
    net-worth blue since it is a transfer, not new money either way. */
 .ns-sankey-wrap {
-  padding: 16px 20px 4px;
-  border-bottom: 1px solid var(--rule);
+  /* Its own flush SectionCard now (docs/REDESIGN-V3.md "Cash Flow"), rather
+     than sharing one with the annual table below it — no more internal
+     divider needed under the diagram. */
+  padding: 16px 20px 20px;
 }
 .ns-sankey {
   display: block;
@@ -3880,17 +3949,20 @@
   fill: var(--data-nw);
 }
 
-/* --- House lens: one card per home, three stages (docs/REDESIGN.md §4.3) - */
+/* --- House lens: one section per home (docs/REDESIGN-V3.md "House") ------- */
 
 .ns-house-card {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
-.ns-house-card:first-child {
-  margin-top: 14px;
-  padding-top: 0;
-  border-top: 0;
+/* Not `:first-child` — `PageHeader` is always the true first child of this
+   card's parent, so that selector never matched (M17): every home got the
+   divider/gap meant only to separate a SECOND home's card from the first. */
+.ns-house-card + .ns-house-card {
+  margin-top: 28px;
+  padding-top: 28px;
+  border-top: 1px solid var(--rule);
 }
 .ns-house-card-title {
   font-size: 15px;
@@ -3898,34 +3970,24 @@
   color: var(--ink);
 }
 
-.ns-goal-ring-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 14px 0;
-}
-.ns-goal-ring {
-  flex-shrink: 0;
-}
-.ns-goal-ring-pct {
-  font-size: 15px;
-  font-weight: 700;
-  fill: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.ns-goal-ring-text {
+/* Down-payment readiness as a goal row (docs/REDESIGN-V3.md "House") — a
+   progress bar plus an on-track badge, replacing the funding-progress ring. */
+.ns-goal-readiness {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+  gap: 8px;
 }
-.ns-goal-ring-headline {
-  font-size: 14px;
+.ns-goal-readiness-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--ink);
 }
-.ns-goal-ring-note {
-  font-size: 12px;
+.ns-goal-readiness-note {
+  font-size: 12.5px;
   color: var(--muted);
 }
 
@@ -3945,24 +4007,28 @@
 /* The honest-cost sentence: chrome stays neutral (§5.2), only the reading
    itself carries colour (§5.1) — net-worth blue's "in" / "out" pair reused
    for "buying leaves you ahead" / "buying costs you", never a new hue. */
+/* What buying costs the rest of the plan, as a neutral one-line reading
+   (docs/REDESIGN-V3.md "House": "not an orange alert box") — chrome stays
+   neutral, a `Badge` alone carries the direction; the sentence is plain ink
+   either way. */
 .ns-house-cost {
-  margin: 14px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--surface-sub);
   border: 1px solid var(--rule);
   font-size: 13px;
-  font-weight: 600;
   line-height: 1.55;
-}
-.ns-house-cost-down {
-  color: var(--out-deep);
-}
-.ns-house-cost-up {
-  color: var(--in-deep);
-}
-.ns-house-cost-neutral {
   color: var(--ink);
+}
+.ns-house-cost p {
+  margin: 0;
+  flex: 1;
+}
+.ns-house-cost .ns-ui-badge {
+  margin-top: 1px;
 }
 
 .ns-sepp-disclaimer {
@@ -4104,28 +4170,21 @@
   background: var(--data-nw);
 }
 
-/* --- Retirement lens: never-blank prompt, freedom read, durability ------- */
+/* --- Retirement lens: the year slider, durability ------------------------- */
 
-.ns-freedom-prompt {
-  padding: 30px 20px 26px;
-  text-align: center;
-}
-.ns-freedom-prompt-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-.ns-freedom-prompt .ns-view-sub {
-  max-width: 46ch;
-  margin: 8px auto 0;
-}
 .ns-freedom-slider-row {
   display: flex;
   align-items: center;
   gap: 18px;
   max-width: 420px;
   margin: 20px auto 0;
+}
+/* The control-bar placement (docs/REDESIGN-V3.md "Retirement": the slider
+   moves into a compact control bar rather than gating a never-blank prompt)
+   — left-aligned inside its `SectionCard`, not centered under a headline. */
+.ns-freedom-slider-row-inline {
+  max-width: 480px;
+  margin: 14px 0 0;
 }
 .ns-freedom-slider {
   flex: 1;
@@ -4197,46 +4256,14 @@
   margin-top: 2px;
 }
 
-/* The freedom read's headline figure — same weight of attention as the
-   Overview hero (docs/REDESIGN.md §4.1), scaled down for a card rather than
-   the full-bleed spine. Calm ink normally; the alarm modifier is the one
-   place this lens raises its voice, reusing out-orange rather than a new
-   hue (§5.1). */
-.ns-freedom {
-  margin: 10px 0 18px;
-}
-.ns-freedom-label {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-light);
-}
-.ns-freedom-figure {
-  display: block;
-  margin-top: 4px;
-  font-size: clamp(1.9rem, 4.4vw, 2.7rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ink-deep);
-}
-.ns-freedom-note {
-  margin-top: 6px;
-  max-width: 62ch;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--muted);
-}
-.ns-freedom-alarm .ns-freedom-figure,
-.ns-freedom-alarm .ns-freedom-note {
-  color: var(--out-deep);
-}
 
 /* Durability at the year actually set — a fuller alarm treatment than
    ns-house-cost's neutral-background convention, because REDESIGN.md names
    this "the one alarm" the lens raises; it earns the tint. */
 .ns-durability {
-  margin: 0 0 18px;
+  /* Was 18px — every other gap on this page follows a 24px rhythm; this
+     one and `.ns-disclosure`'s top margin below were the two outliers. */
+  margin: 0;
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--surface-sub);
@@ -4257,7 +4284,10 @@
 /* --- the SEPP disclosure (docs/REDESIGN.md §3.1: a tool, not a peer lens) - */
 
 .ns-disclosure {
-  margin-top: 22px;
+  /* Was 22px — see `.ns-durability`'s comment above; both broke the page's
+     24px rhythm, which comes from the SectionCards' own spacing and needs
+     no margin here to match once this is 0. */
+  margin-top: 0;
   padding-top: 18px;
   border-top: 1px solid var(--rule);
 }
@@ -4394,50 +4424,6 @@
   justify-content: center;
 }
 
-/* --- the freshness banner ------------------------------------------------- */
-
-.ns-data-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 20px;
-  padding: 9px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-sub);
-  font-size: 13px;
-}
-
-.ns-data-message {
-  flex: 1;
-  color: var(--muted);
-}
-
-.ns-data-action {
-  flex: none;
-  font-size: 13px;
-}
-
-/* Stale or disconnected: worth acting on, so it carries the "out" hue. */
-.ns-data-alarm {
-  border-color: var(--out-line);
-  background: var(--out-tint);
-}
-
-.ns-data-alarm .ns-data-message {
-  color: var(--out-deep);
-  font-weight: 500;
-}
-
-.ns-data-prompt {
-  border-color: var(--border-strong);
-}
-
-/* Current. Present, but not asking for anything. */
-.ns-data-quiet .ns-data-message {
-  color: var(--muted-light);
-}
-
 /* --- the connect walkthrough --------------------------------------------- */
 
 .ns-connect-warn {
@@ -4484,14 +4470,6 @@
   color: var(--ink);
 }
 
-@media (max-width: 640px) {
-  .ns-data-banner {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 6px;
-  }
-}
-
 /* ---------------------------------------------------------------------------
  * PROGRESS / REPORTS / COMPARE
  * ------------------------------------------------------------------------- */
@@ -4502,33 +4480,15 @@
   border-radius: 10px;
 }
 
-.ns-progress-summary {
-  display: flex;
-  gap: 32px;
-  margin-bottom: 16px;
-}
-.ns-progress-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.ns-progress-stat-label {
-  font-size: 12px;
-  color: var(--muted);
-}
-.ns-progress-stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
-
 .ns-progress-form {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   align-items: end;
-  margin-top: 20px;
+  /* Sits inside a flush `SectionCard` (the table above runs edge-to-edge),
+     so it carries its own horizontal margin matching the card's own
+     un-flushed body padding rather than touching the card's border. */
+  margin: 20px 22px 22px;
   padding: 16px;
   background: var(--surface-sub);
   border: 1px solid var(--border);
@@ -4549,7 +4509,10 @@
 .ns-datatable {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px;
+  /* M15: this used to leave an empty 20px band above the header inside an
+     already-flush card (Reports/Progress both wrap this table in a `flush`
+     `SectionCard`, which has no padding of its own to separate from). */
+  margin-top: 0;
   font-size: 13px;
 }
 .ns-datatable th {
@@ -4560,6 +4523,15 @@
   border-bottom: 1px solid var(--rule);
   white-space: nowrap;
 }
+/* M15: every column but the first (Year/Date, a label) is a number —
+   right-aligned so a reader can scan magnitude, matching every other
+   numeric table in the app (`tabular-nums` alone isn't enough when the
+   values are also left-anchored). */
+.ns-datatable th:not(:first-child),
+.ns-datatable td:not(:first-child) {
+  text-align: right;
+}
+
 .ns-datatable td {
   padding: 10px 12px;
   border-bottom: 1px solid var(--rule-light);
@@ -4576,15 +4548,7 @@
 .ns-datatable-actions {
   display: flex;
   gap: 6px;
-}
-
-.ns-reports-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ns-reports-toolbar-spacer {
-  flex: 1;
+  justify-content: flex-end;
 }
 
 .ns-plot-grid {
@@ -4601,24 +4565,6 @@
 }
 .ns-plot-card .ns-section-title {
   margin-bottom: 8px;
-}
-
-.ns-compare-option {
-  padding: 20px 0;
-  border-top: 1px solid var(--rule);
-}
-.ns-compare-option:first-of-type {
-  padding-top: 12px;
-  border-top: none;
-}
-.ns-compare-option .ns-section-title {
-  margin-bottom: 6px;
-}
-.ns-compare-plan-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
 }
 
 .ns-compare-actions {

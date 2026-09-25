@@ -1,0 +1,167 @@
+/*
+ * New chrome for the ledger pages (Accounts / Cash Flow / Events —
+ * docs/REDESIGN-V3.md "Accounts" / "Cash Flow" / "Events"). Existing rules
+ * these components still rely on (the grid, magnitude bars, gantt, sankey,
+ * add-pill, gear) stay in `planner.css`; only genuinely NEW selectors live
+ * here, per the parallel-work split (docs/REDESIGN-V3.md "Parallel-work
+ * rules").
+ */
+
+/* --- shared ledger toolbar (Select + window pager, in a SectionCard's
+   header actions) -------------------------------------------------------- */
+
+.ns-ledger-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* --- the compact "‹ 2026 ›" single-year stepper in a PageHeader's actions
+   (Cash Flow) — visually the same shape as the ledger toolbar's window
+   pager (`.ns-window` in planner.css), just not tied to the multi-year
+   table window. -----------------------------------------------------------*/
+
+.ns-year-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ns-year-stepper-label {
+  min-width: 3.5em;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- a clickable ledger row (Accounts' balance-sheet rows, Events' gantt
+   label) — the whole row opens the editor, not just its gear. ------------ */
+
+.ns-row-clickable {
+  cursor: pointer;
+}
+
+/* --- the balance sheet's trailing "Add" row, tidied into one quiet row
+   that spans the full table width instead of being squeezed into the
+   268px label column (where it wrapped into a vertical stack of pills). -- */
+
+.ns-add-row-flush {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--rule-light);
+}
+
+/* --- the header's Add-account menu (Accounts) — a trigger + popover using
+   the same listbox chrome `ui/Select.tsx` already established, just
+   act-on-click instead of a persisted selection. ------------------------- */
+
+.ns-add-account-menu {
+  position: relative;
+  display: inline-flex;
+}
+.ns-add-account-menu .ns-ui-select-popover {
+  left: auto;
+  right: 0;
+  min-width: 220px;
+}
+/* The popover's items are real `<button role="menuitem">`s now (REVIEW.md
+   M12 — arrow keys, Home/End and Escape need a real focusable element per
+   row), so `.ns-ui-select-option`'s shared chrome needs a button reset on
+   top of it: full width, left-aligned text, no button-default background
+   or border. */
+.ns-add-account-item {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+.ns-add-account-group {
+  padding: 8px 10px 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+}
+.ns-add-account-group:first-child {
+  padding-top: 5px;
+}
+
+/* --- events gantt: TODAY line + excluded-event dimming ------------------ */
+
+.ns-gantt-today {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 0;
+  border-left: 1px dashed var(--muted-light);
+  pointer-events: none;
+}
+
+/* The dashed line's own eyebrow, in the ticks header rather than repeated
+   per row — sits above the numeric tick it lines up with (REVIEW.md S19:
+   "add a small TODAY mono eyebrow at its top"). */
+.ns-gantt-today-label {
+  position: absolute;
+  top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+  white-space: nowrap;
+}
+
+.ns-gantt-row[data-excluded='true'] .ns-gantt-name,
+.ns-gantt-row[data-excluded='true'] .ns-code,
+.ns-gantt-row[data-excluded='true'] .ns-bar {
+  opacity: 0.5;
+}
+.ns-gantt-row[data-excluded='true'] .ns-bar {
+  cursor: default;
+}
+
+/* --- phone Sankey substitute (REVIEW.md M9) — two StackedBars ("In" /
+   "Out") in place of the ribbon diagram, which has no legible size once its
+   viewBox is scaled down to phone width. --------------------------------- */
+
+.ns-sankey-phone {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.ns-sankey-phone-title {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .ns-add-row-flush {
+    padding: 10px 14px;
+  }
+
+  /* Wraps the Select and the window pager onto their own row instead of
+     the two fighting over a card width that isn't there — the pager keeps
+     its right-aligned look once wrapped by pushing to the row's own end. */
+  .ns-ledger-toolbar {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .ns-ledger-toolbar .ns-window {
+    margin-left: auto;
+  }
+}
