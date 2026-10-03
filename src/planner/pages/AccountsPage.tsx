@@ -5,8 +5,8 @@ import { Plus } from 'lucide-react';
 import { usePlanner } from '../PlannerContext';
 import { LedgerToolbar, LedgerCompareDiff } from '../LedgerToolbar';
 import { AccountsTab } from '../tabs/AccountsTab';
-import { planMetaLine, money } from '../format';
-import { assetMixToday, missingAccountClasses, moneyDelta, netWorthStats } from '../ledger';
+import { asOfDateLabel, planMetaLine, money } from '../format';
+import { assetMixToday, missingAccountClasses, netWorthStats } from '../ledger';
 import { Page, PageHeader, StatStrip, Stat, SectionCard, StackedBar } from '../ui';
 import './ledger.css';
 
@@ -19,8 +19,10 @@ export function AccountsPage() {
   // balance as "today" (REVIEW.md M1). Same reason the Add-account menu
   // below checks `result.years`: a class missing from a paged window isn't
   // necessarily missing from the plan.
-  const stats = netWorthStats(result.years);
-  const mix = assetMixToday(result.years);
+  const stats = netWorthStats(result.years, result.opening);
+  const mix = assetMixToday(result.years, result.opening);
+  const asOf = stored.settings.asOfDate ?? `${stored.settings.startYear}-01-01`;
+  const asOfLabel = asOfDateLabel(asOf);
 
   const missing = [
     ...missingAccountClasses(ASSET_CLASSES, false, allAccounts, result.years).map((accountClass) => ({
@@ -42,16 +44,33 @@ export function AccountsPage() {
       />
 
       <StatStrip>
+        {/* No delta tag here (docs/ROADMAP-10.md C1) — a "+$3.85M" pill next
+            to "NET WORTH TODAY" read as today's own change, when it's
+            actually the horizon's. The arrow in the sub line already says
+            that without needing a second, misplaced figure. */}
         <Stat
           size="xl"
           label="Net worth today"
           value={money(stats.netWorthToday)}
-          sub={`at ${result.endYear}: ${money(stats.netWorthAtEnd)}`}
-          delta={moneyDelta(stats.netWorthAtEnd - stats.netWorthToday)}
+          sub={`→ ${money(stats.netWorthAtEnd)} by ${result.endYear}`}
+          explain={`Every asset's balance minus every liability's, as of ${asOfLabel} — your plan's real "today," not the first plan year's projected Dec 31 close.`}
         />
-        <Stat label="Assets" value={money(stats.assetsToday)} />
-        <Stat label="Liabilities" value={money(stats.liabilitiesToday)} />
-        <Stat label="Liquid" value={money(stats.liquidToday)} sub="Cash + taxable" />
+        <Stat
+          label="Assets"
+          value={money(stats.assetsToday)}
+          explain={`Every asset account's balance as of ${asOfLabel}, before subtracting liabilities.`}
+        />
+        <Stat
+          label="Liabilities"
+          value={money(stats.liabilitiesToday)}
+          explain={`Every liability account's balance (mortgages, loans) as of ${asOfLabel}.`}
+        />
+        <Stat
+          label="Liquid"
+          value={money(stats.liquidToday)}
+          sub="Cash + taxable"
+          explain={`Cash and taxable-investment balances as of ${asOfLabel} — the two buckets you could spend without a withdrawal penalty or triggering a tax event.`}
+        />
       </StatStrip>
 
       {mix.length > 0 && (
@@ -66,6 +85,7 @@ export function AccountsPage() {
           window={windowYears}
           accounts={allAccounts}
           highlightYear={scrubYear}
+          opening={result.opening}
           onEditType={(accountClass: AccountClass) => {
             const owned = stored.accounts.find(
               (a) => a.accountClass === accountClass && !a.isSynthetic,

@@ -1,4 +1,4 @@
-import type { Account, AccountClass, YearSnapshot } from '@northstar/engine';
+import type { Account, AccountClass, OpeningSnapshot, YearSnapshot } from '@northstar/engine';
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engine';
 import { tableMoney } from '../format';
 import { accountDetail } from '../detail';
@@ -7,6 +7,7 @@ import { Cell, type CellMagnitude } from './DataTable';
 import { GearIcon } from '../icons';
 import { ACCOUNT_ICON } from '../domainIcons';
 import { classBalances, missingAccountClasses } from '../ledger';
+import { useBreakpoint } from '../useBreakpoint';
 
 /**
  * The balance sheet, one row per ACCOUNT TYPE rather than per linked account.
@@ -20,6 +21,7 @@ export function AccountsTab({
   accounts,
   highlightYear,
   onEditType,
+  opening,
 }: {
   window: YearSnapshot[];
   accounts: Account[];
@@ -27,11 +29,34 @@ export function AccountsTab({
       nothing. */
   highlightYear?: number | null;
   onEditType(accountClass: AccountClass): void;
+  /** The plan's real "today" (docs/W3-REVIEW.md "A 'Today' column") — a
+      leading column ahead of the projected years, so $168K (today) and
+      $204K (the first plan year's projected Dec 31 close) don't sit side by
+      side with nothing saying which is which. Optional only so a caller
+      mid-migration (or a test) can still render the table without it. */
+  opening?: OpeningSnapshot;
 }) {
+  // No room for a 4th column at the phone breakpoint (`yearColumnsFor`
+  // already trims to 2 years there) — adding "Today" back on top of those
+  // would reintroduce the exact 3-column clipping/truncation this table
+  // used to have on a 390px screen (docs/W3-REVIEW.md "Phone balance
+  // sheet"). Today's figure is one tap away in the stat strip above instead.
+  // Called unconditionally — React hooks can't be called inside a `&&`.
+  const breakpoint = useBreakpoint();
+  const showOpening = Boolean(opening) && breakpoint !== 'phone';
+
   const yearLabels = years.map((y) => y.year);
-  const style = { ['--cols' as string]: yearLabels.length };
+  // +1 for the leading "Today" column when there's an opening snapshot to
+  // show one from.
+  const style = { ['--cols' as string]: yearLabels.length + (showOpening ? 1 : 0) };
 
   const classRow = (accountClass: AccountClass, liability: boolean) => classBalances(years, accountClass, liability);
+  const openingClassBalance = (accountClass: AccountClass, liability: boolean) =>
+    opening
+      ? opening.accounts
+          .filter((a) => a.accountClass === accountClass && a.isLiability === liability)
+          .reduce((sum, a) => sum + a.balance, 0)
+      : 0;
 
   /**
    * Types not yet on the balance sheet, offered as a trailing add row — a
@@ -76,12 +101,19 @@ export function AccountsTab({
         const baseRemaining = (id: string) =>
           lastYearRow?.accounts.find((a) => a.accountId === id)?.nonTaxableBaseRemaining;
 
+        // The leading "Today" cell, from the opening snapshot rather than
+        // `cells` (which is the projected years only) — prepended so it
+        // shares this row's own magnitude-bar scale below instead of
+        // reading against a different max than the years next to it.
+        const todayValue = showOpening ? openingClassBalance(accountClass, liability) : undefined;
+        const rowValues = todayValue !== undefined ? [todayValue, ...cells] : cells;
+
         // Magnitude bar, scaled to THIS row's own max across its visible
         // columns (docs/REDESIGN.md §4.1) — an asset row reuses the "money
         // in" hue, a liability row the "money out" hue, the same tone
         // convention EventsTab.tsx's Gantt bars use, applied here to a
         // dollar magnitude rather than a time span.
-        const rowMax = Math.max(1, ...cells.map((v) => Math.abs(v)));
+        const rowMax = Math.max(1, ...rowValues.map((v) => Math.abs(v)));
 
         // The whole row opens the editor, not just its gear
         // (docs/REDESIGN-V3.md "Accounts") — but only when there's an
@@ -137,17 +169,20 @@ export function AccountsTab({
                 </HoverCard>
               ) : null}
             </div>
-            {cells.map((v, i) => {
+            {rowValues.map((v, i) => {
+              const isToday = todayValue !== undefined && i === 0;
+              const yearIndex = todayValue !== undefined ? i - 1 : i;
               const magnitude: CellMagnitude = {
                 fraction: Math.abs(v) / rowMax,
                 tone: liability ? 'cost' : 'income',
               };
               return (
                 <Cell
-                  key={i}
+                  key={isToday ? 'today' : yearLabels[yearIndex]}
                   value={tableMoney(v)}
                   magnitude={magnitude}
-                  highlighted={yearLabels[i] === highlightYear}
+                  highlighted={!isToday && yearLabels[yearIndex] === highlightYear}
+                  divider={isToday}
                 />
               );
             })}
@@ -161,6 +196,7 @@ export function AccountsTab({
         {/* The SectionCard above already titles this "Balance sheet" —
             this column header just needs to say what its own rows are. */}
         <div>Account</div>
+        {showOpening && <div className="ns-col-divider">Today</div>}
         {yearLabels.map((y) => (
           <div key={y} className={y === highlightYear ? 'ns-col-scrub' : undefined}>
             {y}
@@ -170,6 +206,7 @@ export function AccountsTab({
 
       <div className="ns-grid ns-row-total" style={style}>
         <div>Net worth</div>
+        {showOpening && opening && <Cell value={tableMoney(opening.netWorth)} divider />}
         {years.map((y) => (
           <Cell key={y.year} value={tableMoney(y.netWorth)} highlighted={y.year === highlightYear} />
         ))}
@@ -177,6 +214,7 @@ export function AccountsTab({
 
       <div className="ns-grid ns-row-group" style={style}>
         <div>Assets</div>
+        {showOpening && opening && <Cell value={tableMoney(opening.assets)} divider />}
         {years.map((y) => (
           <Cell key={y.year} value={tableMoney(y.assets)} highlighted={y.year === highlightYear} />
         ))}
@@ -186,6 +224,7 @@ export function AccountsTab({
 
       <div className="ns-grid ns-row-group" style={style}>
         <div>Liabilities</div>
+        {showOpening && opening && <Cell value={tableMoney(opening.liabilities)} divider />}
         {years.map((y) => (
           <Cell key={y.year} value={tableMoney(y.liabilities)} highlighted={y.year === highlightYear} />
         ))}

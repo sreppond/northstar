@@ -34,17 +34,32 @@ export function Cell({
   value,
   magnitude,
   highlighted,
+  title,
+  divider,
 }: {
   value: string;
   magnitude?: CellMagnitude;
   highlighted?: boolean;
+  /** A native tooltip for this one cell — Cash Flow's negative "Savings
+      rate" cells (docs/ROADMAP-10.md C7), which name why that year went
+      negative rather than leaving a bare "-12%" to look like an error. */
+  title?: string;
+  /** A rule on this cell's right edge — Accounts' leading "Today" column
+      (docs/W3-REVIEW.md), which is a different KIND of figure (today's real
+      balance) from the projected years beside it and reads as one of them
+      without a seam marking where "today" ends and "projected" begins. */
+  divider?: boolean;
 }) {
-  const classes = [value === ZERO_DASH ? 'ns-zero' : null, highlighted ? 'ns-col-scrub' : null]
+  const classes = [
+    value === ZERO_DASH ? 'ns-zero' : null,
+    highlighted ? 'ns-col-scrub' : null,
+    divider ? 'ns-col-divider' : null,
+  ]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <div className={classes || undefined}>
+    <div className={classes || undefined} title={title}>
       {magnitude && magnitude.fraction > 0 && (
         <span
           aria-hidden="true"
@@ -97,6 +112,10 @@ export interface TableRow {
       display-formatted text. */
   values?: number[];
   bar?: RowBar;
+  /** Per-cell tooltips parallel to `cells` — `undefined` entries get no
+      tooltip. Cash Flow's "Savings rate" row uses this for a negative
+      year's one-line explainer (docs/ROADMAP-10.md C7). */
+  cellTitles?: (string | undefined)[];
 }
 
 /**
@@ -109,6 +128,7 @@ export function DataTable({
   rows,
   empty,
   highlightYear,
+  columnSubLabel,
 }: {
   caption: string;
   years: number[];
@@ -118,6 +138,11 @@ export function DataTable({
       highlights nothing — nobody's pointing at the chart, or the scrubbed
       year has paged out of this table's visible window. */
   highlightYear?: number | null;
+  /** A small mono sub-label under a year's column header — the stub-year
+      flag (docs/ROADMAP-10.md C7 "the stub year is invisible"), built from
+      `stubYearLabel` (`ledger.ts`) by the caller so every table renders the
+      same wording. Returns `undefined` for every ordinary year. */
+  columnSubLabel?(year: number): string | undefined;
 }) {
   const style = { ['--cols' as string]: years.length };
 
@@ -125,11 +150,15 @@ export function DataTable({
     <div className="ns-table-scroll">
       <div className="ns-grid ns-row-head" style={style}>
         <div>{caption}</div>
-        {years.map((y) => (
-          <div key={y} className={y === highlightYear ? 'ns-col-scrub' : undefined}>
-            {y}
-          </div>
-        ))}
+        {years.map((y) => {
+          const sub = columnSubLabel?.(y);
+          return (
+            <div key={y} className={y === highlightYear ? 'ns-col-scrub' : undefined}>
+              {y}
+              {sub && <div className="ns-col-head-sub">{sub}</div>}
+            </div>
+          );
+        })}
       </div>
 
       {rows.length === 0 && <div className="ns-empty">{empty ?? 'Nothing to show.'}</div>}
@@ -169,7 +198,13 @@ export function DataTable({
                     }
                   : undefined;
               return (
-                <Cell key={i} value={cell} magnitude={magnitude} highlighted={years[i] === highlightYear} />
+                <Cell
+                  key={i}
+                  value={cell}
+                  magnitude={magnitude}
+                  highlighted={years[i] === highlightYear}
+                  title={row.cellTitles?.[i]}
+                />
               );
             })}
           </div>

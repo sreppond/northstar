@@ -1,4 +1,5 @@
 import type { PlanResult } from '@northstar/engine';
+import { savedThisYear, savingsRatePercent, spendingThisYear } from './ledger';
 
 /**
  * The Reports lens: every plan-year reduced to one row of numbers already
@@ -11,19 +12,30 @@ export interface ExploreRow {
   year: number;
   netWorth: number;
   income: number;
+  /** Living expenses + event costs — contributions excluded, same as
+      `ledger.ts`'s `spendingThisYear` (docs/MATH.md "Savings rate and
+      spending", W3#5). Before that fix this was the raw `totalExpenses`,
+      which STILL included paycheck/allocation contributions — the exact
+      mismatch the review found between this column and Cash Flow's
+      "Expenses" stat, which already excluded them via `netCashFlow`. */
   expenses: number;
   taxes: number;
   /** Contributions ÷ income — deliberately named for what it actually
-      measures (S5), not "savings rate": Overview and Cash Flow both already
-      use that label for a DIFFERENT figure, net cash flow ÷ income
-      (`dashboard.ts`'s `savingsRateThisYear`, `ledger.ts`'s `cashFlowStats`).
-      The two aren't interchangeable — net cash flow also nets out
-      withdrawals spent and debt principal paid down, contributions don't —
-      so this renames the column rather than silently reusing their number
-      or their label for a different one. */
+      measures (S5), not "savings rate": that label belongs to `savingsRate`
+      below, a DIFFERENT figure (`ledger.ts`'s `savingsRatePercent`, the one
+      shared definition used by Overview and Cash Flow too). The two aren't
+      interchangeable — savings also counts whatever's left over after
+      contributions (a surplus swept to cash, say), contribution rate
+      doesn't — so this stays its own column rather than silently reusing
+      either the other's number or its label. */
   contributionRatePercent: number;
   contributions: number;
   withdrawals: number;
+  /** Income − spending, contributions counted as saved — `ledger.ts`'s
+      `savedThisYear` / `savingsRatePercent`, the same definition Overview's
+      and Cash Flow's "Savings rate" stats already read off. */
+  saved: number;
+  savingsRatePercent: number;
 }
 
 export function buildExploreRows(result: PlanResult): ExploreRow[] {
@@ -34,11 +46,13 @@ export function buildExploreRows(result: PlanResult): ExploreRow[] {
       year: snapshot.year,
       netWorth: snapshot.netWorth,
       income: snapshot.totalIncome,
-      expenses: snapshot.totalExpenses,
+      expenses: spendingThisYear(snapshot),
       taxes: snapshot.totalTaxes,
       contributionRatePercent: snapshot.totalIncome > 0 ? (contributions / snapshot.totalIncome) * 100 : 0,
       contributions,
       withdrawals,
+      saved: savedThisYear(snapshot),
+      savingsRatePercent: savingsRatePercent(snapshot) ?? 0,
     };
   });
 }
@@ -52,6 +66,8 @@ export const EXPLORE_COLUMNS: { key: keyof ExploreRow; label: string; percent?: 
   { key: 'contributionRatePercent', label: 'Contribution Rate', percent: true },
   { key: 'contributions', label: 'Contributions' },
   { key: 'withdrawals', label: 'Withdrawals' },
+  { key: 'saved', label: 'Saved' },
+  { key: 'savingsRatePercent', label: 'Savings Rate', percent: true },
 ];
 
 // CSV/JSON only. Every Explore value is a plain finite number — never text a

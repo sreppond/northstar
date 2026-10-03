@@ -163,14 +163,23 @@ describe('niceAxisTicks', () => {
   });
 
   it('adds the actual ceiling as its own line only when it is far from the last nice one', () => {
-    // 4.29M is well clear of a $4M nice line (~7.25% away — just under the
-    // threshold, no extra line).
+    // 4.29M: step is $2M here, and 4.29M sits only $290K (14.5% of a step)
+    // past the $4M nice line — just under the quarter-step threshold, no
+    // extra line.
     const close = niceAxisTicks(4_290_000);
     expect(close[close.length - 1]?.value).not.toBe(4_290_000);
 
-    // 4.6M is comfortably more than 8% past a $4M nice line.
+    // 4.6M clears the same $2M step's quarter-step threshold ($600K > $500K).
     const far = niceAxisTicks(4_600_000);
     expect(far[far.length - 1]?.value).toBe(4_600_000);
+  });
+
+  it('does not crowd a nice line with a ceiling tick a fraction of a step away (docs/W3-REVIEW.md)', () => {
+    // 4.4M sits $400K past the $4M nice line — a fifth of the $2M step, and
+    // under the old ceiling-relative 8% threshold (9.1%) that used to add a
+    // crowding "$4.4M" line right next to "$4M".
+    const ticks = niceAxisTicks(4_400_000);
+    expect(ticks[ticks.length - 1]?.value).not.toBe(4_400_000);
   });
 
   it('degenerates to a single zero line rather than dividing by zero on a non-positive ceiling', () => {

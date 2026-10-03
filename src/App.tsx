@@ -14,6 +14,8 @@ import { PlannerProvider, usePlanner } from './planner/PlannerContext';
 import { Sidebar } from './planner/Sidebar';
 import { PlanSwitcher } from './planner/PlanSwitcher';
 import { CommandPalette } from './planner/CommandPalette';
+import { ShortcutSheet } from './planner/ShortcutSheet';
+import { ToastRegion, toast } from './planner/ui/Toast';
 import { Onboarding } from './planner/Onboarding';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
@@ -92,6 +94,11 @@ function PlannerShell() {
     monarch,
     importing,
     setImporting,
+    localMonarch,
+    progressPoints,
+    upsertProgressPoint,
+    deleteProgressPoint,
+    undo,
     accountDraft,
     setAccountDraft,
     assumptionsDraft,
@@ -103,6 +110,9 @@ function PlannerShell() {
       <Sidebar />
 
       <main className="ns-main">
+        {/* Real height only under `html.ns-tauri` (planner.css) — a no-op
+            div everywhere else, same idiom as `Sidebar.tsx`'s rail strip. */}
+        <div className="ns-drag-strip" data-tauri-drag-region />
         <Routes>
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
@@ -138,6 +148,9 @@ function PlannerShell() {
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
 
+      <ShortcutSheet />
+      <ToastRegion />
+
       {monarch.connecting && (
         <ConnectDrawer
           status={monarch.status}
@@ -150,8 +163,52 @@ function PlannerShell() {
         <ImportDrawer
           plan={stored}
           fetched={monarch.fetched}
-          onImport={(next, overrides) => {
+          // A snapshot `scripts/monarch-sync.mjs` already dropped on disk
+          // (docs/ROADMAP-10.md Track B/C4) — `ImportDrawer` prefers `fetched`
+          // when both are present, so this only ever prefills when there is
+          // no server-fetched capture already on screen. The Overview
+          // "Review" banner (`OverviewPage.tsx`) opens this same drawer via
+          // `setImporting(true)`; it does nothing else, since the snapshot
+          // itself flows through here.
+          localSnapshot={localMonarch.snapshot}
+          onImport={(next, overrides, progressPoint) => {
+            // Re-importing the same day's capture updates that day's point
+            // rather than piling up a second one at the same date.
+            const previousPoint = progressPoints.find((p) => p.date === progressPoint.date);
+            // Only the LOCAL snapshot's own "new" state should clear —
+            // a server-fetched import (`monarch.fetched` was set) never came
+            // from `useLocalMonarch` in the first place, so it has nothing to
+            // mark applied.
+            const willMarkApplied = !monarch.fetched && Boolean(localMonarch.snapshot);
+            const previousAppliedAt = localMonarch.lastAppliedAt;
+
+            // No `toastMessage` here — an import's Undo has to revert more
+            // than the plan (the Progress point it upserted, and the
+            // "applied" marker), so this fires its own toast below instead
+            // of `replacePlan`'s single-entry one (docs/W3-REVIEW.md #8).
             replacePlan({ ...next, settings: { ...next.settings, monarchOverrides: overrides } });
+            upsertProgressPoint(previousPoint ? { ...progressPoint, id: previousPoint.id } : progressPoint);
+            if (willMarkApplied && localMonarch.snapshot) {
+              localMonarch.markApplied(localMonarch.snapshot.capturedAt);
+            }
+
+            toast('Imported Monarch snapshot', {
+              action: {
+                label: 'Undo',
+                onClick: () => {
+                  undo();
+                  if (previousPoint) {
+                    upsertProgressPoint(previousPoint);
+                  } else {
+                    deleteProgressPoint(progressPoint.id);
+                  }
+                  if (willMarkApplied) {
+                    localMonarch.resetApplied(previousAppliedAt);
+                  }
+                },
+              },
+            });
+
             setImporting(false);
             monarch.clearFetched();
           }}

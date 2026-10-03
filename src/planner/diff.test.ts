@@ -178,7 +178,8 @@ describe('diffOutcomes', () => {
     });
     const changes = diffOutcomes(runPlan(a), runPlan(b));
     const netWorthChange = changes.find((c) => c.label === 'Net worth');
-    expect(netWorthChange?.sentence).toContain('+$60.0K');
+    // docs/ROADMAP-10.md C2 (one number language): no trailing ".0".
+    expect(netWorthChange?.sentence).toContain('+$60K');
   });
 
   it('reports a first-shortfall-year change, including "never"', () => {

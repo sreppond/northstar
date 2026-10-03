@@ -4,6 +4,7 @@
  */
 import type { EventKind, PlanEvent } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
+import { money as formatMoney } from './format';
 
 export type EventTone = 'income' | 'cost' | 'end';
 
@@ -93,10 +94,9 @@ export function summarize(event: PlanEvent): string {
   }
 }
 
+/** `format.ts`'s `money`, tolerant of an event field that hasn't been set
+    (docs/ROADMAP-10.md C2 — one number language, not a second money
+    formatter living beside it). */
 function money(value: number | undefined): string {
-  if (value === undefined) return '';
-  const abs = Math.abs(value);
-  if (abs >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `$${Math.round(value / 1e3)}K`;
-  return `$${Math.round(value)}`;
+  return value === undefined ? '' : formatMoney(value);
 }

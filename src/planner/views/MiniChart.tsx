@@ -44,6 +44,16 @@ export interface ChartSeries {
       series, where each point is a real logged reading rather than an
       annual sample of a smooth projection. */
   dots?: boolean;
+  /** The index whose INCOMING segment (from the previous point) should draw
+      as a step — flat at the prior value out to this x, then a vertical
+      jump — instead of the usual diagonal. House's home-value and
+      mortgage-balance lines (docs/ROADMAP-10.md C7): the account springs
+      into existence at its full purchase-year value, it doesn't appreciate
+      up from zero over the prior year, so a plain diagonal between "0 the
+      year before" and "$X at purchase" drew a ramp that never happened.
+      Every OTHER segment (ordinary year-to-year change once owned) still
+      draws as a normal diagonal. */
+  stepAt?: number;
 }
 
 /** Rounds `rawStep` up to the nearest "nice" 1/2/2.5/5 × 10ⁿ step — the same
@@ -96,14 +106,26 @@ function niceTicks(min: number, max: number): Tick[] {
   return result;
 }
 
-/** Same idea as `axisMoney`, but rounded to one decimal on the M-scale
-    rather than two — used only for the ceiling tick's own label
-    (`isCeiling`), which already sits close enough to the nice tick above it
-    that axisMoney's two decimal digits ("$47.17M") read as noise crowding a
-    round "$40M" line. */
+/** Same idea as `axisMoney`, but always 3 significant figures on the
+    M-scale rather than `axisMoney`'s fixed 2 decimals — used only for the
+    ceiling tick's own label (`isCeiling`), which already sits close enough
+    to the nice tick above it that axisMoney's two decimal digits
+    ("$47.17M") read as noise crowding a round "$40M" line. A FIXED one
+    decimal used to drop a digit at the low end of the M range — a $1.85M
+    ceiling read as "$1.8M" (docs/W3-REVIEW.md "Axis ceiling ticks"), which
+    is the one thing this label exists to state exactly. Trailing zeros are
+    only dropped where the magnitude already carries 3 sig figs without
+    them (47.0M → 47M); below $10M the decimal always shows, since dropping
+    it there would lose a significant figure rather than a redundant one. */
 function tightCeilingMoney(value: number): string {
   const abs = Math.abs(value);
-  if (abs >= 1e6) return `$${(abs / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+  if (abs >= 1e6) {
+    const sign = value < 0 ? '-' : '';
+    const millions = abs / 1e6;
+    if (millions >= 100) return `${sign}$${Math.round(millions)}M`;
+    if (millions >= 10) return `${sign}$${millions.toFixed(1).replace(/\.0$/, '')}M`;
+    return `${sign}$${millions.toFixed(2)}M`;
+  }
   return axisMoney(value);
 }
 
@@ -151,6 +173,7 @@ export function MiniChart({
   endLabels = false,
   bandFrom,
   bandLabel,
+  stubYear,
 }: {
   /** The shared x-domain every series' `values` is sampled at, index for
       index — real numeric positions (a plain year, or Progress's fractional
@@ -178,6 +201,12 @@ export function MiniChart({
       needs to say so rather than let the extension pass as more real data. */
   bandFrom?: number;
   bandLabel?: string;
+  /** Marks the plan's stub first year (docs/ROADMAP-10.md C7 "the stub year
+      is invisible") — whichever x-tick lands on `year` gets a small second
+      line under its own label, e.g. "2026" / "from Sep 25", instead of
+      letting a partial year's chart pass as a full one. Built from
+      `stubYearLabel` (`ledger.ts`) so every page uses the same wording. */
+  stubYear?: { year: number; label: string };
 }) {
   const [containerRef, width] = useMeasuredWidth();
 
@@ -195,27 +224,54 @@ export function MiniChart({
   const xFor = (i: number) => LEFT + ((years[i] - xMin) / xSpan) * (RIGHT_EDGE - LEFT);
   const yFor = (v: number) => BOTTOM - ((v - min) / span) * (BOTTOM - TOP);
 
-  const pathFor = (values: number[]) => {
+  const pathFor = (values: number[], stepAt?: number) => {
     let d = '';
     let drawing = false;
+    let prevY = 0;
     values.forEach((v, i) => {
       if (!Number.isFinite(v)) {
         drawing = false;
         return;
       }
-      d += `${drawing ? 'L' : 'M'}${xFor(i).toFixed(1)},${yFor(v).toFixed(1)} `;
+      const x = xFor(i).toFixed(1);
+      const y = yFor(v);
+      if (!drawing) {
+        d += `M${x},${y.toFixed(1)} `;
+      } else if (i === stepAt) {
+        // Hold the PRIOR value flat out to this x, then jump — see
+        // `stepAt` on `ChartSeries`. Every other segment stays a diagonal.
+        d += `L${x},${prevY.toFixed(1)} L${x},${y.toFixed(1)} `;
+      } else {
+        d += `L${x},${y.toFixed(1)} `;
+      }
+      prevY = y;
       drawing = true;
     });
     return d.trim();
   };
 
-  const areaFor = (values: number[]) => {
+  const areaFor = (values: number[], stepAt?: number) => {
     if (!values.every(Number.isFinite)) return '';
-    return `${pathFor(values)} L${xFor(values.length - 1).toFixed(1)},${yFor(0).toFixed(1)} L${xFor(0).toFixed(1)},${yFor(0).toFixed(1)} Z`;
+    return `${pathFor(values, stepAt)} L${xFor(values.length - 1).toFixed(1)},${yFor(0).toFixed(1)} L${xFor(0).toFixed(1)},${yFor(0).toFixed(1)} Z`;
   };
 
   const zeroY = yFor(0);
-  const ticks = niceTicks(min, max);
+  // The data ceiling `niceTicks` appends sits at the true max, which can land
+  // much closer (in real px) to the last "nice" gridline than the nice
+  // gridlines are to each other — House's "$1.8M" ceiling crowding "$1.5M"
+  // (docs/ROADMAP-10.md C1, MiniChart's ceiling-tick rule). Same collision
+  // rule the x-axis ticks below already use: when two labels would land
+  // closer than a readable gap, drop the earlier of the pair rather than let
+  // them overlap. The ceiling is the one that's new information (the exact
+  // data top); the nice tick it crowds is redundant with the ticks around it.
+  const MIN_Y_TICK_GAP_PX = 40;
+  const ticks: Tick[] = [];
+  niceTicks(min, max).forEach((t) => {
+    const y = yFor(t.value);
+    const prev = ticks[ticks.length - 1];
+    if (prev && Math.abs(yFor(prev.value) - y) < MIN_Y_TICK_GAP_PX) ticks.pop();
+    ticks.push(t);
+  });
   // A fixed "every 6th point" used to be fine when every MiniChart's domain
   // was a plan's ~20-year span, but B2's extended Retirement view can put
   // 50+ points on a chart that's also been squeezed narrow (a phone width,
@@ -289,22 +345,28 @@ export function MiniChart({
           // The end ticks anchor inward rather than centering, or their label
           // would overhang past the plot's edge (and the card holding it).
           const anchor = i === 0 ? 'start' : i === years.length - 1 ? 'end' : 'middle';
+          const isStub = stubYear && y === stubYear.year;
           return (
             <text key={y} x={xFor(i)} y={BOTTOM + 20} className="ns-mini-axis" textAnchor={anchor}>
               {label}
+              {isStub && (
+                <tspan x={xFor(i)} dy="1.15em" className="ns-mini-axis-sub">
+                  {stubYear.label}
+                </tspan>
+              )}
             </text>
           );
         })}
 
         {series.map((s) =>
           s.fill ? (
-            <path key={s.label} d={areaFor(s.values)} fill={s.color} opacity={0.14} stroke="none" />
+            <path key={s.label} d={areaFor(s.values, s.stepAt)} fill={s.color} opacity={0.14} stroke="none" />
           ) : null,
         )}
         {series.map((s) => (
           <path
             key={s.label}
-            d={pathFor(s.values)}
+            d={pathFor(s.values, s.stepAt)}
             fill="none"
             stroke={s.color}
             strokeWidth={2}

@@ -393,9 +393,62 @@ export interface YearSnapshot {
   unfundedShortfall?: number;
 }
 
+/** One account's contribution to `OpeningSnapshot` — see there. */
+export interface OpeningAccountSnapshot {
+  accountId: string;
+  name: string;
+  accountClass: AccountClass;
+  isLiability: boolean;
+  /** Positive magnitude, as of `OpeningSnapshot.asOfDate`. */
+  balance: number;
+  /**
+   * Remaining cost basis as of `OpeningSnapshot.asOfDate`, for an account
+   * using the cost-basis model (`Account.nonTaxableBase` set) — same
+   * meaning as `AccountYear.nonTaxableBaseRemaining`, just read at "today"
+   * instead of a projected year's close (W3#7: the Annuity view's "as of"
+   * basis/gain split used to have nothing but a projected `years[]` close
+   * to read, the same `years[0]`-as-today gap `opening` itself was built to
+   * close). Undefined for every other account, exactly like
+   * `Account.nonTaxableBase` itself. As of "today" nothing has been drawn
+   * down yet this year, so this is simply `Account.nonTaxableBase` carried
+   * over unchanged — a plain copy, not a derived figure.
+   */
+  nonTaxableBaseRemaining?: number;
+}
+
+/**
+ * The plan's balances as of `settings.asOfDate` — distinct from
+ * `years[0]`, which is the projected CLOSE of the first plan year (Dec 31),
+ * not "today" (docs/PLAN.md §4.3, docs/MATH.md "Today vs. years[0]"). The UI
+ * used to read `years[0]` for every "today" figure, which overstates the
+ * present by however much the stub year is projected to grow, earn and
+ * spend before it actually closes.
+ *
+ * Built from each account's `initialBalance` for every account that exists
+ * at or before `startYear` — the same "exists yet" test `accountExistsIn`
+ * already applies everywhere else, so a synthetic account an event creates
+ * before the plan even starts (a house bought years ago) is counted, and one
+ * an event will create later this same stub year is not.
+ */
+export interface OpeningSnapshot {
+  /** `settings.asOfDate`, or `${startYear}-01-01` when unset. */
+  asOfDate: string;
+  accounts: OpeningAccountSnapshot[];
+  assets: number;
+  liabilities: number;
+  netWorth: number;
+}
+
 export interface PlanResult {
   startYear: number;
   endYear: number;
   years: YearSnapshot[];
   warnings: string[];
+  /**
+   * Additive (docs/PLAN.md's engine-purity rule: existing consumers must not
+   * break). Always set by `runPlan` itself; optional only so a `PlanResult`
+   * hand-built in a test fixture, rather than produced by `runPlan`, does not
+   * need to supply one.
+   */
+  opening?: OpeningSnapshot;
 }

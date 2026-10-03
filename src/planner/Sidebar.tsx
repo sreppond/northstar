@@ -21,6 +21,7 @@ import { usePlanner } from './PlannerContext';
 import { useBreakpoint } from './useBreakpoint';
 import { ThemeToggle } from './ThemeToggle';
 import { HeaderMenu } from './HeaderMenu';
+import { isTauri } from './monarchLocal';
 
 /**
  * The persistent nav rail's destinations, regrouped for v3
@@ -67,6 +68,14 @@ export function Sidebar() {
   const location = useLocation();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sheetNavRef = useRef<HTMLElement>(null);
+
+  // Stamped once, for `planner.css`'s `html.ns-tauri` rules (the traffic-light
+  // clearance + drag-region strips below) — a plain browser tab never
+  // matches `isTauri()`, so this is a no-op there and the browser build's
+  // rail is pixel-identical to before.
+  useEffect(() => {
+    if (isTauri()) document.documentElement.classList.add('ns-tauri');
+  }, []);
 
   // A route change means the sheet has done its job.
   useEffect(() => setSheetOpen(false), [location.pathname]);
@@ -221,6 +230,10 @@ function RailContent({
 
   return (
     <nav ref={navRef} className={className} {...sheetProps}>
+      {/* Real height only under `html.ns-tauri` (planner.css) — a no-op div
+          in the browser build and in the mobile sheet, which never sits
+          under the traffic lights. */}
+      {!sheet && <div className="ns-rail-drag" data-tauri-drag-region />}
       <Link to="/overview" className="ns-rail-brand" onClick={onNavigate}>
         <img src="/favicon.png" alt="" width={22} height={22} />
         <span className="ns-rail-brand-word">Northstar</span>

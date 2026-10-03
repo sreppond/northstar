@@ -19,12 +19,80 @@ The two halves cannot reach each other, for three independent reasons:
    system keyring specifically so it never reaches a client bundle. Making the
    browser call Monarch directly would mean shipping that token to the page.
 
-So the flow is a **capture and paste**, not a socket. It takes about fifteen
-seconds and can be repeated as often as you like. When Phase 2 lands, the
-server can hold the session and run this same mapper on a schedule — the
-mapping code does not change, only what calls it.
+So the paste flow below is a **capture and paste**, not a socket. It takes
+about fifteen seconds and can be repeated as often as you like. The desktop
+app closes that gap a different way — not a live connection either, but a
+local script that drives an actual logged-in browser (below).
 
-## The loop
+## The monthly drop-in (desktop app, local only)
+
+The owner's own loop, and the one `docs/ROADMAP-10.md` Track B was built for:
+scrape Monarch with a real Chrome roughly monthly, no forms, no MCP server,
+no server at all.
+
+**1. `npm run monarch:sync`.** First run only: it opens Chrome, headed,
+pointed at `https://app.monarch.com`, and waits — with a generous timeout —
+for you to log in by hand, MFA included. **The script never reads, prompts
+for, types, or stores your credentials.** All it ever waits for is the
+`session_id` cookie Monarch itself sets once you're in. That session then
+lives in a persistent, local-only Chrome profile
+(`~/Library/Application Support/com.northstar.planner/monarch/profile`), so
+every run after the first is headless and takes a few seconds — pass
+`--headed` any time you want to watch, or if a run reports the session
+expired.
+
+Once logged in, it calls Monarch's own GraphQL API **from inside that logged-in
+page** (`page.evaluate` running `fetch(..., { credentials: 'include' })`) —
+the same query documents and header conventions
+`packages/server/src/monarch/{queries,client}.ts` use, reused rather than
+duplicated. Add `--cashflow` to also pull the last three full months of
+income/expense totals, the way `docs/BACKEND.md`'s server refresh does.
+
+**2. It writes a snapshot to disk, not to the app.** Validated with the same
+`parseSnapshot` this whole document is about, then written to
+`~/Library/Application Support/com.northstar.planner/monarch/snapshots/`:
+`<YYYY-MM-DD>.json` (or `<YYYY-MM-DD>-HHMM.json` if you run it twice in one
+day) plus `latest.json`. The terminal prints the account count, total
+assets/liabilities, and the exact path.
+
+**3. Open Northstar.** The app finds the new snapshot itself — a Tauri
+command reads `latest.json` directly out of that same folder
+(`src-tauri/src/lib.rs`'s `monarch_latest_snapshot`); a plain browser tab
+running `npm run dev` gets the identical file over a dev-only route
+(`scripts/vite-monarch-plugin.ts`, `GET /__local/monarch/latest`). Neither
+path exists in a production browser build — there is no server there to ask.
+`src/planner/monarchLocal.ts` is the one module that decides which of the two
+to use, and `src/planner/useLocalMonarch.ts` is what notices a snapshot is
+newer than the last one you applied.
+
+**4. Review, same as a paste.** Opening Import from a local snapshot lands on
+the identical diff a paste produces — `previewImport`/`applyImport` don't
+know or care where a snapshot came from. Applying also sets the plan's
+`asOfDate` to the snapshot's capture date and appends a Progress point (net
+worth, assets, liabilities, all read from the snapshot's own totals) — so a
+monthly sync is what turns into the actual-vs-plan history on Progress,
+automatically, with no separate step.
+
+You can also drag a snapshot JSON file straight onto the Import drawer, or
+pick it with a file browser — the same file `monarch:sync` just wrote, if
+you'd rather not wait for the app to notice it itself.
+
+**Resetting the session.** Delete the profile directory —
+`~/Library/Application Support/com.northstar.planner/monarch/profile` — and
+the next `npm run monarch:sync` behaves like a first run: headed, and
+waiting for you to log in again. Nothing else is affected; your snapshots and
+plans are untouched, because they live in sibling directories, not inside the
+profile.
+
+**The security posture, stated plainly.** Every plan and snapshot on this
+machine stays on this machine — nothing here talks to any server but
+Monarch's own, and only `monarch-sync.mjs` ever does that. The script never
+sees a password, an OTP, or a TOTP code; Chrome's own login form handles all
+of it, and the only thing the script reads back is a cookie the browser
+already set. The app itself never calls Monarch — it only ever reads a JSON
+file `monarch-sync.mjs` already wrote to disk.
+
+## The paste loop (fallback, works without the desktop app)
 
 **1. Capture.** In Claude Desktop or Claude Code with the Monarch MCP server
 configured, run `get_accounts` — and `get_cashflow` if you want the spending
@@ -139,8 +207,15 @@ on a plain capture they are simply absent. Nothing is invented to fill them.
 |---|---|
 | `packages/engine/src/monarch.ts` | The contract, the classifier and the mapper. Pure — no I/O, no React. |
 | `packages/engine/test/monarch.test.ts` | 29 tests, including that an import never mutates the plan it was given and that re-importing the same capture is a no-op. |
-| `src/planner/drawer/ImportDrawer.tsx` | The diff, the question queue, the paste box. |
-| `scripts/monarch-capture.mjs` | Raw MCP output → snapshot. |
+| `src/planner/drawer/ImportDrawer.tsx` | The diff, the question queue, the paste box, drag-and-drop/file-picker, and (on Save) the `asOfDate` + Progress-point write. |
+| `scripts/monarch-capture.mjs` | Raw MCP output → snapshot (the paste loop). |
+| `scripts/monarch-sync.mjs` | The monthly drop-in: drives real Chrome, waits for login, calls Monarch's GraphQL from inside the page, writes a snapshot. |
+| `scripts/monarch-paths.mjs` | The one place the local data directory is computed — shared by the sync script and the dev route so they can't drift apart. |
+| `scripts/ts-extension-loader.mjs` | Lets `monarch-sync.mjs` import `packages/engine`'s TypeScript source directly with no build step (see the comment at its top). |
+| `scripts/vite-monarch-plugin.ts` | `vite dev`-only routes (`/__local/monarch/latest`, `/__local/monarch/list`) that mirror the Tauri commands for a plain browser tab. |
+| `src-tauri/src/lib.rs` | `monarch_latest_snapshot`, `monarch_list_snapshots`, `write_plans_backup` — the packaged app's equivalent of the dev routes, plus the local plans backup. |
+| `src/planner/monarchLocal.ts` | The one module that decides Tauri vs. dev-route vs. neither, and parses whatever it gets with `parseSnapshot`. |
+| `src/planner/useLocalMonarch.ts` | "Is there a snapshot newer than the one I last applied?" — checked on launch and on window focus. |
 
 [monarch]: https://www.monarchmoney.com
 [server]: https://github.com/robcerda/monarch-mcp-server

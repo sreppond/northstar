@@ -4,7 +4,7 @@ import { headlineReturnRate, runPlan } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
 import { NetWorthChart } from '../NetWorthChart';
 import { CompareDiff } from '../CompareDiff';
-import { detailMoney, percent, planMetaLine, signedMoney } from '../format';
+import { money, percent, planMetaLine, signedMoney } from '../format';
 import { DeltaTag, Page, PageHeader, SectionCard } from '../ui';
 
 /**
@@ -212,7 +212,7 @@ function PlanCard({
         <span className="ns-compare-card-name">{plan.name}</span>
         <DeltaTag value={signedMoney(delta)} tone={delta >= 0 ? 'in' : 'out'} />
       </div>
-      <div className="ns-compare-card-value ns-num">{detailMoney(atActiveHorizon)}</div>
+      <div className="ns-compare-card-value ns-num">{money(atActiveHorizon)}</div>
       <Sparkline values={windowed.map((y) => y.netWorth)} />
       <div className="ns-compare-card-meta">
         <span>Net worth at {activeEndYear}</span>

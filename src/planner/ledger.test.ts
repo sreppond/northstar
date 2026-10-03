@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Account, AccountYear, PlanEvent, YearSnapshot } from '@northstar/engine';
+import type { Account, AccountYear, OpeningSnapshot, PlanEvent, YearSnapshot } from '@northstar/engine';
 import {
   assetMixToday,
   cashFlowStats,
@@ -9,6 +9,8 @@ import {
   missingAccountClasses,
   moneyDelta,
   netWorthStats,
+  savingsRateNote,
+  stubYearLabel,
 } from './ledger';
 
 function accountYear(overrides: Partial<AccountYear> & Pick<AccountYear, 'accountId' | 'accountClass' | 'close'>): AccountYear {
@@ -165,6 +167,37 @@ describe('netWorthStats', () => {
     expect(netWorthStats(laterYearsPage).netWorthToday).not.toBe(years[0].netWorth);
     expect(netWorthStats(laterYearsPage).netWorthToday).toBe(laterYearsPage[0].netWorth);
   });
+
+  it('prefers `opening` over years[0] once a caller passes it — "today" is the as-of-date balance, not the projected close of the stub year', () => {
+    // A stub year projects growth on top of the true opening balance, so
+    // years[0].netWorth (500,000, per the fixture above) is already AHEAD
+    // of what "today" actually is. `opening` carries the real figure.
+    const years = [
+      year({ year: 2026, netWorth: 500_000, assets: 520_000, liabilities: 20_000 }),
+      year({ year: 2046, netWorth: 2_000_000 }),
+    ];
+    const opening: OpeningSnapshot = {
+      asOfDate: '2026-08-23',
+      accounts: [
+        { accountId: 'cash', name: 'Cash', accountClass: 'cash', isLiability: false, balance: 30_000 },
+        { accountId: 'brokerage', name: 'Brokerage', accountClass: 'taxableInvestment', isLiability: false, balance: 80_000 },
+        { accountId: '401k', name: '401(k)', accountClass: 'taxDeferredInvestment', isLiability: false, balance: 250_000 },
+        { accountId: 'mortgage', name: 'Mortgage', accountClass: 'mortgage', isLiability: true, balance: 18_000 },
+      ],
+      assets: 360_000,
+      liabilities: 18_000,
+      netWorth: 342_000,
+    };
+
+    const stats = netWorthStats(years, opening);
+    expect(stats.netWorthToday).toBe(342_000);
+    expect(stats.assetsToday).toBe(360_000);
+    expect(stats.liabilitiesToday).toBe(18_000);
+    expect(stats.liquidToday).toBe(110_000); // cash + taxable, not the 401(k)
+    expect(stats.netWorthAtEnd).toBe(2_000_000); // horizon still reads the last YEAR, unaffected
+    // Proof it actually differs from the old years[0]-based reading.
+    expect(stats.netWorthToday).not.toBe(years[0].netWorth);
+  });
 });
 
 describe('assetMixToday', () => {
@@ -190,6 +223,28 @@ describe('assetMixToday', () => {
   it('returns nothing for an empty projection', () => {
     expect(assetMixToday([])).toEqual([]);
   });
+
+  it('reads opening.accounts instead of years[0] once a caller passes it', () => {
+    const years = [
+      year({
+        year: 2026,
+        accounts: [accountYear({ accountId: 'a', accountClass: 'cash', close: 999_999 })], // NOT read once `opening` is passed
+      }),
+    ];
+    const opening: OpeningSnapshot = {
+      asOfDate: '2026-08-23',
+      accounts: [
+        { accountId: 'a', name: 'Cash', accountClass: 'cash', isLiability: false, balance: 1_000 },
+        { accountId: 'b', name: 'Brokerage', accountClass: 'taxableInvestment', isLiability: false, balance: 500 },
+      ],
+      assets: 1_500,
+      liabilities: 0,
+      netWorth: 1_500,
+    };
+    const segments = assetMixToday(years, opening);
+    expect(segments.find((s) => s.key === 'cash')?.value).toBe(1_000);
+    expect(segments.find((s) => s.key === 'taxableInvestment')?.value).toBe(500);
+  });
 });
 
 describe('cashFlowStats', () => {
@@ -211,6 +266,34 @@ describe('cashFlowStats', () => {
     const stats = cashFlowStats(cur, undefined);
     expect(stats.savingsRate).toBeUndefined();
     expect(stats.deltaIncome).toBeUndefined();
+  });
+
+  // W3#5 (review item 12): a 401(k)/allocation contribution is booked as an
+  // "expense" line so the waterfall treats it as a cash outflow, but it is
+  // SAVING, not SPENDING. On the sample plan's 2027 this showed a 34%
+  // savings rate where the true rate (contributions counted as saved) is
+  // 39% — this is that exact shape of case, with round hand-derivable
+  // numbers.
+  it('excludes a 401(k) contribution from "spending" and credits it into "saved" (W3#5)', () => {
+    const cur = year({
+      year: 2026,
+      totalIncome: 100_000,
+      totalExpenses: 60_000, // $40k living + a $20k 401(k) contribution
+      totalTaxes: 10_000,
+      netCashFlow: 100_000 - 60_000 - 10_000, // 30,000 — contribution already netted out here
+      expenses: [
+        { label: 'Living expenses', amount: 40_000, category: 'living' },
+        { label: '401(k) — contribution', amount: 20_000, category: 'contribution' },
+      ],
+    });
+    const stats = cashFlowStats(cur, undefined);
+
+    // Hand check: spending = totalExpenses - contributions = 60,000 - 20,000 = 40,000.
+    expect(stats.spending).toBe(40_000);
+    // Hand check: saved = netCashFlow + contributions = 30,000 + 20,000 = 50,000.
+    expect(stats.saved).toBe(50_000);
+    // Hand check: savings rate = saved / income = 50,000 / 100,000 = 50%.
+    expect(stats.savingsRate).toBeCloseTo(50, 6);
   });
 });
 
@@ -262,5 +345,87 @@ describe('deltaTone / moneyDelta', () => {
   it('moneyDelta formats the value and reuses the same tone rule', () => {
     expect(moneyDelta(1200)).toEqual({ value: '+$1.2K', tone: 'in' });
     expect(moneyDelta(undefined)).toBeUndefined();
+  });
+});
+
+describe('stubYearLabel', () => {
+  it('labels the start year as a stub when asOfDate falls mid-year', () => {
+    const label = stubYearLabel(2026, 2026, '2026-09-25');
+    expect(label).toEqual({ date: 'Sep 25', short: 'from Sep 25', long: 'Sep 25 – Dec 31 · partial year' });
+  });
+
+  it('is undefined for any year after the start year', () => {
+    expect(stubYearLabel(2027, 2026, '2026-09-25')).toBeUndefined();
+  });
+
+  it('is undefined when asOfDate is unset (full first year)', () => {
+    expect(stubYearLabel(2026, 2026, undefined)).toBeUndefined();
+  });
+
+  it('is undefined when asOfDate is exactly Jan 1 (full first year)', () => {
+    expect(stubYearLabel(2026, 2026, '2026-01-01')).toBeUndefined();
+  });
+
+  it('is undefined when asOfDate falls in a different year than startYear', () => {
+    expect(stubYearLabel(2026, 2026, '2025-12-15')).toBeUndefined();
+  });
+});
+
+describe('savingsRateNote', () => {
+  it('is undefined when cash flow is not negative', () => {
+    expect(savingsRateNote(year({ year: 2027, netCashFlow: 5000 }))).toBeUndefined();
+    expect(savingsRateNote(year({ year: 2027, netCashFlow: 0 }))).toBeUndefined();
+  });
+
+  it('names the year\'s biggest expense when cash flow is negative', () => {
+    const note = savingsRateNote(
+      year({
+        year: 2026,
+        netCashFlow: -120_000,
+        expenses: [
+          { label: 'Living expenses', amount: 60_000 },
+          { label: 'Down payment', amount: 150_000 },
+        ],
+      }),
+    );
+    expect(note).toBe('Negative because spending outpaced income this year — largely Down payment.');
+  });
+
+  it('falls back to a generic note when there are no expense line items to name', () => {
+    expect(savingsRateNote(year({ year: 2026, netCashFlow: -500, expenses: [] }))).toBe(
+      'Negative because spending outpaced income this year.',
+    );
+  });
+
+  // W3#5: a contribution credited back into "saved" can flip a negative
+  // cash-flow year into a non-negative savings year, and must never be
+  // named as the "culprit" even when it isn't.
+  it('is undefined once a contribution credited back into "saved" covers the cash-flow gap', () => {
+    expect(
+      savingsRateNote(
+        year({
+          year: 2026,
+          netCashFlow: -5_000,
+          expenses: [{ label: '401(k) — contribution', amount: 20_000, category: 'contribution' }],
+        }),
+      ),
+    ).toBeUndefined(); // saved = -5,000 + 20,000 = 15,000, not negative
+  });
+
+  it('never blames a contribution as the biggest expense, even when it dwarfs every other line', () => {
+    const note = savingsRateNote(
+      year({
+        year: 2026,
+        netCashFlow: -200_000,
+        expenses: [
+          { label: 'Living expenses', amount: 60_000 },
+          { label: '401(k) — contribution', amount: 20_000, category: 'contribution' },
+        ],
+      }),
+    );
+    // saved = -200,000 + 20,000 = -180,000 -- still negative, so the note
+    // fires, but "Living expenses" (the biggest NON-contribution line) is
+    // named, not the bigger-looking contribution.
+    expect(note).toBe('Negative because spending outpaced income this year — largely Living expenses.');
   });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Account, Goal, Plan, PriorityRule, RuleType } from '@northstar/engine';
 import { ACCOUNT_TYPES, isWithdrawable, mergeGoalRules, runPlan } from '@northstar/engine';
-import { signedMoney } from '../format';
+import { signedMoney, signedPercent } from '../format';
 import { Choice, Field, NumberInput } from './fields';
 import { GoalWaterfall } from './GoalWaterfall';
 
@@ -388,11 +388,6 @@ function Impact({
       {fieldStr} → {signedMoney(field.netWorthDelta)} at {field.year}
     </span>
   );
-}
-
-function signedPercent(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return rounded > 0 ? `+${rounded}%` : `${rounded}%`;
 }
 
 function Waterfall({

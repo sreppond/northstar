@@ -44,21 +44,28 @@ the API.
 
 ## Monarch import
 
-Real balances can be read out of [Monarch Money][monarch] via
-[`robcerda/monarch-mcp-server`][mcp] — capture, paste, review the diff, save:
+Real balances can be read out of [Monarch Money][monarch] three ways, all
+covered in [`docs/MONARCH-IMPORT.md`](docs/MONARCH-IMPORT.md):
+
+- **The desktop app, monthly, local-only:** `npm run monarch:sync` drives a
+  real Chrome against a persistent local profile — headed the first time so
+  you log in by hand (no credentials ever touch the script), headless after
+  that. It writes a snapshot to disk; the app notices it itself and opens the
+  same review drawer. Nothing but Monarch is ever called, and nothing leaves
+  this machine.
+- **The server:** connect once and press Refresh — it talks to Monarch's
+  GraphQL API directly, which returns account subtypes and interest rates the
+  MCP tool drops, so it classifies retirement accounts automatically instead
+  of asking.
+- **Capture and paste**, via [`robcerda/monarch-mcp-server`][mcp], the
+  fallback that needs neither the desktop app nor the server:
 
 ```bash
 node scripts/monarch-capture.mjs accounts.json [cashflow.json] > snap.json
 ```
 
-An import writes balances and **nothing else**: every rate, tax assumption and
-withdrawal rule stays as you set it. See
-[`docs/MONARCH-IMPORT.md`](docs/MONARCH-IMPORT.md).
-
-With the server running you do not need the capture step at all — connect once
-and press Refresh. The server talks to Monarch's GraphQL API directly, which
-returns account subtypes and interest rates the MCP tool drops, so it classifies
-retirement accounts automatically instead of asking.
+Whichever path produced it, an import writes balances and **nothing else**:
+every rate, tax assumption and withdrawal rule stays as you set it.
 
 [monarch]: https://www.monarchmoney.com
 [mcp]: https://github.com/robcerda/monarch-mcp-server

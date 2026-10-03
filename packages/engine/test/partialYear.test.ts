@@ -38,6 +38,13 @@ describe('runPlan — partial first year', () => {
   it('prorates growth for the fraction of startYear left, as of the given date', () => {
     // The reported bug: $80k at 10% must NOT compound a full year in 2026
     // when we are already partway through it.
+    //
+    // MOVED (owner decision 1, docs/MATH.md "Partial-year growth compounds"):
+    // this used to assert the LINEAR proration 80,000 * (1 + 10% * 131/365)
+    // ≈ 82,849. The engine now COMPOUNDS the stub fraction instead:
+    // 80,000 * 1.1^(131/365) ≈ 82,785 — slightly less, because a shorter
+    // period cannot re-invest its own fractional gains the way linear
+    // proration implicitly assumes.
     const result = runPlan(
       plan({
         settings: { projectionYears: 1, asOfDate: '2026-08-23' } as never,
@@ -45,11 +52,9 @@ describe('runPlan — partial first year', () => {
       }),
     );
     const close = result.years[0].accounts[0].close;
-    // 80,000 * (1 + 10% * 131/365) ≈ 82,849 — nowhere near the naive full-year
-    // 88,000, and nowhere near the previously-computed 136,000.
-    expect(close).toBeCloseTo(80_000 * (1 + 0.1 * (131 / 365)), 2);
+    expect(close).toBeCloseTo(80_000 * Math.pow(1.1, 131 / 365), 6);
     expect(close).toBeGreaterThan(82_500);
-    expect(close).toBeLessThan(83_200);
+    expect(close).toBeLessThan(83_100);
   });
 
   it('runs a full year when asOfDate is unset (backward compatible)', () => {

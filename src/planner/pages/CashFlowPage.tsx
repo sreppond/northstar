@@ -4,7 +4,7 @@ import { LedgerToolbar, LedgerCompareDiff } from '../LedgerToolbar';
 import { CashFlowTab } from '../tabs/CashFlowTab';
 import { CashFlowSankey } from '../CashFlowSankey';
 import { planMetaLine, money, signedMoney, percent } from '../format';
-import { cashFlowStats, moneyDelta } from '../ledger';
+import { cashFlowStats, moneyDelta, stubYearLabel } from '../ledger';
 import { Page, PageHeader, StatStrip, Stat, SectionCard, EmptyState } from '../ui';
 import './ledger.css';
 
@@ -18,6 +18,7 @@ export function CashFlowPage() {
   const snapshot = index >= 0 ? years[index] : years[0];
   const previous = index > 0 ? years[index - 1] : undefined;
   const stats = snapshot ? cashFlowStats(snapshot, previous) : undefined;
+  const stub = snapshot ? stubYearLabel(snapshot.year, plan.settings.startYear, plan.settings.asOfDate) : undefined;
 
   const stepYear = (delta: number) => {
     const next = years[index + delta];
@@ -56,14 +57,32 @@ export function CashFlowPage() {
 
       {stats && (
         <StatStrip>
-          <Stat size="xl" label="Income" value={money(stats.income)} delta={moneyDelta(stats.deltaIncome)} />
-          <Stat label="Spending" value={money(stats.spending)} delta={moneyDelta(stats.deltaSpending)} />
-          <Stat label="Taxes" value={money(stats.taxes)} delta={moneyDelta(stats.deltaTaxes)} />
+          <Stat
+            size="xl"
+            label="Income"
+            value={money(stats.income)}
+            delta={moneyDelta(stats.deltaIncome)}
+            sub={stub?.long}
+            explain={`Every income line (baseline plus any job, Social Security or windfall events) projected for ${stats.year}${stub ? `, prorated for the ${stub.short} partial year` : ''}. The tag is the change from ${stats.year - 1}.`}
+          />
+          <Stat
+            label="Spending"
+            value={money(stats.spending)}
+            delta={moneyDelta(stats.deltaSpending)}
+            explain={`Baseline living costs plus any expense events projected for ${stats.year}. The tag is the change from ${stats.year - 1}.`}
+          />
+          <Stat
+            label="Taxes"
+            value={money(stats.taxes)}
+            delta={moneyDelta(stats.deltaTaxes)}
+            explain={`Income and capital-gains taxes the engine projects for ${stats.year}. The tag is the change from ${stats.year - 1}.`}
+          />
           <Stat
             label="Saved"
             value={signedMoney(stats.saved)}
             sub={stats.savingsRate !== undefined ? `${percent(stats.savingsRate, 0)} savings rate` : undefined}
             delta={moneyDelta(stats.deltaSaved)}
+            explain={`Income minus spending and taxes for ${stats.year} — what's left to save (or, negative, what got drawn down). Savings rate divides this by income.`}
           />
         </StatStrip>
       )}
@@ -84,6 +103,8 @@ export function CashFlowPage() {
           window={windowYears}
           events={plan.events}
           highlightYear={scrubYear}
+          startYear={plan.settings.startYear}
+          asOfDate={plan.settings.asOfDate}
           onEdit={(event) => editor.edit(event)}
           onEditAssumptions={() => setAssumptionsDraft(structuredClone(stored))}
         />

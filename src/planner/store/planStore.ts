@@ -3,6 +3,8 @@ import type { Account, Goal, Plan, PlanEvent } from '@northstar/engine';
 import { mergeGoalRules } from '@northstar/engine';
 import { SAMPLE_PLANS } from '../samplePlan';
 import type { ProgressPoint } from '../progress';
+import { toast } from '../ui/Toast';
+import { backupPlans } from '../monarchLocal';
 
 /**
  * The plan is the only source of truth. `PlanResult` is always derived in a
@@ -11,6 +13,14 @@ import type { ProgressPoint } from '../progress';
  *
  * Undo keeps whole plan snapshots rather than a command log. A plan is a few
  * kilobytes; a command pattern would be a lot of machinery to save nothing.
+ *
+ * Toasts (docs/ROADMAP-10.md C6) are emitted from right here — the actual
+ * commit boundary — rather than from whatever drawer called in, so a toast
+ * fires exactly once per real commit no matter which surface (a drawer's
+ * Save, a drag-to-move, Monarch import) reached it, and never on the
+ * keystroke-by-keystroke drafts those surfaces preview live before Save.
+ * Every toast's Undo calls straight back into this store's own `undo()`
+ * rather than needing a callback threaded in from React.
  */
 
 export const STORAGE_KEY = 'northstar:plans:v1';
@@ -59,7 +69,12 @@ interface PlanState {
   deleteGoal(planId: string, goalId: string): void;
   reorderGoals(planId: string, goalIds: string[]): void;
   updateSettings(planId: string, patch: Partial<Plan['settings']>): void;
-  replacePlan(plan: Plan): void;
+  /** `toastMessage`, when given, is what shows (with an Undo action) instead
+   *  of `replacePlan`'s usual silence — used by the one caller that means
+   *  something specific by "replace the whole plan" (Monarch import), not by
+   *  ordinary settings saves, which stay quiet the way every other field
+   *  edit is quiet until Save. */
+  replacePlan(plan: Plan, toastMessage?: string): void;
   createPlan(name: string): void;
   /**
    * The first-run authoring flow (docs/REDESIGN.md §6 item 6): creates the
@@ -133,6 +148,11 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   },
 
   upsertEvent(planId, event) {
+    // Read the pre-commit event so the toast can tell "moved" from
+    // "updated" — `commit`'s replace function only ever sees the whole
+    // `plans` array, with no notion of what a specific field used to be.
+    const existing = get().plans.find((p) => p.id === planId)?.events.find((e) => e.id === event.id);
+
     set((state) => commit(state, (plans) =>
       plans.map((plan) => {
         if (plan.id !== planId) return plan;
@@ -145,9 +165,20 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         };
       }),
     ));
+
+    if (existing) {
+      const movedOnly = existing.startYear !== event.startYear && sameExceptStartYear(existing, event);
+      toast(movedOnly ? `Moved ${event.name} to ${event.startYear}` : `Updated ${event.name}`, {
+        action: { label: 'Undo', onClick: () => get().undo() },
+      });
+    } else {
+      toast(`Added ${event.name}`, { action: { label: 'Undo', onClick: () => get().undo() } });
+    }
   },
 
   upsertAccount(planId, account) {
+    const existed = get().plans.find((p) => p.id === planId)?.accounts.some((a) => a.id === account.id) ?? false;
+
     set((state) => commit(state, (plans) =>
       plans.map((plan) => {
         if (plan.id !== planId) return plan;
@@ -160,9 +191,15 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         };
       }),
     ));
+
+    toast(existed ? `Updated ${account.name}` : `Added ${account.name}`, {
+      action: { label: 'Undo', onClick: () => get().undo() },
+    });
   },
 
   deleteEvent(planId, eventId) {
+    const deleted = get().plans.find((p) => p.id === planId)?.events.find((e) => e.id === eventId);
+
     set((state) => commit(state, (plans) =>
       plans.map((plan) => {
         if (plan.id !== planId) return plan;
@@ -177,6 +214,10 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         };
       }),
     ));
+
+    if (deleted) {
+      toast(`Deleted ${deleted.name}`, { action: { label: 'Undo', onClick: () => get().undo() } });
+    }
   },
 
   // Goals are a friendly surface over the allocation waterfall
@@ -229,8 +270,11 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     ));
   },
 
-  replacePlan(plan) {
+  replacePlan(plan, toastMessage) {
     set((state) => commit(state, (plans) => plans.map((p) => (p.id === plan.id ? plan : p))));
+    if (toastMessage) {
+      toast(toastMessage, { action: { label: 'Undo', onClick: () => get().undo() } });
+    }
   },
 
   createPlan(name) {
@@ -394,8 +438,22 @@ function newId(): string {
   return `plan-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** True when two events are identical except for `startYear` — the signal
+ *  `upsertEvent`'s toast uses to say "Moved X to 2032" instead of the
+ *  generic "Updated X" a config-field edit gets. */
+function sameExceptStartYear(a: PlanEvent, b: PlanEvent): boolean {
+  const { startYear: _a, ...restA } = a;
+  const { startYear: _b, ...restB } = b;
+  return JSON.stringify(restA) === JSON.stringify(restB);
+}
+
+/** Local calendar date, not UTC (docs/W3-REVIEW.md "Use local dates, not
+ *  UTC") — `toISOString` reads the date in UTC, so an evening save west of
+ *  Greenwich (anywhere in the Americas, after ~4-8pm local) dated itself
+ *  tomorrow. `en-CA` is just the locale whose built-in format happens to be
+ *  YYYY-MM-DD. */
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('en-CA');
 }
 
 /**
@@ -512,6 +570,21 @@ function persistProgressPoints(points: ProgressPoint[]) {
   }
 }
 
+const BACKUP_DEBOUNCE_MS = 5_000;
+let backupTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Debounced so a burst of edits (typing in a drawer, a drag in progress)
+ *  writes one backup file instead of one per keystroke. Tauri-only — see
+ *  `backupPlans` — and never awaited for the same reason `syncToServer`
+ *  isn't: a slow disk write must not make editing feel slow. */
+function scheduleBackup(plans: Plan[]) {
+  if (backupTimer) clearTimeout(backupTimer);
+  backupTimer = setTimeout(() => {
+    backupTimer = null;
+    void backupPlans(plans);
+  }, BACKUP_DEBOUNCE_MS);
+}
+
 function persist(plans: Plan[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plans));
@@ -524,6 +597,10 @@ function persist(plans: Plan[]) {
   // request must not make typing in a drawer feel slow, and the next edit
   // resends the whole set anyway.
   syncToServer?.(plans);
+
+  // A durable copy outside localStorage (docs/ROADMAP-10.md Track B). No-ops
+  // outside the packaged Tauri app.
+  scheduleBackup(plans);
 }
 
 /** Replace everything from the server, without disturbing undo history. */

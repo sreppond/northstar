@@ -257,3 +257,33 @@ describe('runPlan — cost-basis withdrawals', () => {
     expect(tax?.amount).toBeCloseTo(15_000 * (0.24 / 0.76), 2);
   });
 });
+
+// W3#7: the opening snapshot ("today") carries each cost-basis account's
+// remaining basis, not just its balance, so a consumer like the Annuity view
+// can read a basis/gain split as of `asOfDate` instead of a projected
+// `years[]` close.
+describe('opening snapshot carries remaining cost basis', () => {
+  it('reads nonTaxableBaseRemaining straight off Account.nonTaxableBase, unchanged, as of "today"', () => {
+    const account = asset({
+      id: 'ann',
+      name: 'Annuity',
+      accountClass: 'variableAnnuity',
+      initialBalance: 100_000,
+      nonTaxableBase: 80_000,
+      growthRateMethod: 'noChange',
+    });
+    const result = runPlan(plan({ settings: { projectionYears: 1 } as never, accounts: [account] }));
+
+    const opening = result.opening!.accounts.find((a) => a.accountId === 'ann');
+    expect(opening?.balance).toBe(100_000);
+    expect(opening?.nonTaxableBaseRemaining).toBe(80_000);
+  });
+
+  it('leaves nonTaxableBaseRemaining undefined for an ordinary account with no cost-basis tracking', () => {
+    const account = asset({ id: 'b', name: 'Brokerage', initialBalance: 50_000, growthRateMethod: 'noChange' });
+    const result = runPlan(plan({ settings: { projectionYears: 1 } as never, accounts: [account] }));
+
+    const opening = result.opening!.accounts.find((a) => a.accountId === 'b');
+    expect(opening?.nonTaxableBaseRemaining).toBeUndefined();
+  });
+});

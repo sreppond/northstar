@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import type { FreedomAgeCandidate, Goal, Participant, Plan, PlanEvent, PlanResult, RetirementConfig } from '@northstar/engine';
 import { goalFundingProgress, lifeExpectancyYearFor, retirementAgeSweep, runPlan } from '@northstar/engine';
-import { detailMoney, joinNames, percent } from '../format';
+import { money, joinNames, percent } from '../format';
 import { MiniChart } from './MiniChart';
 import { SeppTool } from './SeppForecastView';
 import { Badge, ProgressBar, SectionCard, Stat, StatStrip } from '../ui';
 import { clampYear, extendPlanHorizon, planForRetirementPreview } from '../retirement';
+import { stubYearLabel } from '../ledger';
 
 /**
  * The Retirement lens (docs/REDESIGN-V3.md "Retirement"): "when can I stop,
@@ -227,6 +228,8 @@ function RetirementReady({
   const portfolio = result.years.map((y) =>
     y.accounts.filter((a) => !a.isLiability && PORTFOLIO_CLASSES.has(a.accountClass)).reduce((s, a) => s + a.close, 0),
   );
+  const stub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
+  const stubYear = stub ? { year: plan.settings.startYear, label: stub.short } : undefined;
 
   const retirementIndex = years.indexOf(retirementEvent.startYear);
 
@@ -268,11 +271,13 @@ function RetirementReady({
                 ? `No year before age ${retiree.lifeExpectancy} avoids running dry in this plan.`
                 : undefined
           }
+          explain="The earliest retirement year, swept year by year, whose projection still lasts to the retiree's life expectancy without running dry — not a rule of thumb, an actual re-run of the plan at each candidate year."
         />
         <Stat
           label="Income replacement"
           value={summary && summary.before > 0 ? percent((summary.after / summary.before) * 100, 0) : '—'}
-          sub={summary ? `${detailMoney(summary.before)} → ${detailMoney(summary.after)}` : 'Out of horizon'}
+          sub={summary ? `${money(summary.before)} → ${money(summary.after)}` : 'Out of horizon'}
+          explain="Spendable income the retirement year after retiring, divided by spendable income the year before — how much of your working income the portfolio (plus Social Security) actually replaces."
         />
         <Stat
           label="Money lasts until"
@@ -284,11 +289,17 @@ function RetirementReady({
                 ? `No shortfall through ${result.endYear} (extended for this view)`
                 : 'No shortfall through the plan horizon'
           }
+          explain="The first year, at the retirement year you've set, that a withdrawal can't be fully funded — projected out to 25 years past retirement if the plan's own horizon ends sooner."
         />
         <Stat
           label="Withdrawals, first year"
-          value={summary ? detailMoney(summary.withdrawalsAtRetirement) : '—'}
+          value={summary ? money(summary.withdrawalsAtRetirement) : '—'}
           sub={summary ? undefined : 'Out of horizon'}
+          explain={
+            retirementEvent
+              ? `Total portfolio withdrawals projected for ${retirementEvent.startYear}, the retirement year you've set.`
+              : undefined
+          }
         />
       </StatStrip>
 
@@ -322,6 +333,7 @@ function RetirementReady({
           endLabels
           bandFrom={isExtended ? originalEndYear : undefined}
           bandLabel={isExtended ? 'Beyond horizon' : undefined}
+          stubYear={stubYear}
         />
       </SectionCard>
 
@@ -332,6 +344,7 @@ function RetirementReady({
           height={200}
           bandFrom={isExtended ? originalEndYear : undefined}
           bandLabel={isExtended ? 'Beyond horizon' : undefined}
+          stubYear={stubYear}
         />
       </SectionCard>
 
@@ -391,7 +404,7 @@ function RetirementGoalStage({ plan, result, goal }: { plan: Plan; result: PlanR
     <div className="ns-goal-readiness">
       <div className="ns-goal-readiness-head">
         <span className="ns-goal-readiness-title">
-          {goal.name} — {detailMoney(goal.targetAmount)} by {goal.byYear}
+          {goal.name} — {money(goal.targetAmount)} by {goal.byYear}
         </span>
         <Badge tone={funded ? 'in' : 'out'}>{funded ? 'On track' : 'Behind'}</Badge>
       </div>
@@ -401,7 +414,7 @@ function RetirementGoalStage({ plan, result, goal }: { plan: Plan; result: PlanR
           convention. */}
       <ProgressBar value={balance} max={goal.targetAmount} tone={funded ? 'accent' : 'out'} label={`${goal.name} progress`} />
       <div className="ns-goal-readiness-note">
-        {detailMoney(balance)} earmarked ({percent(fraction * 100, 0)}
+        {money(balance)} earmarked ({percent(fraction * 100, 0)}
         {accountNames ? ` from ${accountNames}` : ''})
       </div>
     </div>

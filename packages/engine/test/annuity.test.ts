@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { annuityFeeForYear, contractYearFor, surrenderCharge } from '../src/annuity.js';
+import { effectiveRateForFraction } from '../src/accounts.js';
 import { runPlan } from '../src/run.js';
 import { asset, plan, rule } from './fixtures.js';
 
@@ -29,7 +30,12 @@ describe('annuityFeeForYear', () => {
     expect(fee).toBeCloseTo(100_000 * 0.015, 6);
   });
 
-  it('scales both the flat and asset-based fee by yearFraction, like every other recurring flow', () => {
+  it('scales the flat fee LINEARLY but the asset-based fee by the COMPOUNDED rate for a partial year', () => {
+    // MOVED (owner decision 1, docs/MATH.md "Partial-year growth
+    // compounds"): the asset-based fee is a percent-of-assets RATE, the same
+    // shape as growth itself, so it no longer simply halves for a half year
+    // — it compounds. The flat fee is an ordinary recurring dollar flow (like
+    // a salary), so it is UNCHANGED: still exactly linear.
     const fullYear = annuityFeeForYear(
       { annuityFlatFeeAnnual: 240, annuityAssetFeePercent: 1 },
       100_000,
@@ -42,7 +48,15 @@ describe('annuityFeeForYear', () => {
       0,
       0.5,
     );
-    expect(halfYear).toBeCloseTo(fullYear / 2, 6);
+    // Hand check: flat halves linearly, 240 -> 120. The asset-based portion
+    // (grossGrowth = 0, so midYearValue = 100,000) compounds:
+    // 100,000 * (1.01^0.5 - 1) ≈ 100,000 * 0.0049875 ≈ 498.76, not half of
+    // the full year's $1,000.
+    const expectedHalf = 120 + 100_000 * effectiveRateForFraction(1, 0.5);
+    expect(halfYear).toBeCloseTo(expectedHalf, 4);
+    expect(halfYear).toBeCloseTo(618.76, 2);
+    // Proof it no longer just halves: fullYear / 2 would be exactly 620.
+    expect(halfYear).not.toBeCloseTo(fullYear / 2, 1);
   });
 
   it('never drives the year below zero even with fees larger than the balance', () => {

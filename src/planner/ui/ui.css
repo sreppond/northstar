@@ -96,6 +96,64 @@
   color: var(--muted);
 }
 
+/* --- explain hint ------------------------------------------------------------
+ * The small "i" affordance next to a stat/card label that reveals its
+ * explainer on hover or keyboard focus (docs/ROADMAP-10.md C3, `HoverCard.tsx`'s
+ * `ExplainHint`). Quiet by default — this is a trust affordance, not a call to
+ * action, so it should read as barely-there until someone reaches for it.
+ * ---------------------------------------------------------------------------*/
+.ns-explain-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted-light);
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
+  cursor: help;
+  transition:
+    color 140ms var(--ease-soft),
+    border-color 140ms var(--ease-soft),
+    background-color 140ms var(--ease-soft);
+}
+.ns-explain-hint:hover,
+.ns-explain-hint:focus-visible {
+  color: var(--ink);
+  border-color: var(--border-strong);
+  background: var(--chip);
+}
+.ns-explain-hint:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The freeform copy an `ExplainHint` popover carries (plain sentences, not
+   the structured title/rows a `Detail`-based `HoverCard` renders) — reset to
+   the hovercard's own type rather than a `<p>`'s default browser margin, and
+   a quiet inline treatment for a command someone should type verbatim
+   (docs/ROADMAP-10.md C3/C4's "run `npm run monarch:sync`" hint). */
+.ns-explain-body p {
+  margin: 0;
+}
+.ns-explain-body p + p {
+  margin-top: 6px;
+}
+.ns-explain-body code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
 /* --- badge / delta tag ------------------------------------------------------ */
 
 .ns-ui-badge {
@@ -192,29 +250,31 @@
   gap: 8px;
 }
 
-/* A pressable stat (docs/REVIEW.md M3) — `Stat` renders as a real `<button>`
-   when it's given an `onClick`, so a stat that toggles something (Overview's
-   "Range P10-P90") keeps the strip's own divider/padding instead of a
-   wrapping `<button>` shifting `:first-child`/`:nth-child` counts out from
-   under every rule above and below. Reset to plain text chrome; the
-   border-left stays, since that's the strip's own divider, not button
-   chrome. Pressed/hover state is a neutral chip fill, never a data hue
-   (docs/REVIEW.md S16) — this is a UI affordance, not a value. */
+/* A pressable stat (docs/REVIEW.md M3) — `Stat` renders a real `<button>`
+   around just its value/sub when given an `onClick` (Overview's "Range"
+   toggle), not around the whole stat: the label row above already holds
+   `ExplainHint`'s own `<button>`, and nesting two buttons is invalid DOM
+   (docs/W3-REVIEW.md #9). The outer `.ns-ui-stat` div keeps the strip's own
+   divider/padding either way. Reset to plain text chrome; negative margin
+   cancels the hit-area padding so the value doesn't shift. Pressed/hover
+   state is a neutral chip fill, never a data hue (docs/REVIEW.md S16) —
+   this is a UI affordance, not a value. */
 .ns-ui-stat-pressable {
+  display: block;
+  width: 100%;
   cursor: pointer;
   font: inherit;
   text-align: left;
   background: none;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  border-radius: 0;
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  margin: -4px -8px;
   transition: background-color 140ms var(--ease-soft);
 }
 .ns-ui-stat-pressable:hover,
 .ns-ui-stat-pressable[aria-pressed='true'] {
   background: var(--chip);
-  border-radius: 8px;
 }
 /* Deliberately not .ns-num — proportional figures, the same reason the old
    hero figure stayed proportional (docs/REDESIGN-V3.md keeps "colour is
@@ -302,7 +362,26 @@
   justify-content: space-between;
   gap: 8px;
 }
+/* Wraps just the value/foot rows when the card is clickable (docs/W3-REVIEW.md
+   #9) — plain button-reset chrome; the outer `.ns-ui-statcard` already
+   supplies the border/padding/hover look, so this is invisible as a button. */
+.ns-ui-statcard-press {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
 .ns-ui-statcard-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
@@ -394,6 +473,17 @@
   }
   .ns-ui-section-body {
     padding: 16px;
+  }
+  /* A mono meta line ("PROJECTED · 2026-2046 · RETURN 6.5%") shares this
+     row with the title at desktop widths, but `nowrap` (above) makes it
+     claim its full width regardless — on a 358px-wide card that squeezed
+     "Net worth trajectory" down to the point its own words wrapped onto
+     three lines. Stacking title over meta gives both their own full-width
+     line instead of fighting over one. */
+  .ns-ui-section-head-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
   /* `flex: none` (above) can't shrink — on a 390px card a header action as
      wide as the ledger toolbar (Select + window pager) clipped past the
@@ -657,4 +747,102 @@
   margin-top: 6px;
   display: flex;
   gap: 8px;
+}
+
+/* --- toast (docs/ROADMAP-10.md C6) --------------------------------------
+ * One region, at most 3 stacked, bottom-centre on desktop and above the
+ * safe area on phones. Entrance is a short transform/opacity spring;
+ * `.ns *`'s global `prefers-reduced-motion` override in `planner.css`
+ * collapses it to a 1ms cross-fade for free, since this region mounts
+ * inside the `.ns` tree. */
+.ns-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  width: 100%;
+  padding: 0 16px;
+}
+
+.ns-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  padding: 10px 10px 10px 16px;
+  background: var(--ink-deep);
+  color: var(--surface);
+  border-radius: 10px;
+  box-shadow: var(--shadow-tooltip);
+  font-size: 13.5px;
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  transition:
+    opacity 220ms var(--ease-soft, ease-out),
+    transform 220ms var(--ease-soft, ease-out);
+}
+.ns-toast-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.ns-toast-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.ns-toast-action {
+  font: inherit;
+  font-weight: 600;
+  flex: none;
+  color: var(--surface);
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ns-toast-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ns-toast-dismiss {
+  font: inherit;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--surface);
+  opacity: 0.6;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.ns-toast-dismiss:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 640px) {
+  .ns-toast-region {
+    bottom: max(12px, env(safe-area-inset-bottom, 0px) + 8px);
+  }
+  .ns-toast {
+    max-width: none;
+    width: 100%;
+  }
 }

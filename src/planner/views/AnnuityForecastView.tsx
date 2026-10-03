@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Account, Plan, PlanResult } from '@northstar/engine';
 import { contractYearFor, surrenderCharge } from '@northstar/engine';
 import { Field } from '../drawer/fields';
-import { detailMoney, percent } from '../format';
+import { money, percent } from '../format';
 import { MiniChart } from './MiniChart';
 import { SectionCard, Stat, StatStrip } from '../ui';
 
@@ -62,8 +62,13 @@ function AnnuityContent({
   }));
   const current = rows.find((r) => r.year === asOfYear)?.row ?? rows[0]?.row;
 
-  const balance = current?.close ?? account.initialBalance;
-  const basisRemaining = Math.min(balance, current?.nonTaxableBaseRemaining ?? account.nonTaxableBase ?? 0);
+  // "As of today" (docs/MATH.md "Today vs. years[0]") — `result.opening` is
+  // the plan's real `asOfDate` balance; `current` (year[0]'s projected Dec
+  // 31 close) is kept above only for the fee-history chart below, which
+  // plots a full year at a time and has no "today" column of its own.
+  const opening = result.opening?.accounts.find((a) => a.accountId === account.id);
+  const balance = opening?.balance ?? account.initialBalance;
+  const basisRemaining = Math.min(balance, opening?.nonTaxableBaseRemaining ?? account.nonTaxableBase ?? 0);
   const gain = Math.max(0, balance - basisRemaining);
   const basisPct = balance > 0 ? (basisRemaining / balance) * 100 : 0;
   const gainPct = 100 - basisPct;
@@ -88,14 +93,33 @@ function AnnuityContent({
   return (
     <>
       <StatStrip>
-        <Stat size="xl" label="Balance" value={detailMoney(balance)} sub={`As of ${asOfYear}`} />
-        <Stat label="Basis (tax-free)" value={detailMoney(basisRemaining)} />
-        <Stat label="Gain (taxable)" value={detailMoney(gain)} />
-        <Stat label={`Fees paid through ${asOfYear}`} value={detailMoney(totalFeesToDate)} />
+        <Stat
+          size="xl"
+          label="Balance"
+          value={money(balance)}
+          sub={`As of ${asOfYear}`}
+          explain={`This contract's projected account balance for ${asOfYear}.`}
+        />
+        <Stat
+          label="Basis (tax-free)"
+          value={money(basisRemaining)}
+          explain="What you've put in and haven't yet withdrawn — the part of the balance that comes out with no further tax owed."
+        />
+        <Stat
+          label="Gain (taxable)"
+          value={money(gain)}
+          explain="Balance minus remaining basis — investment growth inside the contract, taxed as ordinary income when withdrawn."
+        />
+        <Stat
+          label={`Fees paid through ${asOfYear}`}
+          value={money(totalFeesToDate)}
+          explain="Mortality & expense, advisory and flat fees deducted from this contract in every projected year up to and including this one."
+        />
         <Stat
           label="Surrender charge now"
-          value={currentCharge > 0 ? detailMoney(currentCharge) : '—'}
+          value={currentCharge > 0 ? money(currentCharge) : '—'}
           sub={`Contract year ${contractYear}`}
+          explain="What leaving the contract today would cost, per its own surrender schedule — 0 once the schedule has run out."
         />
       </StatStrip>
 
@@ -129,10 +153,10 @@ function AnnuityContent({
         </div>
         <div className="ns-split-bar-legend">
           <span>
-            Basis (tax-free): <b>{detailMoney(basisRemaining)}</b>
+            Basis (tax-free): <b>{money(basisRemaining)}</b>
           </span>
           <span>
-            Gain (taxable): <b>{detailMoney(gain)}</b>
+            Gain (taxable): <b>{money(gain)}</b>
           </span>
         </div>
       </SectionCard>
@@ -155,7 +179,7 @@ function AnnuityContent({
                   <Stat label="Advisory fee" value={percent(account.annuityAdvisoryFeePercent ?? 0)} />
                 )}
                 {(account.annuityFlatFeeAnnual ?? 0) > 0 && (
-                  <Stat label="Flat annual fee" value={detailMoney(account.annuityFlatFeeAnnual ?? 0)} />
+                  <Stat label="Flat annual fee" value={money(account.annuityFlatFeeAnnual ?? 0)} />
                 )}
               </div>
             </SectionCard>
@@ -166,7 +190,7 @@ function AnnuityContent({
               <p className="ns-view-sub">
                 The percent of a withdrawal the carrier keeps if it is taken during that contract year
                 {currentCharge > 0
-                  ? ` — withdrawing the full balance today would cost ${detailMoney(currentCharge)}.`
+                  ? ` — withdrawing the full balance today would cost ${money(currentCharge)}.`
                   : ' — past the surrender period, or the schedule has no entry for it.'}
               </p>
               <div className="ns-surrender-list">

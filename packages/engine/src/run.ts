@@ -14,11 +14,19 @@ import type {
   Account,
   AccountYear,
   LineItem,
+  OpeningAccountSnapshot,
+  OpeningSnapshot,
   Plan,
   PlanResult,
   YearSnapshot,
 } from './types.js';
-import { accountExistsIn, amortizeYear, growthRateFor, scheduledAnnualPayment } from './accounts.js';
+import {
+  accountExistsIn,
+  amortizeYear,
+  effectiveRateForFraction,
+  growthRateFor,
+  scheduledAnnualPayment,
+} from './accounts.js';
 import { annuityFeeForYear } from './annuity.js';
 import { sweepAllocationLabel } from './goals.js';
 import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
@@ -68,11 +76,53 @@ export function runPlan(plan: Plan): PlanResult {
   for (const f of failures) warnings.push(f.message);
 
   // --- assemble the account set ---------------------------------------------
-  const accounts: Account[] = [
-    ...plan.accounts.filter((a) => a.isIncluded),
-    ...compiled.flatMap((c) => c.accountsCreated),
-  ];
+  const planAccounts = plan.accounts.filter((a) => a.isIncluded);
+  const eventAccounts = compiled.flatMap((c) => c.accountsCreated);
+  const accounts: Account[] = [...planAccounts, ...eventAccounts];
   const accountById = new Map(accounts.map((a) => [a.id, a]));
+
+  // --- opening snapshot -------------------------------------------------------
+  // "Today", distinct from `years[0]` (the projected CLOSE of the first plan
+  // year) -- see `OpeningSnapshot`'s doc in types.ts.
+  //
+  // A plain `plan.accounts` entry contributes its `initialBalance` whenever
+  // it already exists at `startYear` -- the same `accountExistsIn` test
+  // applied everywhere else. An EVENT-CREATED account (`eventAccounts`,
+  // e.g. `buyAHome`'s home/mortgage pair) is different: `accountExistsIn`
+  // only tracks CALENDAR-YEAR existence, so an event starting in the plan's
+  // own `startYear` reads as "exists at startYear" even though the event's
+  // cash flows (the down payment, say) are dated to land DURING the stub
+  // year, strictly after `asOfDate` -- "today" has not happened yet for it.
+  // Including it here double-counts: the down payment is still sitting in
+  // cash (it hasn't been paid out yet, as of today) AND the home/mortgage
+  // it bought are already on the balance sheet. So an event account only
+  // belongs in `opening` when it started strictly BEFORE this plan's
+  // `startYear` -- a genuine carryover (e.g. a home bought in an earlier
+  // plan, now just an ordinary asset after a rollover), never one this very
+  // plan is about to create partway through its own first year (W3#3).
+  const openingAccounts: OpeningAccountSnapshot[] = [
+    ...planAccounts.filter((a) => accountExistsIn(a, startYear)),
+    ...eventAccounts.filter((a) => (a.startYear ?? startYear) < startYear),
+  ].map((a) => ({
+    accountId: a.id,
+    name: a.name,
+    accountClass: a.accountClass,
+    isLiability: a.isLiability,
+    balance: a.initialBalance,
+    // A plain copy, not a derived figure (W3#7): nothing has drawn basis
+    // down yet as of "today", so the remaining basis IS `nonTaxableBase`
+    // itself, same as `balance` above is just `initialBalance`.
+    ...(a.nonTaxableBase !== undefined ? { nonTaxableBaseRemaining: a.nonTaxableBase } : {}),
+  }));
+  const openingAssets = sum(openingAccounts.filter((a) => !a.isLiability).map((a) => a.balance));
+  const openingLiabilities = sum(openingAccounts.filter((a) => a.isLiability).map((a) => a.balance));
+  const opening: OpeningSnapshot = {
+    asOfDate: settings.asOfDate ?? `${startYear}-01-01`,
+    accounts: openingAccounts,
+    assets: openingAssets,
+    liabilities: openingLiabilities,
+    netWorth: openingAssets - openingLiabilities,
+  };
 
   // --- index compiled output by year ----------------------------------------
   const cashFlowsByYear = groupBy(
@@ -258,7 +308,7 @@ export function runPlan(plan: Plan): PlanResult {
       const balance = balances.get(account.id) ?? 0;
       if (balance <= EPSILON) continue;
 
-      const payment = scheduledAnnualPayment(account, balance);
+      const payment = scheduledAnnualPayment(account);
       const result = amortizeYear(balance, account.interestRate ?? 0, payment, monthsRemaining(yearFraction));
       amortization.set(account.id, result);
 
@@ -525,14 +575,30 @@ export function runPlan(plan: Plan): PlanResult {
       const contributions = contributionsByAccount.get(account.id) ?? 0;
       const withdrawals = withdrawalsByAccount.get(account.id) ?? 0;
       // The waterfall already debited withdrawals from the live balance, so
-      // this is the opening balance net of anything drawn out. Contributions
-      // are deliberately excluded from the growth base: a contribution made
-      // during year Y earns growth only from year Y+1 (docs/PLAN.md §4.3).
+      // this is the opening balance net of anything drawn out; contributions
+      // land separately below. Growth on `growthBase` itself still runs for
+      // the WHOLE period (docs/MATH.md "Mid-year contributions and
+      // withdrawals") — it is the money that MOVED during the year that gets
+      // the half-period treatment just below.
       const growthBase = balances.get(account.id) ?? 0;
-      const rate = closed.has(account.id) ? 0 : growthRateFor(account, year) / 100;
-      // A partial `startYear` only has `yearFraction` of the year left to
-      // compound (docs/PLAN.md §4.3) — full years elsewhere leave this at 1.
-      const grossGrowth = growthBase * rate * yearFraction;
+      const ratePercent = closed.has(account.id) ? 0 : growthRateFor(account, year);
+      // Partial-year growth compounds rather than prorating linearly
+      // (docs/MATH.md "Partial-year growth compounds"; a full `yearFraction`
+      // of 1 reduces this to the plain annual rate, so this applies
+      // unconditionally, not just to a partial `startYear`).
+      const fullPeriodFactor = effectiveRateForFraction(ratePercent, yearFraction);
+      // Mid-year convention (docs/MATH.md "Mid-year contributions and
+      // withdrawals"): a dollar that moves DURING the year only earns, or
+      // forgoes, HALF the period's growth — not the whole thing, and not
+      // none of it. A contribution is credited `halfPeriodFactor` of growth
+      // on top of itself; a withdrawal, which `growthBase` above already
+      // removed for the FULL period, gets `fullPeriodFactor - halfPeriodFactor`
+      // credited back so it only ever forgoes half.
+      const halfPeriodFactor = effectiveRateForFraction(ratePercent, yearFraction / 2);
+      const grossGrowth =
+        growthBase * fullPeriodFactor +
+        contributions * halfPeriodFactor +
+        withdrawals * (fullPeriodFactor - halfPeriodFactor);
       // Contract fee drag (annuity.ts): 0 for any account that never sets
       // annuityFlatFeeAnnual/annuityAssetFeePercent/annuityAdvisoryFeePercent,
       // so this is a no-op for every account type that predates the feature.
@@ -592,7 +658,7 @@ export function runPlan(plan: Plan): PlanResult {
     });
   }
 
-  return { startYear, endYear, years, warnings };
+  return { startYear, endYear, years, warnings, opening };
 }
 
 // ---------------------------------------------------------------------------

@@ -3,11 +3,14 @@ import type { Plan, PlanEvent, PlanResult, YearSnapshot } from '@northstar/engin
 import type { MonarchStatus } from '../api/client';
 import type { FanSeries } from './NetWorthChart';
 import { accountClassColor } from './ui';
+import type { ProgressPoint } from './progress';
 import {
   accountMixToday,
   describeAge,
+  freshnessHeaderStatus,
   horizonPoints,
   monarchHeaderStatus,
+  planVsReality,
   retirementReadout,
   savingsRateThisYear,
   spreadPercent,
@@ -159,6 +162,29 @@ describe('accountMixToday', () => {
     });
     expect(accountMixToday(resultFrom(2026, [today])).segments).toEqual([]);
   });
+
+  it('reads result.opening instead of years[0] once it is set — "today" is the as-of-date balance, not the projected close', () => {
+    const today = snapshot(2026, {
+      accounts: [
+        { accountId: 'c1', name: 'Cash', accountClass: 'cash', isLiability: false, open: 0, growth: 0, contributions: 0, withdrawals: 0, interest: 0, principal: 0, close: 999_999 }, // NOT read
+      ],
+    });
+    const result = { ...resultFrom(2026, [today]), opening: {
+      asOfDate: '2026-08-23',
+      accounts: [
+        { accountId: 'c1', name: 'Cash', accountClass: 'cash' as const, isLiability: false, balance: 10_000 },
+        { accountId: 'm1', name: 'Mortgage', accountClass: 'mortgage' as const, isLiability: true, balance: 400_000 },
+      ],
+      assets: 10_000,
+      liabilities: 400_000,
+      netWorth: -390_000,
+    } };
+    const mix = accountMixToday(result);
+    expect(mix.liabilitiesTotal).toBe(400_000);
+    expect(mix.segments).toEqual([
+      { key: 'cash', label: expect.any(String), value: 10_000, color: accountClassColor('cash') },
+    ]);
+  });
 });
 
 // --- upcomingEvents -----------------------------------------------------------
@@ -219,6 +245,26 @@ describe('savingsRateThisYear', () => {
   it('can go negative — spending more than you make is a real answer, not an error', () => {
     const result = resultFrom(2026, [snapshot(2026, { totalIncome: 100_000, netCashFlow: -5_000 })]);
     expect(savingsRateThisYear(result, 2026)).toBeCloseTo(-5, 9);
+  });
+
+  // W3#5: contributions counted as saved, not spent — the one shared
+  // definition (`ledger.ts`'s `savingsRatePercent`), not raw
+  // netCashFlow/income (which would understate this to 15%).
+  it('counts a paycheck contribution as saved, not spent (W3#5)', () => {
+    const result = resultFrom(2026, [
+      snapshot(2026, {
+        totalIncome: 100_000,
+        totalExpenses: 60_000,
+        totalTaxes: 10_000,
+        netCashFlow: 30_000,
+        expenses: [
+          { label: 'Living expenses', amount: 40_000, category: 'living' },
+          { label: '401(k) — contribution', amount: 20_000, category: 'contribution' },
+        ],
+      }),
+    ]);
+    // Hand check: saved = netCashFlow (30,000) + contribution (20,000) = 50,000; / 100,000 income = 50%.
+    expect(savingsRateThisYear(result, 2026)).toBeCloseTo(50, 6);
   });
 });
 
@@ -288,5 +334,91 @@ describe('describeAge', () => {
     expect(describeAge(21)).toBe('synced 3 weeks ago');
     expect(describeAge(90)).toBe('synced 3 months ago');
     expect(describeAge(null)).toBe('unknown age');
+  });
+});
+
+describe('freshnessHeaderStatus', () => {
+  it('reads "Manual balances · as of <date>" for a plan with no Monarch link', () => {
+    const status = freshnessHeaderStatus({ daysSinceAsOf: 5, isStale: false, needsRollover: false }, '2026-09-02', false);
+    expect(status).toEqual({ text: 'Manual balances · as of Sep 2, 2026', isStale: false });
+  });
+
+  it('reads "Monarch · synced <date> · N days ago" once the plan has absorbed a Monarch import', () => {
+    const status = freshnessHeaderStatus({ daysSinceAsOf: 24, isStale: false, needsRollover: false }, '2026-09-01', true);
+    expect(status).toEqual({ text: 'Monarch · synced Sep 1, 2026 · 24 days ago', isStale: false });
+  });
+
+  it('carries isStale through for the caller’s warn-dot treatment', () => {
+    const status = freshnessHeaderStatus({ daysSinceAsOf: 40, isStale: true, needsRollover: false }, '2026-08-01', true);
+    expect(status.isStale).toBe(true);
+  });
+
+  it('reads "today"/"1 day ago" rather than "0 days ago"/"1 days ago"', () => {
+    expect(freshnessHeaderStatus({ daysSinceAsOf: 0, isStale: false, needsRollover: false }, '2026-09-01', true).text).toContain('today');
+    expect(freshnessHeaderStatus({ daysSinceAsOf: 1, isStale: false, needsRollover: false }, '2026-09-01', true).text).toContain('1 day ago');
+  });
+});
+
+describe('planVsReality', () => {
+  const points: ProgressPoint[] = [
+    { id: 'pp1', date: '2026-09-25', netWorth: 168_000, assets: 168_000, liabilities: 0 },
+  ];
+
+  it('is undefined with no progress points logged', () => {
+    const result = resultFrom(2026, [snapshot(2026, { netWorth: 150_000 })]);
+    expect(planVsReality([], result, planFixture({ settings: { asOfDate: '2026-09-25' } as never }))).toBeUndefined();
+  });
+
+  it('reads ahead of plan (in tone) when the latest actual beats the projection', () => {
+    const result = resultFrom(2026, [
+      snapshot(2026, { netWorth: 150_000 }),
+      snapshot(2027, { netWorth: 200_000 }),
+    ]);
+    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
+    const reality = planVsReality(points, result, plan);
+    expect(reality?.tone).toBe('in');
+    expect(reality?.delta).toBeCloseTo(168_000 - 150_000, 0);
+    expect(reality?.sinceLabel).toBe('Sep 25, 2026');
+  });
+
+  it('reads behind plan (out tone) when the latest actual falls short', () => {
+    const result = resultFrom(2026, [
+      snapshot(2026, { netWorth: 200_000 }),
+      snapshot(2027, { netWorth: 220_000 }),
+    ]);
+    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
+    const reality = planVsReality(points, result, plan);
+    expect(reality?.tone).toBe('out');
+    expect(reality!.delta).toBeLessThan(0);
+  });
+
+  it('is undefined once the gap rounds to nothing (money()’s own under-$50 floor)', () => {
+    const result = resultFrom(2026, [snapshot(2026, { netWorth: 168_010 })]);
+    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
+    expect(planVsReality(points, result, plan)).toBeUndefined();
+  });
+
+  // W3#1 ("UI" row): the review's exact failing case. A progress point
+  // logged on the plan's own asOfDate (a Monarch apply, same-day) holds
+  // `opening`'s balances — not a whole year's projected growth/income ahead
+  // of "today" — so it must read ~$0 vs. plan even though years[0]'s
+  // projected Dec-31 CLOSE is a much bigger number. Before the fix this
+  // compared 168,000 against years[0] (204,600) and read "Behind plan by
+  // $36,600" on the sync day itself.
+  it('reads zero delta on the sync day when the actual matches opening, not the stub year\'s projected close', () => {
+    const result: PlanResult = {
+      ...resultFrom(2026, [
+        snapshot(2026, { netWorth: 204_600 }),
+        snapshot(2027, { netWorth: 260_000 }),
+      ]),
+      opening: { asOfDate: '2026-09-25', accounts: [], assets: 168_000, liabilities: 0, netWorth: 168_000 },
+    };
+    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
+    const syncDayPoint: ProgressPoint[] = [
+      { id: 'pp-sync', date: '2026-09-25', netWorth: 168_000, assets: 168_000, liabilities: 0 },
+    ];
+    // Undefined, not just "small": planVsReality treats anything under the
+    // $50 noise floor as no signal at all, and this case is an exact $0.
+    expect(planVsReality(syncDayPoint, result, plan)).toBeUndefined();
   });
 });

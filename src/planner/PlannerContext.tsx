@@ -1,22 +1,35 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   DEFAULT_RETURN_SHIFT,
   deflate,
   headlineReturnRate,
   pathMarkers,
+  planFreshness,
   runPlan,
   withReturnShift,
 } from '@northstar/engine';
-import type { AccountClass, Account, Plan, PlanEvent, RetirementConfig } from '@northstar/engine';
+import type {
+  AccountClass,
+  Account,
+  Plan,
+  PlanEvent,
+  PlanFreshness,
+  RetirementConfig,
+} from '@northstar/engine';
 import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './store/planStore';
 import type { ProgressPoint } from './progress';
 import { useMonarch } from './useMonarch';
+import { useLocalMonarch } from './useLocalMonarch';
+import { rollForward } from './rollover';
 import { useEventEditor, withDraft } from './drawer/useEventEditor';
 import type { ChartSelection, CompareSeries, FanSeries } from './NetWorthChart';
 import { useBreakpoint, yearColumnsFor } from './useBreakpoint';
-import { cagr } from './format';
+import { asOfDateLabel, cagr } from './format';
 import { heroReading } from './reading';
+import { useGlobalShortcuts } from './shortcuts';
+import { openShortcutSheet } from './ShortcutSheet';
 
 /**
  * Everything the routed pages (`pages/*.tsx`) need, computed once here rather
@@ -38,7 +51,7 @@ export interface PlannerContextValue {
   duplicatePlan(id: string): void;
   renamePlan(id: string, name: string): void;
   deletePlan(id: string): void;
-  replacePlan(plan: Plan): void;
+  replacePlan(plan: Plan, toastMessage?: string): void;
   updateSettings: ReturnType<typeof usePlanStore.getState>['updateSettings'];
 
   // -- Compare page's What-If --
@@ -113,6 +126,12 @@ export interface PlannerContextValue {
   importing: boolean;
   setImporting(importing: boolean): void;
 
+  // -- freshness: how stale `stored`'s balances/clock are, and the local
+  // Monarch-drop-in loop (docs/ROADMAP-10.md Track B/C4) --
+  freshness: PlanFreshness;
+  localMonarch: ReturnType<typeof useLocalMonarch>;
+  rollPlanForward(): void;
+
   // -- chrome: plan switcher & command palette --
   sidebarOpen: boolean;
   setSidebarOpen(open: boolean): void;
@@ -165,6 +184,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [assumptionsDraft, setAssumptionsDraft] = useState<Plan | null>(null);
   const [importing, setImporting] = useState(false);
   const monarch = useMonarch();
+  const localMonarch = useLocalMonarch();
 
   const [scrubYear, setScrubYear] = useState<number | null>(null);
   const [dragDraft, setDragDraft] = useState<PlanEvent | null>(null);
@@ -172,30 +192,44 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
   const visiblePlans = useMemo(() => plans.filter((p) => !p.isWhatIfSnapshot), [plans]);
 
-  // ⌘Z / ⇧⌘Z, but never while a field has focus.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
-      const el = document.activeElement;
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
-      e.preventDefault();
-      if (e.shiftKey) redo();
-      else undo();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo]);
+  // How stale `stored`'s own clock/balances are — the SAVED plan, not the
+  // live `plan` below (which can carry an in-progress assumptions/event
+  // draft that never touched `asOfDate`). `new Date()` on every render is
+  // deliberate, not memoized: `planFreshness` is cheap pure arithmetic, and
+  // a memoized value would go stale the moment midnight passes while the
+  // tab stays open.
+  const freshness = planFreshness(stored, new Date());
+  // `rollForward` now returns `{ plan, projectedFrom }` (docs/W3-REVIEW.md
+  // #4) rather than a bare `Plan` — `projectedFrom` is the old plan's stale
+  // `asOfDate` the new initial balances were actually PROJECTED forward
+  // from, so the toast can say that instead of implying the new balances are
+  // as fresh as "Jan 1" (the exact bug #4 fixes: staleness used to just
+  // disappear on rollover).
+  const rollPlanForward = () => {
+    const { plan: rolled, projectedFrom } = rollForward(stored, new Date());
+    replacePlan(
+      rolled,
+      projectedFrom
+        ? `Rolled forward using balances projected from ${asOfDateLabel(projectedFrom)}`
+        : 'Rolled the plan forward',
+    );
+  };
 
-  // ⌘K, the command palette. Fires regardless of focus, unlike ⌘Z.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k') return;
-      e.preventDefault();
-      setPaletteOpen((v) => !v);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  // The one keyboard-shortcut registry (docs/ROADMAP-10.md C6,
+  // `shortcuts.ts`) — replaces what used to be two separate `window`
+  // keydown listeners here (⌘Z/⇧⌘Z and ⌘K) with a single dispatcher, so
+  // ⌘1–⌘9, ⌘N, ⌘, and `?` can join them without a third/fourth/fifth
+  // listener each doing its own typing-guard.
+  const navigate = useNavigate();
+  useGlobalShortcuts({
+    navigate,
+    newEvent: () => editor.startNew(),
+    openSettings: () => setAssumptionsDraft(structuredClone(stored)),
+    undo,
+    redo,
+    togglePalette: () => setPaletteOpen((v) => !v),
+    openHelp: () => openShortcutSheet(),
+  });
 
   const plan = useMemo(
     () => withDraft(withDraft(assumptionsDraft ?? stored, editor.draft), dragDraft),
@@ -285,9 +319,21 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     return [...plan.accounts, ...synthetic.values()];
   }, [plan.accounts, result.years]);
 
-  const first = result.years[0];
   const last = result.years[result.years.length - 1];
-  const growth = cagr(first?.netWorth ?? 0, last?.netWorth ?? 0, result.years.length - 1);
+  // From the plan's real opening balance (`result.opening`, as of
+  // `asOfDate`) to the horizon's close, over the REAL elapsed time between
+  // those two dates — not the whole-number "years.length - 1" this used to
+  // give, which measured from `years[0]`'s projected Dec 31 close (already a
+  // few months of assumed growth past today) over a clock that always
+  // ticked in whole calendar years regardless of how much of the stub year
+  // was actually left (docs/MATH.md "Today vs. years[0]", queued for this
+  // wave). A plan whose as-of date is Sep 25 has ~21.3 years to a 2046
+  // horizon, not a flat 20.
+  const growth = cagr(
+    result.opening?.netWorth ?? result.years[0]?.netWorth ?? 0,
+    last?.netWorth ?? 0,
+    elapsedYearsToHorizon(plan.settings.startYear, plan.settings.asOfDate, result.endYear),
+  );
 
   // Passed separately from `growth` (docs/REVIEW.md S15) so the hero reading
   // can name the market-return assumption behind the net-worth CAGR it
@@ -401,6 +447,10 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     importing,
     setImporting,
 
+    freshness,
+    localMonarch,
+    rollPlanForward,
+
     sidebarOpen,
     setSidebarOpen,
     paletteOpen,
@@ -408,4 +458,20 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   };
 
   return <PlannerContext.Provider value={value}>{children}</PlannerContext.Provider>;
+}
+
+/** Real elapsed time from `asOfDate` (or Jan 1st of `startYear` when unset —
+    the same fallback `planFreshness`/`planMetaLine`/`progress.ts` all use) to
+    December 31st of `endYear`, in fractional years — the CAGR clock `growth`
+    above uses (docs/MATH.md "Today vs. years[0]", queued for this wave). A
+    365.25-day year, matching the leap-year-averaged convention a "years
+    elapsed" figure conventionally uses; nothing else in this file needs
+    day-level precision for a single growth-rate headline. */
+function elapsedYearsToHorizon(startYear: number, asOfDate: string | undefined, endYear: number): number {
+  const parsed = asOfDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(asOfDate) : null;
+  const asOfUTC = parsed
+    ? Date.UTC(Number(parsed[1]), Number(parsed[2]) - 1, Number(parsed[3]))
+    : Date.UTC(startYear, 0, 1);
+  const endUTC = Date.UTC(endYear, 11, 31);
+  return Math.max(0, (endUTC - asOfUTC) / (365.25 * 86_400_000));
 }

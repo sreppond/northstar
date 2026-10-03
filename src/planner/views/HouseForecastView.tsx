@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import type { Goal, Plan, PlanEvent, PlanResult } from '@northstar/engine';
 import { goalFundingProgress, mergeGoalRules, pathMarkers, runPlan } from '@northstar/engine';
-import { detailMoney, joinNames, percent } from '../format';
+import { money, joinNames, percent } from '../format';
 import { MiniChart } from './MiniChart';
 import { Badge, ProgressBar, SectionCard, Stat, StatStrip } from '../ui';
+import { stubYearLabel } from '../ledger';
 
 /**
  * The House lens (docs/REDESIGN-V3.md "House"): the actual decision, per
@@ -64,6 +65,8 @@ function HouseCard({
   const currentEquity = equity[equity.length - 1];
 
   const goal = resolveHouseGoal(plan, event.id, isOnlyHome);
+  const stub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
+  const stubYear = stub ? { year: plan.settings.startYear, label: stub.short } : undefined;
 
   return (
     <div className="ns-house-card">
@@ -77,13 +80,23 @@ function HouseCard({
           <Stat
             size="xl"
             label={isOnlyHome ? 'Home value at horizon' : `${event.name} value at horizon`}
-            value={detailMoney(currentValue)}
+            value={money(currentValue)}
+            explain={`The home's projected appreciated value at the plan's ${result.endYear} horizon — the account's own balance, compounding at the appreciation rate set on this event.`}
           />
-          <Stat label={`Equity at purchase (${years[ownedIndex]})`} value={detailMoney(equity[ownedIndex])} />
-          <Stat label="Equity at horizon" value={detailMoney(currentEquity)} />
+          <Stat
+            label={`Equity at purchase (${years[ownedIndex]})`}
+            value={money(equity[ownedIndex])}
+            explain={`Home value minus mortgage balance in ${years[ownedIndex]}, the purchase year — typically close to the down payment, before any appreciation or amortization.`}
+          />
+          <Stat
+            label="Equity at horizon"
+            value={money(currentEquity)}
+            explain={`Home value minus mortgage balance at the plan's ${result.endYear} horizon.`}
+          />
           <Stat
             label="Mortgage payoff"
             value={payoffIndex >= 0 ? String(years[payoffIndex]) : `Not by ${result.endYear}`}
+            explain="The first year the mortgage's amortizing balance reaches zero."
           />
         </StatStrip>
       )}
@@ -95,12 +108,13 @@ function HouseCard({
           <MiniChart
             years={years}
             series={[
-              { label: 'Home value', color: 'var(--data-nw)', values: value },
-              { label: 'Mortgage balance', color: 'var(--out)', values: mortgage },
-              { label: 'Equity', color: 'var(--in)', values: equity, fill: true },
+              { label: 'Home value', color: 'var(--data-nw)', values: value, stepAt: ownedIndex },
+              { label: 'Mortgage balance', color: 'var(--out)', values: mortgage, stepAt: ownedIndex },
+              { label: 'Equity', color: 'var(--in)', values: equity, fill: true, stepAt: ownedIndex },
             ]}
             height={240}
             endLabels
+            stubYear={stubYear}
           />
         </SectionCard>
       ) : (
@@ -177,7 +191,7 @@ function DownPaymentReadiness({
     <div className="ns-goal-readiness">
       <div className="ns-goal-readiness-head">
         <span className="ns-goal-readiness-title">
-          {goal.name} — {detailMoney(goal.targetAmount)} by {goal.byYear}
+          {goal.name} — {money(goal.targetAmount)} by {goal.byYear}
         </span>
         <Badge tone={funded ? 'in' : 'out'}>{funded ? 'On track' : 'At risk'}</Badge>
       </div>
@@ -187,7 +201,7 @@ function DownPaymentReadiness({
           (per fix-2) Overview's. */}
       <ProgressBar value={balance} max={goal.targetAmount} tone={funded ? 'accent' : 'out'} label={`${goal.name} progress`} />
       <div className="ns-goal-readiness-note">
-        {detailMoney(balance)} earmarked ({percent(goal.targetAmount > 0 ? (balance / goal.targetAmount) * 100 : 0, 0)}
+        {money(balance)} earmarked ({percent(goal.targetAmount > 0 ? (balance / goal.targetAmount) * 100 : 0, 0)}
         {accountNames ? ` from ${accountNames}` : ''})
       </div>
     </div>
@@ -303,9 +317,9 @@ function describeCostOfBuying(plan: Plan, withHouse: PlanResult, withoutHouse: P
 
   if (Math.abs(netWorthDelta) > NET_WORTH_NOISE_FLOOR) {
     return netWorthDelta > 0
-      ? { text: `Buying costs ${detailMoney(netWorthDelta)} at the ${withHouse.endYear} horizon, compared to not buying.`, tone: 'down' }
+      ? { text: `Buying costs ${money(netWorthDelta)} at the ${withHouse.endYear} horizon, compared to not buying.`, tone: 'down' }
       : {
-          text: `Buying leaves you ${detailMoney(-netWorthDelta)} ahead at the ${withHouse.endYear} horizon, compared to not buying.`,
+          text: `Buying leaves you ${money(-netWorthDelta)} ahead at the ${withHouse.endYear} horizon, compared to not buying.`,
           tone: 'up',
         };
   }

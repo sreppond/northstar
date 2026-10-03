@@ -11,7 +11,7 @@ import { codeFor, summarize, toneFor } from "./presentation";
 import { eventDetail } from "./detail";
 import { HoverCard } from "./HoverCard";
 import type { Detail } from "./detail";
-import { axisMoney, money, signedMoney } from "./format";
+import { axisMoney, money, percent, signedMoney, signedPercent } from "./format";
 import type { ProgressPoint } from "./progress";
 import { planAsOfFraction, yearFraction } from "./progress";
 import {
@@ -56,6 +56,15 @@ const NARROW_CHART_PX = 640;
 const LABEL_TOP = PLOT_TOP + 8;
 const LABEL_LANE_H = 20;
 const LABEL_GAP = 14;
+/** A label chip's real rendered height (planner.css `.ns-event-label`: 12px
+    font + 4px top/bottom padding + 1px border each side) plus a few px of
+    breathing room — the minimum real pixel gap two stacked lanes need so a
+    second-lane label's chip doesn't overlap the first's. `LABEL_LANE_H`
+    above is a fixed VIEWBOX-unit gap, which only maps to this many real px
+    when the chart is tall enough; on a short phone chart it was mapping to
+    ~12px, well under a chip's own height, so a lane-2 label sat drawn
+    halfway over lane 1's. */
+const MIN_LABEL_LANE_PX = 30;
 
 // Shared with chartMath.ts's screen<->year helpers, so the static line and
 // the live scrub/drag math can never disagree about where a year sits.
@@ -126,6 +135,19 @@ export interface FanSeries {
   high: PlanResult;
 }
 
+/**
+ * The Levers panel's live preview (docs/ROADMAP-10.md C5, docs/DESIGN-DIRECTION.md
+ * "colour is data"): the same plan re-run under one or more What-if knobs,
+ * drawn as a dashed INK line rather than a new data hue — this is the actual
+ * plan under a hypothetical, not a second series competing with the real one,
+ * the same reasoning that keeps the return fan in `--data-nw` instead of
+ * green/orange (docs/REVIEW.md S3). Present only while a lever is non-zero;
+ * `Levers.tsx` is the only caller and clears it on Apply/Reset.
+ */
+export interface GhostSeries {
+  result: PlanResult;
+}
+
 interface Props {
   result: PlanResult;
   /** The whole plan, not just its events — ranking a dot's label needs to
@@ -144,6 +166,10 @@ interface Props {
   /** A second plan drawn alongside, clipped to this plan's horizon. */
   compare?: CompareSeries;
   fan?: FanSeries;
+  /** The Levers panel's live "what if" preview, clipped to this plan's
+      horizon the same way `compare` is. Undefined whenever every lever
+      sits at its no-op value. */
+  ghost?: GhostSeries;
   /** The moments worth pointing at: failure, peak, worst fall. */
   markers: PathMarkers;
   /** False when nothing in the plan has a market return to flex. */
@@ -182,6 +208,7 @@ export function NetWorthChart({
   selected,
   compare,
   fan,
+  ghost,
   markers,
   canFan,
   actuals,
@@ -209,18 +236,28 @@ export function NetWorthChart({
   // scroll width, so there's no label-collision flash before the first
   // measurement lands.
   const [chartWidthPx, setChartWidthPx] = useState(800);
+  // Real rendered height, in px — same reasoning as `chartWidthPx`, but for
+  // the vertical lane gap between stacked event labels. 253 pairs with the
+  // 800 width default at this viewBox's own 1176:372 aspect ratio.
+  const [chartHeightPx, setChartHeightPx] = useState(253);
   useEffect(() => {
     const el = svgRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width;
-      if (width) setChartWidthPx(width);
+      const rect = entries[0]?.contentRect;
+      if (rect?.width) setChartWidthPx(rect.width);
+      if (rect?.height) setChartHeightPx(rect.height);
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
   const unitsPerPx = chartWidthPx > 0 ? VB_W / chartWidthPx : 1;
   const topLabelCount = chartWidthPx < NARROW_CHART_PX ? NARROW_LABEL_COUNT : TOP_LABEL_COUNT;
+  // Stretches the fixed `LABEL_LANE_H` viewBox-unit gap so a second lane is
+  // always at least `MIN_LABEL_LANE_PX` real px below the first, however
+  // short the chart has been squeezed (a phone's shorter aspect ratio).
+  const unitsPerPxY = chartHeightPx > 0 ? VB_H / chartHeightPx : 1;
+  const labelLaneH = Math.max(LABEL_LANE_H, MIN_LABEL_LANE_PX * unitsPerPxY);
   // A click follows a real drag's pointerup practically for free (see the
   // comment on `handleDragEnd`); this swallows that one click so releasing a
   // drag never also toggles the chart's selection footer.
@@ -265,8 +302,35 @@ export function NetWorthChart({
   );
 
   const geometry = useMemo(
-    () => build(result, plan.events, impactByEventId, compare, fan, domainStartYear, unitsPerPx, topLabelCount, actuals, asOf),
-    [result, plan.events, impactByEventId, compare, fan, domainStartYear, unitsPerPx, topLabelCount, actuals, asOf],
+    () =>
+      build(
+        result,
+        plan.events,
+        impactByEventId,
+        compare,
+        fan,
+        ghost,
+        domainStartYear,
+        unitsPerPx,
+        topLabelCount,
+        actuals,
+        asOf,
+        labelLaneH,
+      ),
+    [
+      result,
+      plan.events,
+      impactByEventId,
+      compare,
+      fan,
+      ghost,
+      domainStartYear,
+      unitsPerPx,
+      topLabelCount,
+      actuals,
+      asOf,
+      labelLaneH,
+    ],
   );
   const hover =
     hoverYear === null ? null : (geometry.pointByYear.get(hoverYear) ?? null);
@@ -612,8 +676,8 @@ export function NetWorthChart({
             )}
             {/* Both edges in the net-worth hue (docs/REVIEW.md S3) — the fan is
                 one plan under two assumptions, not two different things,
-                and drawing P90/P10 in green/orange read as if they were
-                separate series. */}
+                and drawing the +2pts/−2pts edges in green/orange read as if
+                they were separate series. */}
             {geometry.highEdge && (
               <path
                 className="ns-fan-edge"
@@ -648,6 +712,24 @@ export function NetWorthChart({
                 stroke="var(--cmp)"
                 strokeWidth={2}
                 strokeDasharray="6 5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+
+            {/* The Levers panel's live preview (docs/ROADMAP-10.md C5): ink,
+                not a new hue — this is the SAME plan under a hypothetical,
+                not a second thing (docs/DESIGN-DIRECTION.md "colour is
+                data"), so it gets the fan's own treatment (dashed, muted)
+                rather than `compare`'s purple. */}
+            {geometry.ghostLine && (
+              <path
+                d={geometry.ghostLine}
+                fill="none"
+                stroke="var(--ink)"
+                strokeWidth={2}
+                strokeOpacity={0.6}
+                strokeDasharray="5 4"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -917,20 +999,36 @@ export function NetWorthChart({
               </>
             )}
             {/* The base line's own end point, labelled to match — with the
-                two edge chips reading "P90"/"P10" a bare number would read
-                as unlabelled by comparison (docs/REDESIGN-V3.md "Goodcast":
-                direct end labels "P90 … / P50 … / P10 …"). Shown in Plan
-                mode too, not just alongside the fan (docs/REVIEW.md S3) — the
-                base line always has an end worth naming. Static, not a
-                HoverCard trigger: it's the plan's own line, already fully
-                described by the hero reading above it. */}
+                two edge chips reading "+2 pts"/"−2 pts" a bare number would
+                read as unlabelled by comparison (docs/REDESIGN-V3.md
+                "Goodcast", relabelled per docs/W3-REVIEW.md #11: this is a
+                deterministic return shift, not percentiles, so "Plan" names
+                it instead of "P50"). Shown in Plan mode too, not just
+                alongside the fan (docs/REVIEW.md S3) — the base line always
+                has an end worth naming. Static, not a HoverCard trigger: it's
+                the plan's own line, already fully described by the hero
+                reading above it. */}
             {geometry.last && (
               <div
                 className="ns-fan-slot"
                 style={{ right: pct(VB_W - geometry.last.x, VB_W), top: pct(geometry.last.y, VB_H) }}
               >
                 <span className="ns-fan-chip ns-fan-chip-mid">
-                  P50 {money(geometry.last.value)}
+                  Plan {money(geometry.last.value)}
+                </span>
+              </div>
+            )}
+
+            {/* The ghost line's own end label — same quiet ink chip as the
+                "Plan" one above, not a new hue, naming what the dashed line
+                ends at instead of leaving it to be read off the axis. */}
+            {geometry.ghostEnd && (
+              <div
+                className="ns-fan-slot"
+                style={{ right: pct(VB_W - geometry.ghostEnd.x, VB_W), top: pct(geometry.ghostEnd.y, VB_H) }}
+              >
+                <span className="ns-fan-chip ns-fan-chip-mid">
+                  What if {money(geometry.ghostEnd.value)}
                 </span>
               </div>
             )}
@@ -1187,7 +1285,7 @@ function markerPoints(
           heading: "Size",
           rows: [
             { label: "Fall", value: signedMoney(-d.amount) },
-            { label: "Of the peak", value: `${d.percent.toFixed(0)}%` },
+            { label: "Of the peak", value: percent(d.percent, 0) },
           ],
         },
       ],
@@ -1239,7 +1337,7 @@ function FanChip({
         heading: "Against the plan",
         rows: [
           { label: "Difference", value: signedMoney(delta) },
-          { label: "Relative", value: `${ratio >= 0 ? "+" : ""}${ratio.toFixed(0)}%` },
+          { label: "Relative", value: signedPercent(ratio, 0) },
         ],
       },
     ],
@@ -1257,12 +1355,14 @@ function FanChip({
       onMouseLeave={() => onHover(null)}
     >
       <HoverCard detail={detail} side={high ? "bottom" : "top"}>
-        {/* "P90"/"P10", not an arrow — the direct-label idiom this replaces
-            (docs/REDESIGN-V3.md "Goodcast": "P90 $67.1M / P50 $64.2M /
-            P10 $61.4M") names which percentile this edge is, which an arrow
-            only gestured at. */}
+        {/* "+2 pts"/"−2 pts", not an arrow or a percentile label — the fan is
+            a deterministic ±2-point return shift (docs/W3-REVIEW.md #11), not
+            percentiles, so the direct-label idiom this replaces (docs/REDESIGN-V3.md
+            "Goodcast": "P90 … / P50 … / P10 …") now names the return shift
+            each edge represents instead of a statistical percentile that
+            doesn't exist here. */}
         <span className={`ns-fan-chip ns-fan-chip-${side}`}>
-          {high ? "P90 " : "P10 "}
+          {high ? `+${shift} pts ` : `−${shift} pts `}
           {money(value)}
         </span>
       </HoverCard>
@@ -1326,11 +1426,13 @@ function build(
   impactByEventId: Map<string, number>,
   compare: CompareSeries | undefined,
   fan: FanSeries | undefined,
+  ghost: GhostSeries | undefined,
   domainStartYear: number,
   unitsPerPx: number,
   topLabelCount: number,
   actuals: ProgressPoint[] | undefined,
   asOf: number,
+  labelLaneH: number,
 ) {
   const years = result.years;
   const span = Math.max(1, result.endYear - result.startYear);
@@ -1359,21 +1461,35 @@ function build(
     ...years.map((y) => y.netWorth),
     ...compareYears.map((y) => y.netWorth),
     ...fanYears(fan?.high).map((y) => y.netWorth),
+    // The ghost line can run above the real one (a better-return or
+    // lower-spending lever) — it needs the same headroom the fan's
+    // optimistic edge gets, or a promising what-if clips off the top.
+    ...fanYears(ghost?.result).map((y) => y.netWorth),
     // A logged actual can be the plan's own high point (a market run-up
     // since the last projection, say) — it has to be in the ceiling
     // calculation too, or its dot would draw above the plot's top edge.
     ...(actuals ?? []).map((p) => p.netWorth),
+    // Same reasoning for the real opening balance the first point below is
+    // about to swap in — a plan that's expected to DECLINE (spend-down,
+    // say) can have today's real balance as its own high point.
+    ...(result.opening ? [result.opening.netWorth] : []),
   );
   const top = honestCeiling(maxNetWorth);
   const yFor = (value: number) =>
     PLOT_BOTTOM - (value / top) * (PLOT_BOTTOM - PLOT_TOP);
 
-  const points = years.map((y) => ({
-    year: y.year,
-    x: xFor(y.year),
-    y: yFor(y.netWorth),
-    value: y.netWorth,
-  }));
+  const points = years.map((y, i) => {
+    // The first point sits at "Today" (`todayX` above lands on this same
+    // year whenever `asOfDate` falls in `result.startYear`, the normal
+    // case) — it should read the plan's real OPENING balance, not
+    // `years[0].netWorth`, the projected Dec 31 CLOSE of a (often partial)
+    // first year that already includes months of assumed growth nobody has
+    // lived through yet (docs/MATH.md "Today vs. years[0]", queued for this
+    // wave). Every later point is untouched: the engine's own projected
+    // closes are exactly what should drive the rest of the line.
+    const value = i === 0 && result.opening ? result.opening.netWorth : y.netWorth;
+    return { year: y.year, x: xFor(y.year), y: yFor(value), value };
+  });
   const pointByYear = new Map(points.map((p) => [p.year, p]));
 
   const line = points
@@ -1484,7 +1600,7 @@ function build(
   );
   const labels: EventLabel[] = labelledDots.map((d, i) => {
     const pack = packed[i];
-    const top = LABEL_TOP + pack.lane * LABEL_LANE_H;
+    const top = LABEL_TOP + pack.lane * labelLaneH;
     return {
       eventId: d.eventId,
       event: d.event,
@@ -1526,6 +1642,15 @@ function build(
   const lowEdge = edge(fan?.low);
   const highEdge = edge(fan?.high);
 
+  // The Levers panel's live preview (docs/ROADMAP-10.md C5) — clipped to this
+  // plan's window the same way `compareLine` is above. Reuses `edge()`
+  // rather than duplicating its path-string logic; `ghost` only ever needs
+  // the single line + end point `edge` already returns, never the closed
+  // band the fan's two edges together make.
+  const ghostEdge = edge(ghost?.result);
+  const ghostLine = ghostEdge?.d;
+  const ghostEnd = ghostEdge?.end;
+
   // One closed shape: out along the top, back along the bottom.
   const fanBand =
     lowEdge && highEdge
@@ -1540,6 +1665,8 @@ function build(
     line,
     area,
     compareLine,
+    ghostLine,
+    ghostEnd,
     gridlines,
     xTicks,
     dots,

@@ -11,7 +11,7 @@
  * engine. Copy is a UI decision.
  */
 import type { PathMarkers, Plan, PlanResult } from '@northstar/engine';
-import { detailMoney, percent } from './format';
+import { money, percent } from './format';
 
 /** Written out to about a dozen, because "2 kids" in prose reads as a form. */
 const COUNTS = [
@@ -137,8 +137,8 @@ export function heroReading(
       isAlarm: true,
       read:
         years === 1
-          ? `Runs dry in ${dry}, with ${detailMoney(markers.shortfallTotal)} of spending unfunded.`
-          : `Runs dry in ${dry}. ${years} years fall short, ${detailMoney(
+          ? `Runs dry in ${dry}, with ${money(markers.shortfallTotal)} of spending unfunded.`
+          : `Runs dry in ${dry}. ${years} years fall short, ${money(
               markers.shortfallTotal,
             )} unfunded in total.`,
     };

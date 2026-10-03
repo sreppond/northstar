@@ -156,3 +156,90 @@ describe('buyAHome — selling', () => {
     expect(yearOf(2034).expenses.filter((e) => e.label.includes('upkeep'))).toHaveLength(0);
   });
 });
+
+// W3#3: the opening snapshot ("today") must not include a home/mortgage pair
+// an event is only ABOUT to create during the plan's own stub year — the
+// down payment that pays for it hasn't left cash yet as of `asOfDate`.
+describe('opening snapshot excludes a stub-year purchase', () => {
+  it('a $200k household buying a $500k home in the stub year opens at $200k, not $300k', () => {
+    const result = runPlan(
+      plan({
+        settings: {
+          startYear: 2026,
+          projectionYears: 5,
+          inflationRate: 0,
+          baselineIncome: 0,
+          baselineExpenses: 0,
+          incomeTaxRate: 0,
+        } as never,
+        accounts: [
+          asset({ id: 'c', name: 'Cash', accountClass: 'cash', initialBalance: 200_000, growthRateMethod: 'noChange' }),
+        ],
+        events: [
+          event({
+            id: 'h',
+            kind: 'buyAHome',
+            name: 'House',
+            startYear: 2026, // same as the plan's own startYear -- the stub year
+            config: {
+              price: 500_000,
+              downPaymentPercent: 20, // $100k -- the review's own double-counted amount
+              mortgageRate: 6.5,
+              termYears: 30,
+              closingCostPercent: 0,
+            },
+          }),
+        ],
+        rules: [rule('c', 'withdrawal', 1)],
+      }),
+    );
+
+    // Hand check: as of asOfDate, the down payment has not been paid yet, so
+    // the household still holds the full $200k in cash and nothing else --
+    // the home and mortgage the event is about to create this same year are
+    // not "today". Before the fix, `accountExistsIn` (calendar-year-only)
+    // let both synthetic accounts into `opening` too, overstating it by
+    // exactly the down payment: 200,000 + 500,000 (home) - 400,000
+    // (mortgage) = 300,000.
+    expect(result.opening!.netWorth).toBe(200_000);
+    expect(result.opening!.accounts).toHaveLength(1);
+    expect(result.opening!.accounts[0]).toMatchObject({ accountId: 'c', balance: 200_000 });
+  });
+
+  it('DOES include an event-created account that started strictly before this plan (a carryover, e.g. post-rollover)', () => {
+    const result = runPlan(
+      plan({
+        settings: {
+          startYear: 2026,
+          projectionYears: 5,
+          inflationRate: 0,
+          baselineIncome: 0,
+          baselineExpenses: 0,
+          incomeTaxRate: 0,
+        } as never,
+        accounts: [
+          asset({ id: 'c', name: 'Cash', accountClass: 'cash', initialBalance: 200_000, growthRateMethod: 'noChange' }),
+        ],
+        events: [
+          event({
+            id: 'h',
+            kind: 'buyAHome',
+            name: 'House',
+            startYear: 2024, // bought two years before this plan starts
+            config: {
+              price: 500_000,
+              downPaymentPercent: 20,
+              mortgageRate: 6.5,
+              termYears: 30,
+              closingCostPercent: 0,
+            },
+          }),
+        ],
+        rules: [rule('c', 'withdrawal', 1)],
+      }),
+    );
+
+    const ids = result.opening!.accounts.map((a) => a.accountId).sort();
+    expect(ids).toEqual(['c', 'h:home', 'h:mortgage']);
+  });
+});

@@ -139,9 +139,18 @@ export interface AxisTick {
  * includes zero; targets `targetLines` steps above it, so 3-5 gridlines in
  * practice depending on how `ceiling` falls between two nice steps.
  *
- * The ceiling itself only gets its own line when it sits more than 8% above
- * the topmost nice one — close enough and that nice line already reads as
- * "the top"; a second line a few pixels away would just be clutter.
+ * The ceiling itself only gets its own line when it clears the topmost nice
+ * one by more than a quarter of the step between nice lines — close enough
+ * and that nice line already reads as "the top"; a second line a few pixels
+ * away would just be clutter.
+ *
+ * This threshold is relative to `step`, not to `ceiling` (docs/W3-REVIEW.md
+ * "Axis ceiling ticks"): a flat percentage of `ceiling` let a gap as small as
+ * ~20% of the normal gridline spacing through whenever `step` happened to be
+ * large relative to `ceiling` (a $4.4M ceiling landed its own line a mere
+ * $400K past the $4M nice one — a fifth of the $2M step apart — reading as
+ * "$4.4M" crowding "$4M"). Sized against `step` instead, the extra line only
+ * appears when it would actually read as its own gridline.
  */
 export function niceAxisTicks(ceiling: number, targetLines = 4): AxisTick[] {
   if (ceiling <= 0) return [{ value: 0 }];
@@ -161,7 +170,7 @@ export function niceAxisTicks(ceiling: number, targetLines = 4): AxisTick[] {
   const ticks: AxisTick[] = Array.from({ length: count + 1 }, (_, i) => ({ value: i * step }));
 
   const topNice = ticks[ticks.length - 1]?.value ?? 0;
-  if (ceiling - topNice > ceiling * 0.08) {
+  if (ceiling - topNice > step * 0.25) {
     ticks.push({ value: ceiling });
   }
   return ticks;

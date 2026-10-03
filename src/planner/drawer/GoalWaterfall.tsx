@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Goal } from '@northstar/engine';
 import { SWEEP_BUCKET_LABEL } from '@northstar/engine';
-import { roundMoney } from '../format';
+import { money } from '../format';
 
 /**
  * The Goals-first waterfall (docs/REDESIGN.md §2.2, §4.5): "Fund: House, then
@@ -116,5 +116,5 @@ export function GoalWaterfall({ goals, onReorder }: Props) {
 
 function goalMeta(goal: Goal): string | undefined {
   if (goal.targetAmount === undefined) return undefined;
-  return goal.byYear ? `${roundMoney(goal.targetAmount)} by ${goal.byYear}` : roundMoney(goal.targetAmount);
+  return goal.byYear ? `${money(goal.targetAmount)} by ${goal.byYear}` : money(goal.targetAmount);
 }

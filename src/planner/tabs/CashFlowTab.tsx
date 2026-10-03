@@ -4,6 +4,7 @@ import { tableMoney, signedTableMoney, percent, ZERO_DASH } from '../format';
 import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { GearIcon } from '../icons';
+import { savedThisYear, savingsRateNote, savingsRatePercent, spendingThisYear, stubYearLabel } from '../ledger';
 import type { Detail } from '../detail';
 
 /**
@@ -24,6 +25,8 @@ export function CashFlowTab({
   highlightYear,
   onEdit,
   onEditAssumptions,
+  startYear,
+  asOfDate,
 }: {
   window: YearSnapshot[];
   events: PlanEvent[];
@@ -32,6 +35,11 @@ export function CashFlowTab({
   highlightYear?: number | null;
   onEdit(event: PlanEvent): void;
   onEditAssumptions(): void;
+  /** The plan's own `settings.startYear`/`settings.asOfDate` — flags the
+      stub first year's column header (docs/ROADMAP-10.md C7). Optional so a
+      caller that hasn't wired them yet just gets no sub-label. */
+  startYear?: number;
+  asOfDate?: string;
 }) {
   const years = window.map((y) => y.year);
   const rows: TableRow[] = [];
@@ -87,7 +95,7 @@ export function CashFlowTab({
     });
   }
 
-  const expenseTotals = window.map((y) => y.totalExpenses + y.totalTaxes);
+  const expenseTotals = window.map((y) => spendingThisYear(y) + y.totalTaxes);
   rows.push({
     key: 'expenses',
     kind: 'group',
@@ -144,18 +152,24 @@ export function CashFlowTab({
     key: 'savings',
     kind: 'group',
     label: 'Savings',
-    cells: window.map((y) => signedTableMoney(y.netCashFlow)),
+    cells: window.map((y) => signedTableMoney(savedThisYear(y))),
     // The one row that can genuinely flip sign year to year — its bar's
     // side and tone follow each cell's own value rather than a fixed
     // per-row direction (see `RowBar.signed` in DataTable.tsx).
-    values: window.map((y) => y.netCashFlow),
+    values: window.map((y) => savedThisYear(y)),
     bar: { direction: 'diverging', signed: true },
   });
   rows.push({
     key: 'savings-rate',
     kind: 'child',
     label: 'Savings rate',
-    cells: window.map((y) => (y.totalIncome > 0 ? percent((y.netCashFlow / y.totalIncome) * 100, 0) : ZERO_DASH)),
+    cells: window.map((y) => {
+      const rate = savingsRatePercent(y);
+      return rate === undefined ? ZERO_DASH : percent(rate, 0);
+    }),
+    // A negative rate (a house-purchase year, say) reads as an error out of
+    // context — this names what actually caused it (docs/ROADMAP-10.md C7).
+    cellTitles: window.map((y) => savingsRateNote(y)),
   });
 
   const shortfalls = window.filter((y) => y.unfundedShortfall);
@@ -174,7 +188,17 @@ export function CashFlowTab({
 
   // The page's SectionCard already titles this "Annual cash flow" — this
   // column header just needs to say what its own rows are.
-  return <DataTable caption="Category" years={years} rows={rows} highlightYear={highlightYear} />;
+  return (
+    <DataTable
+      caption="Category"
+      years={years}
+      rows={rows}
+      highlightYear={highlightYear}
+      columnSubLabel={
+        startYear !== undefined ? (y) => stubYearLabel(y, startYear, asOfDate)?.short : undefined
+      }
+    />
+  );
 }
 
 /** A cash flow row label with its gear. Detail is optional — the assumptions

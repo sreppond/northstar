@@ -16,8 +16,14 @@ export interface ProgressPoint {
   liabilities: number;
 }
 
+/** Local calendar date, not UTC (W3#6/docs/W3-REVIEW.md "Use local dates,
+    not UTC") — `toISOString` reads the date in UTC, so an evening Monarch
+    sync west of Greenwich (anywhere in the Americas, after ~4-8pm local)
+    dated the logged progress point tomorrow. `en-CA` is just the locale
+    whose built-in format happens to be YYYY-MM-DD — the same fix and the
+    same reasoning as `planStore.ts`'s own (separate, unexported) `todayISO`. */
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('en-CA');
 }
 
 export function newProgressId(): string {
@@ -68,57 +74,99 @@ export function planAsOfFraction(settings: { startYear: number; asOfDate?: strin
 
 /** The subset of `PlanResult` this module reads — kept narrow (rather than
     importing the real type from `@northstar/engine`) so a plain fixture
-    object satisfies it in a test without constructing a full engine result. */
+    object satisfies it in a test without constructing a full engine result.
+    `opening` is optional so a caller/fixture that predates it still
+    type-checks and gets the old (slightly-wrong) `years[0]`-as-today
+    fallback, same convention as `CurrentNetWorthSource` below. */
 export interface NetWorthSeries {
   years: { year: number; netWorth: number }[];
+  opening?: { netWorth: number };
 }
 
 /**
- * What the plan projects net worth to be at a given fractional year —
- * linearly interpolated between the two annual snapshots straddling it,
- * since the projection only has one point per calendar year. Clamps to the
- * first/last snapshot outside the projected range rather than extrapolating.
+ * What the plan projects net worth to be at a given fractional year.
  *
- * `asOf` (from `planAsOfFraction`) anchors WHERE `years[0]` sits on the
- * x-axis: at `asOf` itself, not at `years[0].year` on the nose (M14). Every
- * later snapshot N follows at `asOf + (N - years[0].year)` — one full year
- * per snapshot, starting from that same anchor, so a fraction exactly at
- * `asOf` reads back exactly `years[0].netWorth` (a point logged "today"
- * compares at zero delta against a plan whose first snapshot IS "today").
+ * The x-axis has one knot per "today" plus one per annual CLOSE:
+ * `(asOf, opening.netWorth)`, then `(year + 1, netWorth)` for every snapshot
+ * in `years` — `year + 1` because `yearFraction` reads Dec 31 of `year` as
+ * just under `year + 1` (day 364/365), so anchoring a year's close there is
+ * consistent with how a logged `ProgressPoint`'s own date is read onto this
+ * same axis. Interpolated linearly between consecutive knots; clamped to the
+ * first/last knot outside the projected range rather than extrapolating.
+ *
+ * Fixes M14/W3#1: the previous version anchored `years[0]` (the stub year's
+ * projected Dec-31 CLOSE) AT `asOf` itself, so a point logged exactly on the
+ * as-of date — which already holds only `opening`'s balances, not a whole
+ * year's projected growth/income — compared against the wrong number and
+ * read "behind plan" on every sync. `opening` is the true value at `asOf`;
+ * `years[0]` only arrives a full year of simulation later than that.
  */
 export function projectedNetWorthAt(result: NetWorthSeries, fraction: number, asOf: number): number {
   const years = result.years;
-  if (years.length === 0) return 0;
-  const startYear = years[0].year;
-  const xFor = (year: number) => asOf + (year - startYear);
+  const openingNetWorth = result.opening?.netWorth ?? years[0]?.netWorth ?? 0;
+  if (years.length === 0) return openingNetWorth;
 
-  const first = years[0];
-  const last = years[years.length - 1];
-  if (fraction <= xFor(first.year)) return first.netWorth;
-  if (fraction >= xFor(last.year)) return last.netWorth;
+  const knots: { x: number; netWorth: number }[] = [
+    { x: asOf, netWorth: openingNetWorth },
+    ...years.map((y) => ({ x: y.year + 1, netWorth: y.netWorth })),
+  ];
 
-  const offset = fraction - asOf;
-  const y0 = startYear + Math.floor(offset);
-  const s0 = years.find((y) => y.year === y0) ?? first;
-  const s1 = years.find((y) => y.year === y0 + 1) ?? s0;
-  const t = offset - Math.floor(offset);
-  return s0.netWorth + (s1.netWorth - s0.netWorth) * t;
+  const first = knots[0];
+  const last = knots[knots.length - 1];
+  if (fraction <= first.x) return first.netWorth;
+  if (fraction >= last.x) return last.netWorth;
+
+  for (let i = 0; i < knots.length - 1; i++) {
+    const a = knots[i];
+    const b = knots[i + 1];
+    if (fraction <= b.x) {
+      const t = (fraction - a.x) / (b.x - a.x);
+      return a.netWorth + (b.netWorth - a.netWorth) * t;
+    }
+  }
+  return last.netWorth;
 }
 
 /** The subset of `Plan`/`PlanResult` `progressPointFromPlan` reads. */
 export interface CurrentNetWorthSource {
   settings: { startYear: number };
   years: { year: number; netWorth: number; accounts: { close: number; isLiability: boolean }[] }[];
+  /**
+   * The plan's real "today" — `PlanResult.opening`, balances as of
+   * `settings.asOfDate` — preferred over `years` below when present.
+   * `years[...]` is a projected year's CLOSE (Dec 31), which is not "today"
+   * even for `settings.startYear` itself once that year is partial
+   * (docs/MATH.md "Today vs. years[0]"). Optional so a caller that has not
+   * been updated to pass `result.opening` yet still gets a value, from the
+   * old (slightly-wrong) reading.
+   */
+  opening?: { netWorth: number; accounts: { balance: number; isLiability: boolean }[] };
 }
 
 /**
  * A progress point pre-filled from the plan itself — today's date, and the
- * plan's own current-year snapshot for net worth/assets/liabilities — for
+ * plan's own opening snapshot for net worth/assets/liabilities — for
  * Progress's "Log today's net worth" primary action
  * (docs/REDESIGN-V3.md "Progress"). The user can still edit every field
  * before saving; this only removes the "start from zero" friction.
  */
 export function progressPointFromPlan(source: CurrentNetWorthSource): ProgressPoint {
+  if (source.opening) {
+    const assets = source.opening.accounts
+      .filter((a) => !a.isLiability)
+      .reduce((s, a) => s + Math.max(0, a.balance), 0);
+    const liabilities = source.opening.accounts
+      .filter((a) => a.isLiability)
+      .reduce((s, a) => s + Math.abs(a.balance), 0);
+    return {
+      id: newProgressId(),
+      date: todayISO(),
+      netWorth: Math.round(source.opening.netWorth),
+      assets: Math.round(assets),
+      liabilities: Math.round(liabilities),
+    };
+  }
+
   const snapshot = source.years.find((y) => y.year === source.settings.startYear) ?? source.years[0];
   const assets = snapshot ? snapshot.accounts.filter((a) => !a.isLiability).reduce((s, a) => s + Math.max(0, a.close), 0) : 0;
   const liabilities = snapshot

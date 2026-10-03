@@ -42,11 +42,15 @@ function read(): Breakpoint {
   return 'desktop';
 }
 
-/** Year columns that fit without the type shrinking. */
+/** Year columns that fit without the type shrinking. Phone is 2, not 3
+    (docs/W3-REVIEW.md "Phone balance sheet"): 3 columns at 390px clipped the
+    third one and squeezed the label column enough to truncate "Taxable
+    investments" down to "Taxa…" — the window label still read "2026–2028"
+    while only two of those three years were actually legible. */
 export function yearColumnsFor(breakpoint: Breakpoint): number {
   switch (breakpoint) {
     case 'phone':
-      return 3;
+      return 2;
     case 'tablet':
       return 5;
     default:

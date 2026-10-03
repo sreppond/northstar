@@ -43,6 +43,15 @@
   cursor: pointer;
 }
 
+/* --- the balance sheet's leading "Today" column (docs/W3-REVIEW.md) — a
+   rule on its right edge, since it's a different KIND of figure (the real
+   opening balance) from the projected years beside it, not just another
+   column in that same series. ------------------------------------------- */
+
+.ns-col-divider {
+  border-right: 1px solid var(--border-strong);
+}
+
 /* --- the balance sheet's trailing "Add" row, tidied into one quiet row
    that spans the full table width instead of being squeezed into the
    268px label column (where it wrapped into a vertical stack of pills). -- */
@@ -92,6 +101,37 @@
 }
 .ns-add-account-group:first-child {
   padding-top: 5px;
+}
+
+/* --- stub-year column header sub-label (docs/ROADMAP-10.md C7 "the stub
+   year is invisible") — a small mono line under a year's own head cell
+   ("2026" / "from Sep 25"), Cash Flow's `DataTable` columnSubLabel. -------- */
+
+.ns-col-head-sub {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted-light);
+  white-space: nowrap;
+}
+
+/* --- events gantt: drag ghost + live bar (docs/ROADMAP-10.md C7) --------
+   The ghost is frozen at the bar's ORIGINAL position for the whole drag, so
+   there's always a visible answer to "where did this start" — same idea as
+   `NetWorthChart.tsx`'s own drag ghost, just a bar instead of a dot. -------- */
+
+.ns-bar-ghost {
+  opacity: 0.45;
+  border-style: dashed;
+  box-shadow: none;
+  background-image: none;
+  pointer-events: none;
+}
+.ns-bar-live {
+  cursor: grabbing;
+  box-shadow: var(--jelly-rise-hi);
+  z-index: 1;
 }
 
 /* --- events gantt: TODAY line + excluded-event dimming ------------------ */

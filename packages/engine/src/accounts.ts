@@ -18,6 +18,31 @@ export function rateFromSchedule(schedule: RateAnchor[] | undefined, year: numbe
   return rate;
 }
 
+/**
+ * The rate that actually applies over `fraction` of a year, COMPOUNDING
+ * rather than prorating linearly (docs/PLAN.md §4.3, docs/MATH.md
+ * "Partial-year growth compounds"). A full year (`fraction === 1`) reduces to
+ * exactly `ratePercent / 100`, so this is safe to use unconditionally in
+ * place of the old `rate * fraction` — it is not a special case for the
+ * stub year, it is the general formula the stub year is also a case of.
+ *
+ * Worked check: 12%/yr with exactly a quarter of the year left credits
+ * `1.12^0.25 - 1 ≈ 2.8737%`, not the linear `12% * 0.25 = 3%` a full year of
+ * that return would proportionally suggest — compounding a partial period
+ * earns slightly LESS than the linear share, because the linear share
+ * secretly assumes the money re-invests its own fractional gains at the same
+ * pace a full year would, which a shorter period cannot do.
+ *
+ * `ratePercent` at or below -100% would make `(1 + rate)` zero or negative,
+ * and raising a negative base to a fractional power is `NaN` in JS — clamp
+ * the base at 0 (a total, but finite, loss for the period) rather than let
+ * one bad input poison a whole projection with `NaN`s.
+ */
+export function effectiveRateForFraction(ratePercent: number, fraction: number): number {
+  const base = Math.max(0, 1 + ratePercent / 100);
+  return Math.pow(base, fraction) - 1;
+}
+
 export function growthRateFor(account: Account, year: number): number {
   switch (account.growthRateMethod) {
     case 'noChange':
@@ -107,11 +132,29 @@ export function amortizeYear(
   return { interest: interestPaid, principal: principalPaid, payment: paid, closing: balance };
 }
 
-/** Annual debt service for an account, defaulting to a full amortization. */
-export function scheduledAnnualPayment(account: Account, openingBalance: number): number {
+/**
+ * Annual debt service for an account, defaulting to a full amortization.
+ *
+ * Defect fixed here (docs/MATH.md "Mortgage amortization"): the `termYears`
+ * fallback used to amortize whichever balance the CALLER passed in — which
+ * `run.ts` called with THAT YEAR's current balance, every year. A level-
+ * payment loan's payment is fixed once at origination; re-deriving a fresh
+ * `termYears`-long amortization off a shrinking balance every year makes the
+ * payment shrink too, so the loan never actually retires on the stated
+ * schedule (a 30-year loan run this way is still carrying a balance after
+ * 30 years). `account.initialBalance` — the balance the account STARTS the
+ * projection with, matching what `termYears` ("term remaining") is remaining
+ * against — is what `monthlyPayment` must amortize, computed once and then
+ * implicitly fixed for the life of the loan simply by never being
+ * recomputed from a different balance again. This is exactly what
+ * `buyAHome.ts` already does by hand (freezing `plannedPayment` at
+ * issuance); this fallback now does the same for any OTHER loan/mortgage
+ * account that sets `termYears` without setting `plannedPayment` itself.
+ */
+export function scheduledAnnualPayment(account: Account): number {
   if (account.plannedPayment && account.plannedPayment > 0) return account.plannedPayment;
   if (account.termYears && account.termYears > 0) {
-    return monthlyPayment(openingBalance, account.interestRate ?? 0, account.termYears) * 12;
+    return monthlyPayment(account.initialBalance, account.interestRate ?? 0, account.termYears) * 12;
   }
   if (account.minimumPayment && account.minimumPayment > 0) return account.minimumPayment;
   return 0;

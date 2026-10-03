@@ -34,6 +34,7 @@
  *
  * None of this is tax advice.
  */
+import { effectiveRateForFraction } from './accounts.js';
 import type { Account, SurrenderScheduleEntry } from './types.js';
 
 const EPSILON = 0.005;
@@ -56,11 +57,16 @@ const EPSILON = 0.005;
  * can honestly claim (ported from a sibling engine's `feesForYear` — see
  * docs/PLAN.md for the pointer).
  *
- * `yearFraction` scales BOTH the flat fee and the asset-based rate the same
- * way `growthRateFor` is already scaled in `run.ts` — a contract that starts
- * partway through the plan's first year (docs/PLAN.md §4.3) is charged only
- * for the months it existed, exactly like growth and every other recurring
- * flow that year. This is what lets fee drag compose with the existing
+ * `yearFraction` scales both charges for a contract that starts partway
+ * through the plan's first year (docs/PLAN.md §4.3), but not the same way:
+ * the FLAT fee is a recurring dollar flow, like a salary or a rent payment,
+ * so it prorates LINEARLY (`flat * yearFraction`) the same way every other
+ * recurring flow does. The ASSET-BASED percentage is a RATE, like growth
+ * itself, so it compounds instead (`effectiveRateForFraction`,
+ * docs/MATH.md "Partial-year growth compounds") — a contract that existed
+ * for a quarter of the year does not lose a full quarter of its annual
+ * percentage fee any more than an investment earns a full quarter of its
+ * annual return. This is what lets fee drag compose with the existing
  * opening-balance-net-of-withdrawals growth rule instead of fighting it:
  * `annuityFeeForYear` only ever shrinks the SAME `grossGrowth` number
  * `run.ts` already computed, so `close = growthBase + contributions +
@@ -82,7 +88,7 @@ export function annuityFeeForYear(
   if (flat <= 0 && assetBasedPercent <= 0) return 0;
 
   const midYearValue = Math.max(0, openingBalance + grossGrowth / 2);
-  const assetBasedFee = midYearValue * (assetBasedPercent / 100) * yearFraction;
+  const assetBasedFee = midYearValue * effectiveRateForFraction(assetBasedPercent, yearFraction);
   const flatFee = flat * yearFraction;
 
   const availableToCharge = Math.max(0, openingBalance + grossGrowth);

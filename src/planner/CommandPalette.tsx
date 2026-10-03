@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NAV_ITEMS } from './Sidebar';
 import { usePlanner } from './PlannerContext';
+import { openShortcutSheet } from './ShortcutSheet';
+import { toast } from './ui/Toast';
 
 /**
  * The ⌘K command palette (docs/REDESIGN.md §3.2, §4.5;
@@ -80,6 +82,16 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
     if (canPageLater) out.push({ id: 'page-later', label: `Later years (after ${windowLabel})`, run: pageLater });
 
     out.push({ id: 'switch-plan', label: 'Switch or manage plans…', run: () => setSidebarOpen(true) });
+
+    out.push({ id: 'shortcuts', label: 'Keyboard shortcuts', hint: '?', run: () => openShortcutSheet() });
+    out.push({
+      id: 'monarch-sync-howto',
+      label: 'Sync from Monarch (how-to)',
+      run: () =>
+        toast('Run `npm run monarch:sync` in a terminal, then Import → pick the new snapshot.', {
+          duration: 8000,
+        }),
+    });
 
     return out;
   }, [

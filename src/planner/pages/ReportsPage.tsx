@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { usePlanner } from '../PlannerContext';
 import { MiniChart } from '../views/MiniChart';
 import { Cell, type CellMagnitude } from '../tabs/DataTable';
-import { detailMoney, percent, planMetaLine, tableMoney } from '../format';
+import { money, percent, planMetaLine, tableMoney, tablePercent } from '../format';
+import { stubYearLabel } from '../ledger';
 import {
   buildExploreRows,
   downloadTextFile,
@@ -52,6 +53,8 @@ export function ReportsPage() {
 
   const rows = useMemo(() => buildExploreRows(result), [result]);
   const hasPlan = plan.accounts.length > 0 || plan.events.length > 1;
+  const stub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
+  const stubYear = plan.settings.startYear;
 
   // Scaled per COLUMN, across every row — the Reports equivalent of
   // DataTable's "scaled per row" rule, just transposed: here a column IS
@@ -115,13 +118,27 @@ export function ReportsPage() {
       ) : (
         <>
           <StatStrip>
-            <Stat size="xl" label="Net worth at horizon" value={detailMoney(summary.netWorthAtHorizon)} />
-            <Stat label="Avg. contribution rate" value={percent(summary.avgContributionRate, 0)} />
-            <Stat label="Total taxes" value={detailMoney(summary.totalTaxes)} />
+            <Stat
+              size="xl"
+              label="Net worth at horizon"
+              value={money(summary.netWorthAtHorizon)}
+              explain={`Projected net worth in the plan's final modeled year, ${rows.at(-1)?.year ?? result.endYear}.`}
+            />
+            <Stat
+              label="Avg. contribution rate"
+              value={percent(summary.avgContributionRate, 0)}
+              explain="Every year's contributions ÷ income, averaged across the whole plan — a different figure than Cash Flow's savings rate, which also nets out withdrawals spent and debt paid down."
+            />
+            <Stat
+              label="Total taxes"
+              value={money(summary.totalTaxes)}
+              explain="Every projected year's income and capital-gains taxes, summed across the whole plan."
+            />
             <Stat
               label="Peak withdrawal year"
               value={summary.peakWithdrawalRow ? String(summary.peakWithdrawalRow.year) : '—'}
-              sub={summary.peakWithdrawalRow ? detailMoney(summary.peakWithdrawalRow.withdrawals) : 'None modeled'}
+              sub={summary.peakWithdrawalRow ? money(summary.peakWithdrawalRow.withdrawals) : 'None modeled'}
+              explain="The single year with the largest total account withdrawals anywhere in the plan."
             />
           </StatStrip>
 
@@ -148,7 +165,13 @@ export function ReportsPage() {
                     {rows.map((row) => (
                       <tr key={row.year}>
                         {EXPLORE_COLUMNS.map((col) => {
-                          if (col.key === 'year') return <td key={col.key}>{row.year}</td>;
+                          if (col.key === 'year')
+                            return (
+                              <td key={col.key}>
+                                {row.year}
+                                {row.year === stubYear && stub && <div className="ns-table-year-sub">{stub.short}</div>}
+                              </td>
+                            );
                           const value = row[col.key] as number;
                           const max = columnMax.get(col.key) ?? 1;
                           const magnitude: CellMagnitude = {
@@ -158,7 +181,7 @@ export function ReportsPage() {
                           return (
                             <td key={col.key}>
                               <Cell
-                                value={col.percent ? percent(value) : tableMoney(value)}
+                                value={col.percent ? tablePercent(value) : tableMoney(value)}
                                 magnitude={magnitude}
                               />
                             </td>
@@ -179,6 +202,7 @@ export function ReportsPage() {
                       years={rows.map((r) => r.year)}
                       series={[{ label: p.label, color: p.color, values: rows.map((r) => r[p.key] as number) }]}
                       formatY={p.key === 'contributionRatePercent' ? (v) => `${Math.round(v)}%` : undefined}
+                      stubYear={stub ? { year: stubYear, label: stub.short } : undefined}
                     />
                   </div>
                 ))}

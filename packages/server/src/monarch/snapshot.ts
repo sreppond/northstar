@@ -20,7 +20,11 @@ export function toSnapshot(
   capturedAt = new Date(),
 ): MonarchSnapshot {
   const snapshot: MonarchSnapshot = {
-    capturedAt: capturedAt.toISOString().slice(0, 10),
+    // Local calendar date, not UTC (docs/W3-REVIEW.md "Use local dates, not
+    // UTC") — `toISOString` reads in UTC, so a sync run in the evening west
+    // of Greenwich dated the capture tomorrow. `en-CA`'s built-in format is
+    // YYYY-MM-DD.
+    capturedAt: capturedAt.toLocaleDateString('en-CA'),
     accounts: accounts.map(toAccount),
   };
 

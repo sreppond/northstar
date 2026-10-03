@@ -90,6 +90,34 @@ describe('buildExploreRows', () => {
     const rows = buildExploreRows(result([snapshot(2026, { totalIncome: 0, accounts: [account({ contributions: 1_000 })] })]));
     expect(rows[0].contributionRatePercent).toBe(0);
   });
+
+  // W3#5: one definition, used everywhere (docs/MATH.md "Savings rate and
+  // spending"). A 401(k) contribution is booked as an "expense" line
+  // (`run.ts`'s waterfall needs it to be a cash outflow), but it is SAVING,
+  // not SPENDING — "expenses" here must exclude it, and "saved" must credit
+  // it back in.
+  it('excludes contributions from "expenses" and credits them into "saved"', () => {
+    const rows = buildExploreRows(
+      result([
+        snapshot(2026, {
+          totalIncome: 100_000,
+          totalExpenses: 60_000, // $40k living + a $20k 401(k) contribution
+          totalTaxes: 10_000,
+          netCashFlow: 100_000 - 60_000 - 10_000, // 30,000 (contribution already netted out)
+          expenses: [
+            { label: 'Living expenses', amount: 40_000, category: 'living' },
+            { label: '401k — contribution', amount: 20_000, category: 'contribution' },
+          ],
+          accounts: [account({ contributions: 20_000 })],
+        }),
+      ]),
+    );
+    // Hand check: spending = totalExpenses - contributions = 60,000 - 20,000 = 40,000.
+    expect(rows[0].expenses).toBe(40_000);
+    // Hand check: saved = netCashFlow + contributions = 30,000 + 20,000 = 50,000.
+    expect(rows[0].saved).toBe(50_000);
+    expect(rows[0].savingsRatePercent).toBeCloseTo(50, 6);
+  });
 });
 
 describe('CSV/JSON export', () => {

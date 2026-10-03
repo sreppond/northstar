@@ -7,7 +7,7 @@ import {
   planSepp,
   seppStartAgeSweep,
 } from '@northstar/engine';
-import { detailMoney } from '../format';
+import { money } from '../format';
 import { Choice, Field, NumberInput } from '../drawer/fields';
 import { AnimatedFigure } from '../AnimatedFigure';
 import { ChartLegend, MiniChart } from './MiniChart';
@@ -156,7 +156,7 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
             />
             <Stat
               label={method === 'rmd' ? 'First year’s payment' : 'Annual payment'}
-              value={detailMoney(selected.annualPayment)}
+              value={money(selected.annualPayment)}
               note={method === 'rmd' ? 'Recalculated every year — see the chart' : undefined}
             />
             <Stat label="Runs through" value={String(selected.mandatoryEndYear)} />
@@ -199,12 +199,12 @@ export function SeppTool({ plan, result }: { plan: Plan; result: PlanResult }) {
                   Age {s.startAge} · {s.startYear}
                 </span>
                 <span className="ns-sepp-option-payment">
-                  {detailMoney(s.annualPayment)}
+                  {money(s.annualPayment)}
                   <span className="ns-sepp-option-unit">/yr</span>
                 </span>
                 <span className="ns-sepp-option-note">Runs through {s.mandatoryEndYear}</span>
                 <span className="ns-sepp-option-balance">
-                  {detailMoney(s.balanceAtReference)} at {MANDATORY_AGE}
+                  {money(s.balanceAtReference)} at {MANDATORY_AGE}
                 </span>
                 <span className="ns-sepp-mag-bar">
                   <span

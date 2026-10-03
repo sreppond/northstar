@@ -22,7 +22,7 @@ const DEFAULT_API_BASE = 'https://api.monarch.com';
  * value with a shelf life — a sudden 403 on every call is the sign it needs
  * recapturing from the web app.
  */
-const HEADERS: Record<string, string> = {
+export const HEADERS: Record<string, string> = {
   Accept: 'application/json',
   'Content-Type': 'application/json',
   'Client-Platform': 'web',
@@ -41,7 +41,7 @@ export const REQUIRED_COOKIES = ['session_id', 'csrftoken'] as const;
  * recapture a GraphQL document, and schema drift reported as an expired
  * session sends you round a reconnect loop that can never fix it.
  */
-const AUTH_ERROR =
+export const AUTH_ERROR =
   /\bnot authenticated\b|\bunauthenticated\b|\bunauthorized\b|\bnot authorized\b|\bforbidden\b|permission denied|credentials were not provided|signature has expired|login required/i;
 
 export class MonarchError extends Error {}
@@ -78,7 +78,11 @@ export function missingCookies(raw: string): string[] {
 
 // --- response shapes --------------------------------------------------------
 
-const accountSchema = z.object({
+// Exported so `scripts/monarch-sync.mjs` can validate the exact same shape
+// when it calls the GraphQL API from inside a real Chrome page instead of
+// through `MonarchClient` — see that file for why it can't reuse `call()`
+// itself (the fetch has to run in the page's own context, not Node's).
+export const accountSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(String),
   displayName: z.string().nullish(),
   deactivatedAt: z.string().nullish(),
@@ -94,9 +98,9 @@ const accountSchema = z.object({
   plannedPayment: z.number().nullish(),
 });
 
-const accountsResponse = z.object({ accounts: z.array(accountSchema) });
+export const accountsResponse = z.object({ accounts: z.array(accountSchema) });
 
-const cashflowResponse = z.object({
+export const cashflowResponse = z.object({
   summary: z.array(
     z.object({
       summary: z.object({ sumIncome: z.number().nullish(), sumExpense: z.number().nullish() }),

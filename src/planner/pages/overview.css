@@ -7,6 +7,23 @@
  * pressable.
  */
 
+/* Quiet banners under the header (docs/ROADMAP-10.md Track B / C4): a new
+   local Monarch snapshot to review, or a plan whose clock has fallen behind
+   the calendar. Neutral chip chrome, same family as `.ns-page-status` in
+   ui.css, rather than an alert colour — neither is a problem, just a nudge. */
+.ns-ov-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: 13px;
+  color: var(--ink);
+}
+
 /* The header's action row, wrapped so three buttons + the status chip can
    reflow onto a second line at phone widths instead of overflowing the page
    (`.ns-page-actions`, the shared wrapper `PageHeader` itself renders, is
@@ -37,6 +54,18 @@
 }
 .ns-ov-meta-status {
   display: none;
+}
+/* Freshness (docs/ROADMAP-10.md C4): the chip chrome itself stays the same
+   quiet neutral pill (`.ns-page-status` in ui.css) whether the plan is fresh
+   or stale — only the dot changes, from the chip's own muted text colour to
+   a warm one. `--warn` (planner.css), not `--out` — `--out` is one of the
+   four validated DATA hues ("money out"), and reusing it here made a UI
+   affordance read as if it were a value (docs/W3-REVIEW.md). Not `--danger`
+   either, which planner.css reserves for destructive actions only — a stale
+   plan is a nudge, not an error. The dot is also never the only signal: the
+   chip's own text already states the age in words ("synced … N days ago"). */
+.ns-ov-status-dot-warn {
+  color: var(--warn);
 }
 
 @media (max-width: 640px) {
@@ -76,6 +105,175 @@
   .ns-ov-header-actions > button {
     width: 100%;
     text-align: center;
+  }
+}
+
+/* Plan vs. reality (docs/ROADMAP-10.md C4): a quiet row under the chart, only
+   once a Progress point exists to compare against. The dot carries the same
+   in/out data hues `DeltaTag`/`StackedBar` use elsewhere for "money in vs.
+   money out" — legitimate here, unlike the freshness dot above, because this
+   IS a money-in/money-out reading. */
+.ns-ov-reality {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-ov-reality-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+}
+.ns-ov-reality-in .ns-ov-reality-dot {
+  background: var(--in);
+}
+.ns-ov-reality-out .ns-ov-reality-dot {
+  background: var(--out);
+}
+
+/* "What if" levers (docs/ROADMAP-10.md C5). A flex column so `.ns-ov-levers`
+   can reorder itself relative to the chart/reality/selection/warning blocks
+   `NetWorthChart.tsx`/`OverviewPage.tsx` render alongside it — `order: -1`
+   (below) puts it ABOVE the chart, under the card's own header, at every
+   width except the phone breakpoint, where it drops to AFTER the chart
+   instead (docs/ROADMAP-10.md C5: "On phones it stacks under the chart").
+   A plain flex column rather than touching `.ns-ui-section-body-flush` in
+   the shared `ui/ui.css` — that file is shared by every other flush
+   SectionCard in the app (tables, other charts) and has no business knowing
+   this page keeps a reorderable child. */
+.ns-ov-chart-slot {
+  display: flex;
+  flex-direction: column;
+}
+.ns-ov-levers {
+  order: -1;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ns-ov-levers-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  padding: 14px 24px;
+  cursor: pointer;
+  text-align: left;
+}
+.ns-ov-levers-toggle:hover {
+  background: var(--surface-sub);
+}
+.ns-ov-levers-title {
+  flex: none;
+}
+/* The live delta rides along the same row, right after the title, whenever
+   the panel is collapsed with a lever already moved — so closing it to get
+   out of the way doesn't also hide the one thing it was telling you. */
+.ns-ov-levers-toggle .ns-ui-delta {
+  margin-left: 2px;
+}
+.ns-ov-levers-chevron {
+  flex: none;
+  transition: transform 180ms var(--ease-soft);
+}
+.ns-ov-levers-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+/* The collapse itself: a 0fr/1fr grid track is the one CSS-only way to
+   animate to/from an unmeasured "auto" height (docs/DESIGN-DIRECTION.md's
+   motion table calls for a real, quick transition on things that occasionally
+   open/close — a drawer, not a keyboard-driven toggle used hundreds of times
+   a day, so this earns the animation budget `ease-soft` + ~220ms usually
+   reserves for exactly this). The inner wrapper needs its own `min-height: 0`
+   and `overflow: hidden` — a grid track alone doesn't clip its child. */
+.ns-ov-levers-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms var(--ease-soft);
+}
+.ns-ov-levers-panel.is-open {
+  grid-template-rows: 1fr;
+}
+.ns-ov-levers-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+/* The padding lives here, one level deeper than `-inner`, not on the grid
+   item itself (docs/W3-REVIEW.md #10). A grid track sized `0fr` still falls
+   back to its item's "auto" min size when nothing overrides it, and padding
+   on that item counts toward that min size — so the collapsed track was
+   never really 0, just clipped visually by `overflow: hidden` while still
+   occupying ~18px and leaking a row under the closed toggle. Padding on an
+   inner child doesn't feed into the grid item's own min size the same way,
+   so the track collapses for real. */
+.ns-ov-levers-panel-content {
+  padding: 0 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ns-ov-lever-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ns-ov-lever-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+}
+.ns-ov-lever-head label {
+  color: var(--muted);
+}
+.ns-ov-lever-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.ns-ov-lever-sub {
+  color: var(--muted-light);
+}
+
+/* A plain native range — no custom thumb skin, deliberately: `--accent`
+   tints the filled track via `accent-color` and every browser's own
+   thumb/focus-ring already does the keyboard-accessible part correctly
+   (docs/REVIEW.md: never fight the platform's own a11y for a cosmetic win). */
+.ns-ov-lever-row input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.ns-ov-levers-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+}
+.ns-ov-levers-actions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .ns-ov-levers {
+    order: 1;
+    border-bottom: 0;
+    border-top: 1px solid var(--rule);
   }
 }
 

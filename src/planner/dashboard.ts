@@ -9,12 +9,15 @@
  * `src/**\/*.test.ts` (vitest.config.ts), so a `.tsx` component can't easily
  * be unit tested here, a plain module can.
  */
-import type { AccountClass, Plan, PlanEvent, PlanResult } from '@northstar/engine';
+import type { AccountClass, Plan, PlanEvent, PlanFreshness, PlanResult } from '@northstar/engine';
 import { ACCOUNT_TYPES } from '@northstar/engine';
 import type { MonarchStatus } from '../api/client';
 import { summarize } from './presentation';
 import { accountClassColor } from './ui';
 import type { FanSeries } from './NetWorthChart';
+import { asOfDateLabel } from './format';
+import { planAsOfFraction, projectedNetWorthAt, summarizeProgress, yearFraction, type ProgressPoint } from './progress';
+import { savingsRatePercent } from './ledger';
 
 // --- Monarch status chip ----------------------------------------------------
 
@@ -65,6 +68,44 @@ export function monarchHeaderStatus(status: MonarchStatus | null): MonarchHeader
   }
   // Current. Offer the refresh without nagging about it.
   return { text: `Monarch · ${describeAge(status.ageDays)}`, action: { label: 'Refresh', kind: 'refresh' } };
+}
+
+export interface FreshnessHeaderStatus {
+  /** "Monarch · synced Sep 1 · 24 days ago" or "Manual balances · as of Sep
+      2" (docs/ROADMAP-10.md C4). */
+  text: string;
+  /** `freshness.isStale` passed straight through — the caller uses this to
+      pick the neutral-chip-with-a-warn-dot treatment and to add the
+      `npm run monarch:sync` hint to the chip's explainer. */
+  isStale: boolean;
+}
+
+/**
+ * The header status chip's text, driven by `planFreshness` (the PLAN's own
+ * clock — `asOfDate` against the real calendar) rather than the server
+ * Monarch CONNECTION's own `MonarchStatus` (`monarchHeaderStatus` above,
+ * which still drives the separate Connect/Refresh action next to it): a
+ * plan can be stale whether or not this browser happens to be connected to
+ * Monarch right now, and a plan that has never touched Monarch at all still
+ * has an as-of date worth naming.
+ *
+ * `isMonarchLinked` — whether this plan has ever absorbed a Monarch import
+ * (`plan.settings.monarchOverrides` is only ever written by `applyImport`,
+ * never hand-authored) — decides which of the two sentences prints; both
+ * read the same `freshness`/`asOfDate` underneath.
+ */
+export function freshnessHeaderStatus(
+  freshness: PlanFreshness,
+  asOfDate: string,
+  isMonarchLinked: boolean,
+): FreshnessHeaderStatus {
+  const dateLabel = asOfDateLabel(asOfDate);
+  if (!isMonarchLinked) {
+    return { text: `Manual balances · as of ${dateLabel}`, isStale: freshness.isStale };
+  }
+  const days = freshness.daysSinceAsOf;
+  const ago = days <= 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`;
+  return { text: `Monarch · synced ${dateLabel} · ${ago}`, isStale: freshness.isStale };
 }
 
 // --- horizon cards -----------------------------------------------------------
@@ -182,25 +223,41 @@ const ASSET_CLASS_ORDER: AccountClass[] = [
 ];
 
 /**
- * Today's balances (the projection's first year snapshot) grouped by account
- * class. Reads `result` rather than `plan.accounts` directly so a Monarch
- * import's synthetic accounts (see `PlannerContext.tsx`'s `allAccounts`) are
- * counted too — the bar should show what the plan actually holds, not just
- * what a person hand-entered.
+ * Today's balances grouped by account class. Reads `result.opening` —
+ * balances as of `settings.asOfDate`, not `result.years[0]`, which is the
+ * projected CLOSE of the first plan year (Dec 31) and can already differ
+ * from "today" by however much that stub year is projected to grow and earn
+ * (docs/MATH.md "Today vs. years[0]"). Falls back to `years[0]` only when
+ * `opening` is missing — defensively, for a `PlanResult` a test builds by
+ * hand without one; `runPlan` itself always sets it.
+ *
+ * Reads `result` rather than `plan.accounts` directly so a Monarch import's
+ * synthetic accounts (see `PlannerContext.tsx`'s `allAccounts`) are counted
+ * too — the bar should show what the plan actually holds, not just what a
+ * person hand-entered.
  */
 export function accountMixToday(result: PlanResult): AccountMix {
-  const today = result.years[0];
-  if (!today) return { segments: [], liabilitiesTotal: 0 };
-
   const byClass = new Map<AccountClass, number>();
   let liabilitiesTotal = 0;
 
-  for (const row of today.accounts) {
-    if (row.isLiability) {
-      liabilitiesTotal += row.close;
-      continue;
+  if (result.opening) {
+    for (const row of result.opening.accounts) {
+      if (row.isLiability) {
+        liabilitiesTotal += row.balance;
+        continue;
+      }
+      byClass.set(row.accountClass, (byClass.get(row.accountClass) ?? 0) + row.balance);
     }
-    byClass.set(row.accountClass, (byClass.get(row.accountClass) ?? 0) + row.close);
+  } else {
+    const today = result.years[0];
+    if (!today) return { segments: [], liabilitiesTotal: 0 };
+    for (const row of today.accounts) {
+      if (row.isLiability) {
+        liabilitiesTotal += row.close;
+        continue;
+      }
+      byClass.set(row.accountClass, (byClass.get(row.accountClass) ?? 0) + row.close);
+    }
   }
 
   const segments: AccountMixSegment[] = ASSET_CLASS_ORDER.filter((cls) => (byClass.get(cls) ?? 0) > 0).map(
@@ -250,14 +307,17 @@ export function upcomingEvents(plan: Plan, todayYear: number, limit = 5): Upcomi
 // --- savings rate & freedom age (the stat strip's fourth slot) -------------
 
 /**
- * Net cash flow as a percentage of income, for the year `todayYear` — "of
- * what came in, how much stuck." Undefined when there's no income to take a
- * percentage of, rather than a misleading divide-by-zero-flavoured number.
+ * Savings (income minus spending, contributions counted as saved — see
+ * `ledger.ts`'s `savingsRatePercent`, the one shared definition docs/MATH.md
+ * "Savings rate and spending" pins) as a percentage of income, for the year
+ * `todayYear` — "of what came in, how much stuck." Undefined when there's no
+ * income to take a percentage of, rather than a misleading
+ * divide-by-zero-flavoured number.
  */
 export function savingsRateThisYear(result: PlanResult, todayYear: number): number | undefined {
   const year = result.years.find((y) => y.year === todayYear) ?? result.years[0];
-  if (!year || year.totalIncome <= 0) return undefined;
-  return (year.netCashFlow / year.totalIncome) * 100;
+  if (!year) return undefined;
+  return savingsRatePercent(year);
 }
 
 export interface RetirementReadout {
@@ -277,4 +337,44 @@ export function retirementReadout(plan: Plan): RetirementReadout | undefined {
   const participant = plan.participants.find((p) => p.isIncluded);
   if (!participant) return undefined;
   return { age: event.startYear - participant.birthYear, year: event.startYear };
+}
+
+// --- plan vs. reality (docs/ROADMAP-10.md C4) --------------------------------
+
+export interface PlanVsReality {
+  /** actual − projected, signed. */
+  delta: number;
+  tone: 'in' | 'out';
+  /** The plan's own as-of date, formatted — "Ahead of plan by $12K since Sep
+      1": the divergence is measured from where the plan's own clock is
+      anchored, not from the logged point's own date. */
+  sinceLabel: string;
+}
+
+/**
+ * How the latest logged actual (`progress.ts`'s `ProgressPoint`) compares to
+ * what the plan itself projected for that same date — `projectedNetWorthAt`,
+ * imported read-only from `progress.ts` rather than re-derived here. Absent
+ * with no progress points logged yet, or once the gap rounds to nothing
+ * (`money()`'s own "under $50 reads as $0" floor — a "$0 ahead of plan"
+ * stat would just be noise).
+ */
+export function planVsReality(
+  progressPoints: ProgressPoint[],
+  result: PlanResult,
+  plan: Pick<Plan, 'settings'>,
+): PlanVsReality | undefined {
+  const { latest } = summarizeProgress(progressPoints);
+  if (!latest) return undefined;
+
+  const asOf = planAsOfFraction(plan.settings);
+  const projected = projectedNetWorthAt(result, yearFraction(latest.date), asOf);
+  const delta = latest.netWorth - projected;
+  if (Math.abs(delta) < 50) return undefined;
+
+  return {
+    delta,
+    tone: delta >= 0 ? 'in' : 'out',
+    sinceLabel: asOfDateLabel(plan.settings.asOfDate ?? `${plan.settings.startYear}-01-01`),
+  };
 }

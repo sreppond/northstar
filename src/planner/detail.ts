@@ -12,7 +12,7 @@ import { ACCOUNT_TYPES, EVENT_MODULES, visibleFields } from '@northstar/engine';
 import type { AccountFieldSpec, FieldUnit } from '@northstar/engine';
 import { describeSchema } from './drawer/schemaForm';
 import { toneFor } from './presentation';
-import { detailMoney, roundMoney } from './format';
+import { money } from './format';
 import { eventReferences } from './eventReferences';
 
 export interface DetailRow {
@@ -56,8 +56,8 @@ export function planDetail(plan: Plan, endYear: number): Detail {
     heading: 'Assumptions',
     rows: [
       { label: 'As of', value: s.asOfDate ?? `${s.startYear}-01-01` },
-      { label: 'Yearly take-home income', value: detailMoney(takeHomeIncome(plan)) },
-      { label: 'Yearly living expenses', value: detailMoney(s.baselineExpenses) },
+      { label: 'Yearly take-home income', value: money(takeHomeIncome(plan)) },
+      { label: 'Yearly living expenses', value: money(s.baselineExpenses) },
       { label: 'Yearly inflation rate', value: `${s.inflationRate}%` },
       { label: 'Income tax rate', value: `${s.incomeTaxRate}%` },
       {
@@ -150,10 +150,10 @@ export function accountDetail(
   const rows: DetailRow[] = [];
 
   if (closingBalance !== undefined) {
-    rows.push({ label: 'Balance this year', value: detailMoney(closingBalance) });
+    rows.push({ label: 'Balance this year', value: money(closingBalance) });
   }
   if (nonTaxableBaseRemaining !== undefined) {
-    rows.push({ label: 'Non-taxable base remaining', value: detailMoney(nonTaxableBaseRemaining) });
+    rows.push({ label: 'Non-taxable base remaining', value: money(nonTaxableBaseRemaining) });
   }
 
   for (const field of visibleFields(spec, account)) {
@@ -209,7 +209,7 @@ export function formatUnit(raw: unknown, unit: FieldUnit | 'plain'): string {
 
   switch (unit) {
     case 'currency':
-      return roundMoney(raw);
+      return money(raw);
     case 'percent':
       return `${trim(raw)}%`;
     case 'year':

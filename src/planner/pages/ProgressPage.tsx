@@ -3,7 +3,7 @@ import { LineChart } from 'lucide-react';
 import { usePlanner } from '../PlannerContext';
 import { Field, NumberInput } from '../drawer/fields';
 import { MiniChart } from '../views/MiniChart';
-import { asOfDateLabel, detailMoney, planMetaLine, signedMoney } from '../format';
+import { asOfDateLabel, money, planMetaLine, signedMoney } from '../format';
 import {
   emptyProgressPoint,
   planAsOfFraction,
@@ -88,12 +88,22 @@ export function ProgressPage() {
           <EmptyState
             icon={LineChart}
             title="No progress logged yet"
-            body="A record of what your net worth actually was over time, separate from the plan's projected future. Log today's balance to start the record, or backfill an old statement."
+            body={
+              <>
+                A record of what your net worth actually was over time, separate from the plan's projected future.
+                Running <code>npm run monarch:sync</code> builds this history automatically on every sync — or log
+                today's balance by hand to start the record, or backfill an old statement.
+              </>
+            }
             action={
               <button
                 type="button"
                 className="ns-btn ns-btn-primary"
-                onClick={() => setDraft(progressPointFromPlan({ settings: plan.settings, years: result.years }))}
+                onClick={() =>
+                  setDraft(
+                    progressPointFromPlan({ settings: plan.settings, years: result.years, opening: result.opening }),
+                  )
+                }
               >
                 Log today's net worth
               </button>
@@ -107,8 +117,9 @@ export function ProgressPage() {
               <Stat
                 size="xl"
                 label="Latest actual"
-                value={detailMoney(latest!.netWorth)}
+                value={money(latest!.netWorth)}
                 sub={`As of ${asOfDateLabel(latest!.date)}`}
+                explain={`The most recently logged real net worth entry, dated ${asOfDateLabel(latest!.date)} — a number you entered, not a projection.`}
               />
               <Stat
                 label="Vs. plan"
@@ -122,12 +133,18 @@ export function ProgressPage() {
                   />
                 }
                 sub="Actual minus projected, same date"
+                explain="Your latest logged net worth minus what the plan projected for that same date — positive means you're ahead of the projection, negative means behind."
               />
-              <Stat label="Points logged" value={String(sortedAscending.length)} />
+              <Stat
+                label="Points logged"
+                value={String(sortedAscending.length)}
+                explain="How many net-worth entries you've logged, across every date."
+              />
               <Stat
                 label="Since first point"
                 value={signedMoney(allTimeChange)}
                 sub={earliest && earliest !== latest ? `Since ${asOfDateLabel(earliest.date)}` : 'Log another point to see change'}
+                explain="Latest logged net worth minus your very first logged entry — the real change over the whole time you've been tracking, not a projection."
               />
             </StatStrip>
 
@@ -177,9 +194,9 @@ export function ProgressPage() {
                   {sortedDescending.map((point) => (
                     <tr key={point.id}>
                       <td>{point.date}</td>
-                      <td>{detailMoney(point.netWorth)}</td>
-                      <td>{detailMoney(point.assets)}</td>
-                      <td>{detailMoney(point.liabilities)}</td>
+                      <td>{money(point.netWorth)}</td>
+                      <td>{money(point.assets)}</td>
+                      <td>{money(point.liabilities)}</td>
                       <td className="ns-datatable-actions">
                         <button type="button" className="ns-btn ns-btn-sm" onClick={() => setDraft(point)}>
                           Edit

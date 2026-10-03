@@ -130,10 +130,10 @@ export function CashFlowSankey({ snapshot }: { snapshot: YearSnapshot }) {
         </g>
       ))}
 
+      {/* No "Cash flow" caption over the hub — the card's own title already
+          says that (docs/ROADMAP-10.md C1: redundant with the SectionCard
+          title one line above). */}
       <rect x={HUB_X} y={TOP} width={NODE_W} height={BOTTOM - TOP} rx={3} className="ns-sankey-hub" />
-      <text x={HUB_X + NODE_W / 2} y={TOP - 6} textAnchor="middle" className="ns-sankey-label ns-sankey-hub-label">
-        Cash flow
-      </text>
     </svg>
   );
 }
@@ -155,17 +155,17 @@ function SankeyBar({ title, nodes }: { title: string; nodes: Node[] }) {
   );
 }
 
-/** A band tall enough to read the name AND its amount gets both; a thinner
-    one (docs/REDESIGN-V3.md "Cash Flow" — the "Tax-deferred investments —
-    contribution · $4K" label that overlapped a thin band) drops the amount
-    first, then the label itself if there's truly nothing left to give it —
-    the ribbon and node still carry the value's true proportion, so nothing
-    is lost, only unlabelled at a glance. */
+/** Every band gets its name AND amount — `declutter` (below) already keeps
+    labels at least a line apart regardless of how thin their own band is,
+    since each label sits beside its node rather than inside it, so a thin
+    band never actually collides with its neighbours' text (docs/ROADMAP-10.md
+    C1: a $4K "Tax-deferred investments — contribution" band was dropping its
+    own amount for no reason a reader could see). Only a truly invisible
+    sliver — a rounding artefact rather than a real category — drops its
+    label entirely; the ribbon and node still carry its true proportion. */
 function labelText(slice: LabeledSlice, limit: number): string {
-  const height = slice.y1 - slice.y0;
-  if (height < 7) return '';
+  if (slice.y1 - slice.y0 < 4) return '';
   const name = slice.node.label.length > limit ? `${slice.node.label.slice(0, limit - 1)}…` : slice.node.label;
-  if (height < 13) return name;
   return `${name} · ${tableMoney(slice.node.amount)}`;
 }
 

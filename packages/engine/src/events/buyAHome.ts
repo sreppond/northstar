@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Account, PlanEvent } from '../types.js';
 import { monthlyPayment } from '../accounts.js';
+import { yearFractionRemaining } from '../partialYear.js';
 import {
   type CompileContext,
   type EventModule,
@@ -74,6 +75,19 @@ export const buyAHome: EventModule<BuyAHomeConfig> = {
     const homeId = `${event.id}:home`;
     const mortgageId = `${event.id}:mortgage`;
 
+    // How much of a compounding year has actually elapsed since the
+    // purchase, by `year`'s end — mirrors the home ACCOUNT's own growth
+    // (run.ts's `effectiveRateForFraction`), so the "value" used for
+    // carrying costs below never disagrees with the balance sheet. If the
+    // house was bought in the plan's own partial `startYear`, that first
+    // year only contributed `buyYearFraction` of a compounding year, not a
+    // full one (docs/MATH.md "Home appreciation and purchase costs") — for
+    // any other purchase year `buyYearFraction` is 1 and this reduces to the
+    // plain `year - buyYear` the account itself has always compounded on.
+    const buyYearFraction = yearFractionRemaining(buyYear, ctx.startYear, ctx.settings.asOfDate);
+    const elapsedYears = (year: number) =>
+      year <= buyYear ? 0 : buyYearFraction + (year - buyYear - 1);
+
     // --- synthetic accounts ------------------------------------------------
     const home: Account = {
       ...syntheticAccountDefaults(event.id),
@@ -120,7 +134,7 @@ export const buyAHome: EventModule<BuyAHomeConfig> = {
 
     // --- carrying costs ----------------------------------------------------
     for (const year of yearRange(buyYear, lastYear, ctx)) {
-      const value = config.price * Math.pow(1 + config.appreciationRate / 100, year - buyYear);
+      const value = config.price * Math.pow(1 + config.appreciationRate / 100, elapsedYears(year));
       const inflation = ctx.inflationAt(year) / ctx.inflationAt(buyYear);
 
       const propertyTax = value * (config.propertyTaxRate / 100);
@@ -148,7 +162,7 @@ export const buyAHome: EventModule<BuyAHomeConfig> = {
     // ordinary waterfalls. Selling costs are booked separately.
     if (config.sellYear && config.sellYear >= ctx.startYear && config.sellYear <= ctx.endYear) {
       const value =
-        config.price * Math.pow(1 + config.appreciationRate / 100, config.sellYear - buyYear);
+        config.price * Math.pow(1 + config.appreciationRate / 100, elapsedYears(config.sellYear));
 
       out.accountTerminations.push(
         {

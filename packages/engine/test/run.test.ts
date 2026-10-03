@@ -35,10 +35,18 @@ describe('runPlan — growth', () => {
     expect(closes[2]).toBeCloseTo(133_100, 6);
   });
 
-  it('does not grow a contribution in the year it is made', () => {
-    // A contribution made during year Y earns growth only from Y+1
-    // (docs/PLAN.md §4.3) — growth applies to the balance the account
-    // opened the year with, not the balance after this year's surplus lands.
+  it('credits a contribution with half a year of growth under the mid-year convention', () => {
+    // MOVED (owner decision 2, docs/MATH.md "Mid-year contributions and
+    // withdrawals"): this used to assert a contribution earns NOTHING in
+    // the year it lands ("growth only from Y+1"). The engine now credits it
+    // with HALF a period's growth, matching the mid-year convention: a
+    // contribution made steadily across the year is, on average, in the
+    // account for about half of it.
+    //
+    // Hand check: opening $100k compounds the whole year at 5%: 100,000 *
+    // 0.05 = 5,000. The $44k contribution (144k income - 100k expenses)
+    // compounds for HALF the year: 44,000 * (1.05^0.5 - 1) ≈ 44,000 *
+    // 0.0246950766 ≈ 1,086.58. Total growth ≈ 6,086.58.
     const result = runPlan(
       plan({
         settings: { projectionYears: 1, baselineIncome: 144_000, baselineExpenses: 100_000 } as never,
@@ -48,8 +56,10 @@ describe('runPlan — growth', () => {
     );
     const [brokerage] = result.years[0].accounts;
     expect(brokerage.contributions).toBeCloseTo(44_000, 6);
-    expect(brokerage.growth).toBeCloseTo(5_000, 6); // 5% of the $100k opening balance only
-    expect(brokerage.close).toBeCloseTo(149_000, 6); // 100k opening + 44k contribution + 5k growth
+    const expectedGrowth = 100_000 * 0.05 + 44_000 * (Math.sqrt(1.05) - 1);
+    expect(brokerage.growth).toBeCloseTo(expectedGrowth, 2);
+    expect(brokerage.growth).toBeCloseTo(6_086.58, 2);
+    expect(brokerage.close).toBeCloseTo(100_000 + 44_000 + expectedGrowth, 2);
   });
 
   it('holds a noChange account flat', () => {
@@ -399,7 +409,27 @@ describe('runPlan — RMD', () => {
     );
   });
 
-  it('compounds growth on the post-RMD balance, not the opening one', () => {
+  it('compounds growth on the post-RMD balance, crediting the RMD itself half a year under the mid-year convention', () => {
+    // MOVED (owner decision 2, docs/MATH.md "Mid-year contributions and
+    // withdrawals"): this used to assert the RMD forgoes ALL of the year's
+    // growth once withdrawn. `run.ts` debits an RMD from `balances` the same
+    // way `priority.ts`'s waterfall withdrawals are debited, so the same
+    // symmetric mid-year credit now applies to both without any RMD-specific
+    // code: a withdrawal — forced or discretionary — forgoes only HALF the
+    // period's growth, not all of it (the flip side of a contribution now
+    // earning half instead of none).
+    //
+    // Hand check: forced = 1,000,000 / 23.7. fullFactor = 1.1^1 - 1 = 0.1.
+    // halfFactor = 1.1^0.5 - 1 ≈ 0.0488088. The post-RMD balance
+    // (1,000,000 - forced) compounds the WHOLE year; the RMD itself is
+    // credited back `fullFactor - halfFactor` of growth so it only forgoes
+    // half: growth = (1,000,000 - forced) * 0.1 + forced * (0.1 - 0.0488088).
+    // A plain cash account is here ONLY so the forced RMD proceeds have
+    // somewhere else to sweep to (`run.ts`'s `sweepAccount`) — without one,
+    // the ONLY account in the plan is also its own fallback sweep target, so
+    // the RMD would land right back in 'd' as a CONTRIBUTION, which earns
+    // its own half-period credit and exactly cancels the withdrawal's, and
+    // this test would no longer isolate what it means to.
     const result = runPlan(
       plan({
         settings: { projectionYears: 1 } as never,
@@ -412,13 +442,19 @@ describe('runPlan — RMD', () => {
             initialBalance: 1_000_000,
             growthRate: 10,
           }),
+          asset({ id: 'c', name: 'Cash', accountClass: 'cash', growthRateMethod: 'noChange' }),
         ],
       }),
     );
     const forced = 1_000_000 / 23.7;
-    const d = result.years[0].accounts[0];
+    const fullFactor = Math.pow(1.1, 1) - 1;
+    const halfFactor = Math.pow(1.1, 0.5) - 1;
+    const expectedGrowth = (1_000_000 - forced) * fullFactor + forced * (fullFactor - halfFactor);
+    const d = result.years[0].accounts.find((a) => a.accountId === 'd')!;
     expect(d.withdrawals).toBeCloseTo(forced, 2);
-    expect(d.growth).toBeCloseTo((1_000_000 - forced) * 0.1, 2);
+    expect(d.contributions).toBe(0);
+    expect(d.growth).toBeCloseTo(expectedGrowth, 2);
+    expect(d.growth).toBeCloseTo(97_940.55, 2);
     expect(d.close).toBeCloseTo(d.open + d.contributions - d.withdrawals + d.growth, 4);
   });
 
