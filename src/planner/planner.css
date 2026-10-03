@@ -2171,6 +2171,13 @@ html.ns-tauri .ns-drag-strip {
 .ns-bar:hover {
   box-shadow: var(--jelly-rise-hi);
 }
+/* The bar is a flex row, and bare text inside a flex container is hard-clipped
+   rather than ellipsized — so the label lives in its own shrinkable span. */
+.ns-bar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .ns-bar:active {
   box-shadow: var(--jelly-press);
 }

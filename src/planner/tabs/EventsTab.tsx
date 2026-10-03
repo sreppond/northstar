@@ -336,8 +336,10 @@ export function EventsTab({
                   title={detail ? `${event.name} · ${event.startYear} · ${detail} · excluded` : `${event.name} · excluded`}
                   style={{ left: `${left}%`, width: `${width}%` }}
                 >
-                  {event.startYear}
-                  {detail && width >= 8 ? ` · ${detail}` : ''}
+                  <span className="ns-bar-text">
+                    {event.startYear}
+                    {detail && width >= 8 ? ` · ${detail}` : ''}
+                  </span>
                 </div>
               ) : (
                 <button
@@ -371,8 +373,10 @@ export function EventsTab({
                 >
                   {/* A short bar cannot hold the detail; showing it just leaves
                       a clipped "2026 ·" dangling. The title carries it instead. */}
-                  {isDragging ? drag!.candidateYear : event.startYear}
-                  {!isDragging && detail && width >= 8 ? ` · ${detail}` : ''}
+                  <span className="ns-bar-text">
+                    {isDragging ? drag!.candidateYear : event.startYear}
+                    {!isDragging && detail && width >= 8 ? ` · ${detail}` : ''}
+                  </span>
                 </button>
               )}
             </div>
@@ -382,8 +386,9 @@ export function EventsTab({
 
       {beyond > 0 && (
         <div className="ns-empty">
-          {beyond} event{beyond > 1 ? 's' : ''} start after the plan ends in {endYear} and are not
-          projected.
+          {beyond === 1
+            ? `1 event starts after the plan ends in ${endYear} and isn't projected.`
+            : `${beyond} events start after the plan ends in ${endYear} and aren't projected.`}
         </div>
       )}
     </div>
