@@ -10,8 +10,8 @@ import { toast } from './ui/Toast';
  * docs/DESIGN-DIRECTION.md "Dark mode and ⌘K"). Absorbs bits of chrome that
  * otherwise each need their own real estate: page navigation (now real
  * routes, pushed via `useNavigate` — `NAV_ITEMS` is the same list
- * `Sidebar.tsx` renders, so the two can never drift), the Compare-plan
- * picker, the year-window pager, and the scenario switcher (which it reopens
+ * `Sidebar.tsx` renders, so the two can never drift), the year-window pager,
+ * and the scenario switcher (which it reopens
  * as the existing `PlanSwitcher` overlay rather than reimplementing a plan
  * list inline).
  *
@@ -32,20 +32,8 @@ interface Command {
 export function CommandPalette({ onClose }: { onClose(): void }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const {
-    visiblePlans,
-    stored,
-    plan,
-    updateSettings,
-    windowLabel,
-    clampedStart,
-    maxStart,
-    pageEarlier,
-    pageLater,
-    setSidebarOpen,
-  } = usePlanner();
+  const { windowLabel, clampedStart, maxStart, pageEarlier, pageLater, setSidebarOpen } = usePlanner();
 
-  const compareToPlanId = plan.settings.compareToPlanId;
   const canPageEarlier = clampedStart > 0;
   const canPageLater = clampedStart < maxStart;
 
@@ -57,26 +45,12 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
   const commands = useMemo<Command[]>(() => {
     const out: Command[] = NAV_ITEMS.map((item) => ({
       id: `page-${item.to}`,
-      label: `Go to ${item.label}`,
+      // Scenarios was `Compare` until v5 (docs/REDESIGN-V5.md §2); keep the
+      // old word findable.
+      label: `Go to ${item.label}${item.to === '/compare' ? ' (Compare)' : ''}`,
       hint: location.pathname === item.to ? 'Current' : undefined,
       run: () => navigate(item.to),
     }));
-
-    out.push({
-      id: 'compare-none',
-      label: 'Compare: None',
-      hint: compareToPlanId === undefined ? 'Current' : undefined,
-      run: () => updateSettings(stored.id, { compareToPlanId: undefined }),
-    });
-    for (const p of visiblePlans) {
-      if (p.id === stored.id) continue;
-      out.push({
-        id: `compare-${p.id}`,
-        label: `Compare with ${p.name}`,
-        hint: compareToPlanId === p.id ? 'Current' : undefined,
-        run: () => updateSettings(stored.id, { compareToPlanId: p.id }),
-      });
-    }
 
     if (canPageEarlier) out.push({ id: 'page-earlier', label: `Earlier years (before ${windowLabel})`, run: pageEarlier });
     if (canPageLater) out.push({ id: 'page-later', label: `Later years (after ${windowLabel})`, run: pageLater });
@@ -97,10 +71,6 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
   }, [
     location.pathname,
     navigate,
-    visiblePlans,
-    stored.id,
-    compareToPlanId,
-    updateSettings,
     windowLabel,
     canPageEarlier,
     canPageLater,
@@ -166,7 +136,7 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
         <input
           ref={inputRef}
           className="ns-palette-input"
-          placeholder="Jump to a page, compare a plan, page years…"
+          placeholder="Jump to a page, switch plans, page years…"
           aria-label="Command palette search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

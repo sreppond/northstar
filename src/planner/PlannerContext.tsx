@@ -183,6 +183,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const upsertAccount = usePlanStore((s) => s.upsertAccount);
   const replacePlan = usePlanStore((s) => s.replacePlan);
   const updateSettings = usePlanStore((s) => s.updateSettings);
+  const updateSettingsSilently = usePlanStore((s) => s.updateSettingsSilently);
   const createPlan = usePlanStore((s) => s.createPlan);
   const duplicatePlan = usePlanStore((s) => s.duplicatePlan);
   const renamePlan = usePlanStore((s) => s.renamePlan);
@@ -325,13 +326,13 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   // Passed `plan` so "spendable" can honour each account's withdrawal gates.
   const health = useMemo(() => planHealth(result, plan), [result, plan]);
 
-  // Persisted through `updateSettings` so it survives reloads per plan. Read
+  // Persisted through `updateSettingsSilently` so it survives reloads per plan. Read
   // from `stored`, not the draft-composed `plan`: it is a display preference,
   // not something an in-progress edit should flicker.
   const chartRange: ChartRangeKey = stored.settings.chartRange ?? 'all';
   const setChartRange = (range: ChartRangeKey) => {
-    // A no-op pick must not land on the undo stack (updateSettings commits).
-    if (range !== chartRange) updateSettings(stored.id, { chartRange: range });
+    // A range pick is a view preference, never an undo step (docs/REDESIGN-V5.md §4.1).
+    if (range !== chartRange) updateSettingsSilently(stored.id, { chartRange: range });
   };
 
   const allAccounts: Account[] = useMemo(() => {

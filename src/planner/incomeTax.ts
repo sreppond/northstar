@@ -26,19 +26,16 @@
  * reading, and it is exact when the rate is flat (which `incomeTaxRate` is).
  * It is NOT a marginal "what this job costs you in tax" number.
  *
- * Which income is ordinary and taxable. A `LineItem` does not carry the
- * engine's `taxable` flag, so it is inferred from what the engine does:
- *  - Not ordinary: any line with an `accountId` (RMD and SEPP are taxed at the
+ * Which income is ordinary and taxable. The engine stamps `taxable` on event
+ * and baseline income lines, so a non-taxable income (`isTaxable: false`)
+ * takes no share. Everything else is inferred from what the engine does:
+ *  - Not ordinary: `taxable === false`, any line with an `accountId` (RMD and SEPP are taxed at the
  *    account's own rate by their own tax line; event termination proceeds,
  *    like a home sale, are taxed by nothing here), a line whose event has its
  *    own tax line (windfall), and the "— untaxed portion" half of Social
  *    Security.
  *  - Ordinary: everything else. That is baseline income and event income
  *    (jobs, bonuses, RSUs, Social Security's taxable half, income events).
- *  KNOWN GAP: an `income` event saved with `isTaxable: false` looks identical
- *  to a taxable one in a snapshot, so it takes a share it should not. Fixing
- *  it needs the engine to stamp `taxable` on the income `LineItem` (one line
- *  in run.ts step 3); this module would then read it.
  */
 import type { LineItem, YearSnapshot } from '@northstar/engine';
 
@@ -71,6 +68,7 @@ export function incomeWithTax(snapshot: YearSnapshot): IncomeWithTax {
     snapshot.taxes.filter((t) => t.sourceEventId && !t.accountId).map((t) => t.sourceEventId!),
   );
   const isOrdinary = (line: LineItem): boolean =>
+    line.taxable !== false &&
     !line.accountId &&
     !(line.sourceEventId && selfTaxedEvents.has(line.sourceEventId)) &&
     !line.label.endsWith(UNTAXED_SUFFIX);

@@ -858,46 +858,49 @@
   }
 }
 
-/* Plan check banner (docs/REDESIGN-V4.md §1.8) — the same quiet row as
-   Overview's own banners, with a warn-toned glyph so it reads as "this
-   forecast is missing something", not as an error. */
+/* Plan checks (docs/REDESIGN-V4.md §1.8): a stack of dismissible warnings
+   (`PlanCheckBanner.tsx`, now `ui/Alert.tsx` rows, docs/REDESIGN-V5.md §4.3). */
 .ns-checks {
+  gap: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
-.ns-check-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--chip);
-  font-size: 13px;
-  color: var(--ink);
+/* Every check dismissed: no empty box eating a page-gap slot. */
+.ns-checks:empty {
+  display: none;
 }
-.ns-check-banner-icon {
-  flex: none;
-  color: var(--warn);
+
+/* The shell's own alert slot (`PlanHealthAlert.tsx`), above the routed page
+   inside `.ns-main` (docs/REDESIGN-V5.md §4.2.3). Same measure and gutters as
+   `.ns-page` so the alert lines up with the content under it. `:empty` takes
+   the slot out of the layout once the alert has been dismissed. */
+.ns-shell-alerts {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 32px 0;
 }
-.ns-check-banner-text {
-  flex: 1;
-  min-width: 0;
-  line-height: 1.45;
+.ns-shell-alerts:empty {
+  display: none;
 }
-.ns-check-banner .ns-btn {
-  flex: none;
+/* The page's own top padding is 32px; with an alert above it, 20px is enough. */
+.ns-shell-alerts:not(:empty) + .ns-page {
+  padding-top: 20px;
 }
-@media (max-width: 560px) {
-  .ns-check-banner {
-    flex-wrap: wrap;
+@media (max-width: 1023px) {
+  .ns-shell-alerts {
+    padding: 16px 24px 0;
   }
-  .ns-check-banner-text {
-    flex-basis: calc(100% - 30px);
+  .ns-shell-alerts:not(:empty) + .ns-page {
+    padding-top: 16px;
   }
-  .ns-check-banner .ns-btn {
-    margin-left: 25px;
+}
+@media (max-width: 640px) {
+  .ns-shell-alerts {
+    padding: 12px 16px 0;
+  }
+  .ns-shell-alerts:not(:empty) + .ns-page {
+    padding-top: 12px;
   }
 }
 

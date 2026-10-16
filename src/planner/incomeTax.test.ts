@@ -87,6 +87,27 @@ describe('incomeWithTax attribution', () => {
     expect(job.tax + side.tax).toBeCloseTo(household.amount, 4);
   });
 
+  it('gives a non-taxable income no share of the household income tax', () => {
+    const withGift: Plan = {
+      ...plan,
+      events: [
+        ...plan.events,
+        { id: 'gift', kind: 'income', name: 'Family gift', startYear: 2026, isIncluded: true, config: { amount: 60_000, isTaxable: false, isEarned: false } },
+      ],
+    };
+    const snapshot = runPlan(withGift).years[1];
+    const line = snapshot.income.find((l) => l.sourceEventId === 'gift')!;
+    expect(line.taxable).toBe(false); // the engine stamps the event's own taxability
+    const view = incomeWithTax(snapshot);
+    const gift = view.sources.find((s) => s.key === 'event:gift')!;
+    const job = view.sources.find((s) => s.key === 'event:job')!;
+    expect(gift.tax).toBe(0);
+    expect(gift.net).toBeCloseTo(gift.gross, 6);
+    const household = snapshot.taxes.find((t) => !t.sourceEventId && !t.accountId)!;
+    expect(job.tax).toBeCloseTo(household.amount, 4); // the whole tax stays on the taxable job
+    expect(view.total.tax).toBeCloseTo(snapshot.totalTaxes, 4);
+  });
+
   it('keeps Social Security’s untaxed half in its gross but out of the tax split', () => {
     const ssa = source(2036, 'event:ssa')!;
     expect(ssa.gross).toBeCloseTo(40_000 * 1.025 ** (2036 - 2033), 0); // default 2.5% COLA from its start

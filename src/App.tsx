@@ -10,6 +10,7 @@ import { Sidebar } from './planner/Sidebar';
 import { PlanSwitcher } from './planner/PlanSwitcher';
 import { CommandPalette } from './planner/CommandPalette';
 import { ShortcutSheet } from './planner/ShortcutSheet';
+import { PlanHealthAlert } from './planner/PlanHealthAlert';
 import { ToastRegion, toast } from './planner/ui/Toast';
 import { Onboarding } from './planner/Onboarding';
 import { AccountDrawer } from './planner/drawer/AccountDrawer';
@@ -18,15 +19,12 @@ import { ImportDrawer } from './planner/drawer/ImportDrawer';
 import { ConnectDrawer } from './planner/drawer/ConnectDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { OverviewPage } from './planner/pages/OverviewPage';
-import { AccountsPage } from './planner/pages/AccountsPage';
 import { BudgetPage } from './planner/pages/BudgetPage';
-import { FamilyPage } from './planner/pages/FamilyPage';
 import { CashFlowPage } from './planner/pages/CashFlowPage';
 import { EventsPage } from './planner/pages/EventsPage';
 import { RetirementPage } from './planner/pages/RetirementPage';
 import { HousePage } from './planner/pages/HousePage';
 import { AnnuityPage } from './planner/pages/AnnuityPage';
-import { ProgressPage } from './planner/pages/ProgressPage';
 import { ComparePage } from './planner/pages/ComparePage';
 import { ReportsPage } from './planner/pages/ReportsPage';
 import { DevChartsPage } from './planner/dev/DevChartsPage';
@@ -112,22 +110,30 @@ function PlannerShell() {
         {/* Real height only under `html.ns-tauri` (planner.css) — a no-op
             div everywhere else, same idiom as `Sidebar.tsx`'s rail strip. */}
         <div className="ns-drag-strip" data-tauri-drag-region />
+        {/* "Runs dry" on every page, once, above whatever the route renders
+            (docs/REDESIGN-V5.md §4.2.3). The rail pill is its undismissable twin. */}
+        <PlanHealthAlert />
         <Routes>
-          <Route path="/overview" element={<OverviewPage />} />
-          <Route path="/budget" element={<BudgetPage />} />
-          <Route path="/family" element={<FamilyPage />} />
-          <Route path="/accounts" element={<AccountsPage />} />
+          {/* docs/REDESIGN-V5.md §2. Net Worth and Timeline render the old
+              Overview / Events pages until units C1 / C4 replace them. */}
+          <Route path="/net-worth" element={<OverviewPage />} />
           <Route path="/cashflow" element={<CashFlowPage />} />
-          <Route path="/events" element={<EventsPage />} />
-          <Route path="/retirement" element={<RetirementPage />} />
+          <Route path="/budget" element={<BudgetPage />} />
+          <Route path="/timeline" element={<EventsPage />} />
           <Route path="/house" element={<HousePage />} />
+          <Route path="/retirement" element={<RetirementPage />} />
           <Route path="/annuity" element={<AnnuityPage />} />
-          <Route path="/progress" element={<ProgressPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          {/* Old routes keep working: bookmarks, and muscle memory. */}
+          <Route path="/overview" element={<Navigate to="/net-worth" replace />} />
+          <Route path="/accounts" element={<Navigate to="/net-worth" replace />} />
+          <Route path="/events" element={<Navigate to="/timeline" replace />} />
+          <Route path="/family" element={<Navigate to="/timeline" replace />} />
+          <Route path="/progress" element={<Navigate to="/net-worth" replace />} />
           {import.meta.env.DEV && <Route path="/dev/charts" element={<DevChartsPage />} />}
           {import.meta.env.DEV && <Route path="/dev/ui" element={<DevUiPage />} />}
-          <Route path="*" element={<Navigate to="/overview" replace />} />
+          <Route path="*" element={<Navigate to="/net-worth" replace />} />
         </Routes>
       </main>
 

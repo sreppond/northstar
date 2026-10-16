@@ -13,7 +13,6 @@ import {
   accountMixToday,
   freshnessHeaderStatus,
   horizonPoints,
-  planVsReality,
   retirementReadout,
   savingsRateThisYear,
   spreadPercent,
@@ -35,6 +34,7 @@ import {
   StackedBar,
 } from '../ui';
 import { PlanCheckBanner } from '../PlanCheckBanner';
+import { DismissibleAlert } from '../ui/Alert';
 import './overview.css';
 
 /**
@@ -50,11 +50,11 @@ export function OverviewPage() {
   const {
     plan,
     stored,
+    planId,
     result,
     replacePlan,
     reading,
     heroFigure,
-    compare,
     spread,
     spreadAtEnd,
     showFan,
@@ -70,7 +70,6 @@ export function OverviewPage() {
     upsertEvent,
     setAssumptionsDraft,
     monarch,
-    progressPoints,
     freshness,
     localMonarch,
     rollPlanForward,
@@ -113,7 +112,6 @@ export function OverviewPage() {
     stored.settings.monarchOverrides && Object.keys(stored.settings.monarchOverrides).length > 0,
   );
   const freshnessStatus = freshnessHeaderStatus(freshness, asOfDate, isMonarchLinked);
-  const reality = planVsReality(progressPoints, result, plan);
   const localSnapshot = localMonarch.snapshot;
 
   return (
@@ -182,34 +180,40 @@ export function OverviewPage() {
         }
       />
 
-      {/* Quiet banners under the header — a new local Monarch capture to
-          review, or a plan whose clock has fallen behind the calendar
-          (docs/ROADMAP-10.md Track B / C4). Both are dismissable by their own
-          action rather than an explicit close, since acting on either one is
-          exactly what makes it go away (a review that applies calls
+      {/* Dismissible info alerts (docs/REDESIGN-V5.md §4.3, R2): a new local
+          Monarch capture to review, or a plan whose clock has fallen behind
+          the calendar (docs/ROADMAP-10.md Track B / C4). The signature is the
+          capture's timestamp / the calendar year, so a newer capture or next
+          January brings the alert back after a dismissal. Acting on either
+          still makes it go away on its own (a review that applies calls
           `markApplied`; rolling forward moves `startYear` past
           `needsRollover`'s own test). */}
       {localMonarch.isNew && localSnapshot && (
-        <div className="ns-ov-banner">
-          <span>
-            New Monarch snapshot · {asOfDateLabel(localSnapshot.capturedAt)} · {localSnapshot.accounts.length}{' '}
-            accounts
-          </span>
-          <button type="button" className="ns-btn-ghost" onClick={() => setImporting(true)}>
-            Review
-          </button>
-        </div>
+        <DismissibleAlert
+          planId={planId}
+          id="monarch-snapshot"
+          signature={localSnapshot.capturedAt}
+          tone="info"
+          action={{ label: 'Review', onClick: () => setImporting(true) }}
+        >
+          New Monarch snapshot · {asOfDateLabel(localSnapshot.capturedAt)} · {localSnapshot.accounts.length}{' '}
+          accounts
+        </DismissibleAlert>
       )}
 
       <PlanCheckBanner />
 
+
       {freshness.needsRollover && (
-        <div className="ns-ov-banner">
-          <span>It's {new Date().getUTCFullYear()} — roll the plan forward?</span>
-          <button type="button" className="ns-btn-ghost" onClick={rollPlanForward}>
-            Roll forward
-          </button>
-        </div>
+        <DismissibleAlert
+          planId={planId}
+          id="roll-forward"
+          signature={String(new Date().getUTCFullYear())}
+          tone="info"
+          action={{ label: 'Roll forward', onClick: rollPlanForward }}
+        >
+          It's {new Date().getUTCFullYear()} — roll the plan forward?
+        </DismissibleAlert>
       )}
 
       <StatStrip>
@@ -296,13 +300,10 @@ export function OverviewPage() {
 
       <SectionCard
         title="Net worth trajectory"
-        // The chart's own legend is hidden here (`hideHead`) — with a
-        // compare plan selected on any ledger, its purple dashed line drew
-        // with nothing on the card explaining what it was. Same treatment
-        // for logged actuals, which otherwise ride along unannounced too.
-        meta={`Projected · ${result.startYear}–${result.endYear} · Return ${percent(headlineReturnRate(plan) ?? 0)}${
-          compare ? ` · vs ${compare.name}` : ''
-        }${progressPoints.length ? ' · Actual' : ''}`}
+        // The comparison overlay and logged-actuals line are gone from this
+        // chart (docs/REDESIGN-V5.md §4.4, §4.5), so the meta has nothing
+        // else to announce.
+        meta={`Projected · ${result.startYear}–${result.endYear} · Return ${percent(headlineReturnRate(plan) ?? 0)}`}
         actions={
           canFan ? (
             <Segmented
@@ -329,12 +330,10 @@ export function OverviewPage() {
             plan={plan}
             rateLabel={percent(headlineReturnRate(plan) ?? 0)}
             selected={selected}
-            compare={compare}
             fan={fan}
             ghost={ghost ?? undefined}
             markers={markers}
             canFan={canFan}
-            actuals={progressPoints}
             hideHead
             onToggleFan={toggleFan}
             onSelect={setSelected}
@@ -345,14 +344,6 @@ export function OverviewPage() {
               if (event) upsertEvent(stored.id, { ...event, startYear: year });
             }}
           />
-
-          {reality && (
-            <div className={`ns-ov-reality ns-ov-reality-${reality.tone}`}>
-              <span className="ns-ov-reality-dot" aria-hidden />
-              {reality.tone === 'in' ? 'Ahead of' : 'Behind'} plan by {money(Math.abs(reality.delta))} since{' '}
-              {reality.sinceLabel}
-            </div>
-          )}
 
           {selected && (
             <div className="ns-selection">
@@ -380,14 +371,6 @@ export function OverviewPage() {
             </div>
           )}
 
-          {result.warnings.length > 0 && (
-            <div className="ns-alarm">
-              <strong>
-                {result.warnings.length} warning{result.warnings.length > 1 ? 's' : ''}:
-              </strong>
-              <span>{result.warnings[0]}</span>
-            </div>
-          )}
         </div>
       </SectionCard>
 

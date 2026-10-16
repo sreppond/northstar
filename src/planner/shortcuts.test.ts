@@ -32,18 +32,21 @@ describe('isTypingTarget', () => {
 });
 
 describe('matchShortcut', () => {
-  it('maps ⌘1..⌘9 to the first nine rail destinations', () => {
-    expect(matchShortcut(key('1', { metaKey: true }))).toEqual({ type: 'navigate', path: '/overview' });
-    expect(matchShortcut(key('2', { metaKey: true }))).toEqual({ type: 'navigate', path: '/budget' });
-    expect(matchShortcut(key('9', { metaKey: true }))).toEqual({ type: 'navigate', path: '/annuity' });
+  it('maps ⌘1..⌘7 to the seven main rail destinations, in rail order', () => {
+    const paths = ['/net-worth', '/cashflow', '/budget', '/timeline', '/house', '/retirement', '/annuity'];
+    paths.forEach((path, i) => {
+      expect(matchShortcut(key(String(i + 1), { metaKey: true }))).toEqual({ type: 'navigate', path });
+    });
   });
 
-  it('has no ⌘0 (only nine rail items get a number)', () => {
+  it('has no ⌘0, ⌘8 or ⌘9 (the More group has no number)', () => {
     expect(matchShortcut(key('0', { metaKey: true }))).toBeNull();
+    expect(matchShortcut(key('8', { metaKey: true }))).toBeNull();
+    expect(matchShortcut(key('9', { metaKey: true }))).toBeNull();
   });
 
   it('treats ctrlKey the same as metaKey', () => {
-    expect(matchShortcut(key('1', { ctrlKey: true }))).toEqual({ type: 'navigate', path: '/overview' });
+    expect(matchShortcut(key('1', { ctrlKey: true }))).toEqual({ type: 'navigate', path: '/net-worth' });
   });
 
   it('maps ⌘N, ⌘, and ⌘K', () => {
@@ -73,10 +76,11 @@ describe('matchShortcut', () => {
 });
 
 describe('shortcutList', () => {
-  it('lists nine pages plus the six action shortcuts', () => {
+  it('lists seven pages plus the six action shortcuts', () => {
     const list = shortcutList();
-    expect(list).toHaveLength(15);
-    expect(list[0]).toEqual({ keys: '⌘1', label: 'Overview' });
+    expect(list).toHaveLength(13);
+    expect(list[0]).toEqual({ keys: '⌘1', label: 'Net Worth' });
+    expect(list[6]).toEqual({ keys: '⌘7', label: 'Annuity & SEPP' });
     expect(list.at(-1)).toEqual({ keys: '?', label: 'Keyboard shortcuts' });
   });
 });

@@ -7,23 +7,6 @@
  * pressable.
  */
 
-/* Quiet banners under the header (docs/ROADMAP-10.md Track B / C4): a new
-   local Monarch snapshot to review, or a plan whose clock has fallen behind
-   the calendar. Neutral chip chrome, same family as `.ns-page-status` in
-   ui.css, rather than an alert colour — neither is a problem, just a nudge. */
-.ns-ov-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--chip);
-  font-size: 13px;
-  color: var(--ink);
-}
-
 /* The header's action row, wrapped so three buttons + the status chip can
    reflow onto a second line at phone widths instead of overflowing the page
    (`.ns-page-actions`, the shared wrapper `PageHeader` itself renders, is
@@ -106,32 +89,6 @@
     width: 100%;
     text-align: center;
   }
-}
-
-/* Plan vs. reality (docs/ROADMAP-10.md C4): a quiet row under the chart, only
-   once a Progress point exists to compare against. The dot carries the same
-   in/out data hues `DeltaTag`/`StackedBar` use elsewhere for "money in vs.
-   money out" — legitimate here, unlike the freshness dot above, because this
-   IS a money-in/money-out reading. */
-.ns-ov-reality {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 12px;
-  font-size: 13px;
-  color: var(--muted);
-}
-.ns-ov-reality-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex: none;
-}
-.ns-ov-reality-in .ns-ov-reality-dot {
-  background: var(--in);
-}
-.ns-ov-reality-out .ns-ov-reality-dot {
-  background: var(--out);
 }
 
 /* "What if" levers (docs/ROADMAP-10.md C5). A flex column so `.ns-ov-levers`

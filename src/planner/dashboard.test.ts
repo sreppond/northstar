@@ -3,14 +3,12 @@ import type { Plan, PlanEvent, PlanResult, YearSnapshot } from '@northstar/engin
 import type { MonarchStatus } from '../api/client';
 import type { FanSeries } from './NetWorthChart';
 import { accountClassColor } from './ui';
-import type { ProgressPoint } from './progress';
 import {
   accountMixToday,
   describeAge,
   freshnessHeaderStatus,
   horizonPoints,
   monarchHeaderStatus,
-  planVsReality,
   retirementReadout,
   savingsRateThisYear,
   spreadPercent,
@@ -356,69 +354,5 @@ describe('freshnessHeaderStatus', () => {
   it('reads "today"/"1 day ago" rather than "0 days ago"/"1 days ago"', () => {
     expect(freshnessHeaderStatus({ daysSinceAsOf: 0, isStale: false, needsRollover: false }, '2026-09-01', true).text).toContain('today');
     expect(freshnessHeaderStatus({ daysSinceAsOf: 1, isStale: false, needsRollover: false }, '2026-09-01', true).text).toContain('1 day ago');
-  });
-});
-
-describe('planVsReality', () => {
-  const points: ProgressPoint[] = [
-    { id: 'pp1', date: '2026-09-25', netWorth: 168_000, assets: 168_000, liabilities: 0 },
-  ];
-
-  it('is undefined with no progress points logged', () => {
-    const result = resultFrom(2026, [snapshot(2026, { netWorth: 150_000 })]);
-    expect(planVsReality([], result, planFixture({ settings: { asOfDate: '2026-09-25' } as never }))).toBeUndefined();
-  });
-
-  it('reads ahead of plan (in tone) when the latest actual beats the projection', () => {
-    const result = resultFrom(2026, [
-      snapshot(2026, { netWorth: 150_000 }),
-      snapshot(2027, { netWorth: 200_000 }),
-    ]);
-    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
-    const reality = planVsReality(points, result, plan);
-    expect(reality?.tone).toBe('in');
-    expect(reality?.delta).toBeCloseTo(168_000 - 150_000, 0);
-    expect(reality?.sinceLabel).toBe('Sep 25, 2026');
-  });
-
-  it('reads behind plan (out tone) when the latest actual falls short', () => {
-    const result = resultFrom(2026, [
-      snapshot(2026, { netWorth: 200_000 }),
-      snapshot(2027, { netWorth: 220_000 }),
-    ]);
-    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
-    const reality = planVsReality(points, result, plan);
-    expect(reality?.tone).toBe('out');
-    expect(reality!.delta).toBeLessThan(0);
-  });
-
-  it('is undefined once the gap rounds to nothing (money()’s own under-$50 floor)', () => {
-    const result = resultFrom(2026, [snapshot(2026, { netWorth: 168_010 })]);
-    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
-    expect(planVsReality(points, result, plan)).toBeUndefined();
-  });
-
-  // W3#1 ("UI" row): the review's exact failing case. A progress point
-  // logged on the plan's own asOfDate (a Monarch apply, same-day) holds
-  // `opening`'s balances — not a whole year's projected growth/income ahead
-  // of "today" — so it must read ~$0 vs. plan even though years[0]'s
-  // projected Dec-31 CLOSE is a much bigger number. Before the fix this
-  // compared 168,000 against years[0] (204,600) and read "Behind plan by
-  // $36,600" on the sync day itself.
-  it('reads zero delta on the sync day when the actual matches opening, not the stub year\'s projected close', () => {
-    const result: PlanResult = {
-      ...resultFrom(2026, [
-        snapshot(2026, { netWorth: 204_600 }),
-        snapshot(2027, { netWorth: 260_000 }),
-      ]),
-      opening: { asOfDate: '2026-09-25', accounts: [], assets: 168_000, liabilities: 0, netWorth: 168_000 },
-    };
-    const plan = planFixture({ settings: { startYear: 2026, asOfDate: '2026-09-25' } as never });
-    const syncDayPoint: ProgressPoint[] = [
-      { id: 'pp-sync', date: '2026-09-25', netWorth: 168_000, assets: 168_000, liabilities: 0 },
-    ];
-    // Undefined, not just "small": planVsReality treats anything under the
-    // $50 noise floor as no signal at all, and this case is an exact $0.
-    expect(planVsReality(syncDayPoint, result, plan)).toBeUndefined();
   });
 });

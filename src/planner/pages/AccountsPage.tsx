@@ -3,7 +3,7 @@ import type { AccountClass } from '@northstar/engine';
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES, newAccountOfType } from '@northstar/engine';
 import { Plus } from 'lucide-react';
 import { usePlanner } from '../PlannerContext';
-import { LedgerToolbar, LedgerCompareDiff } from '../LedgerToolbar';
+import { LedgerToolbar } from '../LedgerToolbar';
 import { AccountsTab } from '../tabs/AccountsTab';
 import { asOfDateLabel, planMetaLine, money } from '../format';
 import { assetMixToday, missingAccountClasses, netWorthStats, stubYearLabel } from '../ledger';
@@ -96,7 +96,6 @@ export function AccountsPage() {
       )}
 
       <SectionCard title="Balance sheet" flush actions={<LedgerToolbar showPager />}>
-        <LedgerCompareDiff />
         <AccountsTab
           window={windowYears}
           accounts={allAccounts}

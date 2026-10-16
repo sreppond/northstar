@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { CalendarClock, Plus } from 'lucide-react';
 import { usePlanner } from '../PlannerContext';
-import { LedgerToolbar, LedgerCompareDiff } from '../LedgerToolbar';
 import { EventsTab } from '../tabs/EventsTab';
 import { planMetaLine } from '../format';
 import { eventStats } from '../ledger';
@@ -63,8 +62,7 @@ export function EventsPage() {
         />
       </StatStrip>
 
-      <SectionCard title="Life timeline" flush actions={<LedgerToolbar showPager={false} />}>
-        <LedgerCompareDiff />
+      <SectionCard title="Life timeline" flush>
         {hasEvents ? (
           <EventsTab
             events={plan.events}

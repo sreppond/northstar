@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
+  CircleX,
   Settings as SettingsIcon,
   Search,
   ChevronsUpDown,
@@ -110,10 +111,11 @@ function MobileTopBar({
 }) {
   return (
     <div className="ns-topbar">
-      <Link to="/overview" className="ns-topbar-brand" aria-label="Northstar">
+      <Link to="/net-worth" className="ns-topbar-brand" aria-label="Northstar">
         <img src="/favicon.png" alt="" width={22} height={22} />
       </Link>
       <PlanSwitcherTrigger compact />
+      <PlanHealthPill compact />
       <button
         ref={menuRef}
         type="button"
@@ -171,6 +173,37 @@ function PlanSwitcherTrigger({ compact }: { compact?: boolean }) {
   );
 }
 
+/**
+ * The "runs dry" pill (docs/REDESIGN-V5.md §4.2.2). Unlike the page-top alert
+ * it can't be dismissed: the plan failing stays on screen for as long as it
+ * is true, on every page. Clicking pins the first short year and opens Cash
+ * Flow, where the shortfall is explained. Shape (the ✗ icon) and text carry
+ * the meaning, not just the red (§1.8). `compact` is the mobile top bar's
+ * version: no room for "Runs dry in", so it reads "Dry 2071".
+ */
+function PlanHealthPill({ compact }: { compact?: boolean }) {
+  const { health, setFocusYear } = usePlanner();
+  const navigate = useNavigate();
+  if (health.status !== 'short' || health.firstShortYear === undefined) return null;
+  const year = health.firstShortYear;
+
+  return (
+    <button
+      type="button"
+      className={`ns-rail-health${compact ? ' ns-rail-health-compact' : ''}`}
+      aria-label={`Plan runs dry in ${year}. Open Cash Flow at ${year}.`}
+      title={`Plan runs dry in ${year}`}
+      onClick={() => {
+        setFocusYear(year);
+        navigate('/cashflow');
+      }}
+    >
+      <CircleX size={compact ? 13 : 14} strokeWidth={2} aria-hidden />
+      <span>{compact ? `Dry ${year}` : `Runs dry in ${year}`}</span>
+    </button>
+  );
+}
+
 function RailContent({
   className,
   onNavigate,
@@ -211,12 +244,14 @@ function RailContent({
           in the browser build and in the mobile sheet, which never sits
           under the traffic lights. */}
       {!sheet && <div className="ns-rail-drag" data-tauri-drag-region />}
-      <Link to="/overview" className="ns-rail-brand" onClick={onNavigate}>
+      <Link to="/net-worth" className="ns-rail-brand" onClick={onNavigate}>
         <img src="/favicon.png" alt="" width={22} height={22} />
         <span className="ns-rail-brand-word">Northstar</span>
       </Link>
 
       <PlanSwitcherTrigger />
+
+      <PlanHealthPill />
 
       <button type="button" className="ns-rail-search" onClick={() => setPaletteOpen(true)}>
         <Search size={14} strokeWidth={1.75} aria-hidden />
@@ -228,16 +263,19 @@ function RailContent({
         {NAV_ITEMS.map(({ to, label, Icon, group }, i) => {
           // A group's eyebrow appears once, the moment the group changes —
           // keyed off the previous item rather than a fixed index so the
-          // grouping stays correct if NAV_ITEMS is ever reordered. Overview
-          // is its own group with no label: it isn't a member of PLAN,
-          // GOALS or ANALYSIS.
-          const showLabel = group !== 'overview' && group !== NAV_ITEMS[i - 1]?.group;
+          // grouping stays correct if NAV_ITEMS is ever reordered. The main
+          // group has no label (docs/REDESIGN-V5.md §2). `more` is drawn
+          // quieter (smaller, muted) because it is reference, not the daily path.
+          const groupLabel = GROUP_LABELS[group];
+          const showLabel = groupLabel !== undefined && group !== NAV_ITEMS[i - 1]?.group;
           return (
             <Fragment key={to}>
-              {showLabel && <div className="ns-rail-eyebrow">{GROUP_LABELS[group]}</div>}
+              {showLabel && <div className="ns-rail-eyebrow">{groupLabel}</div>}
               <NavLink
                 to={to}
-                className={({ isActive }) => `ns-rail-link${isActive ? ' active' : ''}`}
+                className={({ isActive }) =>
+                  `ns-rail-link${group === 'more' ? ' ns-rail-link-quiet' : ''}${isActive ? ' active' : ''}`
+                }
                 onClick={onNavigate}
               >
                 <Icon size={17} strokeWidth={1.75} aria-hidden />

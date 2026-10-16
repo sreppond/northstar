@@ -957,6 +957,59 @@ html.ns-tauri .ns-drag-strip {
   gap: 2px;
 }
 
+/* Plan-health pill (docs/REDESIGN-V5.md §4.2.2): the one always-on danger
+   chip in the rail. A full hairline border + wash + icon, never colour alone
+   (§1.8). It is a button, so it gets the same press feedback as the rest. */
+.ns-rail-health {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin: 2px 0 4px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 32%, transparent);
+  border-radius: 8px;
+  background: var(--danger-wash);
+  color: var(--danger);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-soft), border-color 140ms var(--ease-soft),
+    transform 120ms var(--ease-soft);
+}
+.ns-rail-health svg {
+  flex: none;
+}
+.ns-rail-health:hover {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+}
+.ns-rail-health:active {
+  transform: scale(0.98);
+}
+.ns-rail-health:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+/* The mobile top bar has room for a short chip only: it sits between the
+   plan name and the menu button. */
+.ns-rail-health-compact {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ns-rail-health {
+    transition: none;
+  }
+}
+
 /* Eyebrow group labels (PLAN / GOALS / ANALYSIS) replace the single mid-list
    hairline the old ten-flat-row rail used — three groups answer "author it"
    (Plan), "how am I doing against a goal" (Goals) and "read about the plan"
@@ -976,6 +1029,21 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-rail-nav > .ns-rail-eyebrow:first-child {
   margin-top: 4px;
+}
+/* More (docs/REDESIGN-V5.md §2): reference pages, one step quieter than the
+   daily destinations above it. */
+.ns-rail-link-quiet {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.ns-rail-link-quiet svg {
+  opacity: 0.7;
+}
+.ns-rail-link-quiet.active {
+  color: var(--rail-ink-active);
+  font-weight: 500;
 }
 
 /* Active row: --chip background + ink text + medium weight — no saturated
@@ -1072,15 +1140,25 @@ html.ns-tauri .ns-drag-strip {
   position: relative;
   flex: none;
 }
-/* Hangs from the right edge of its trigger rather than the left — the
-   shared `.ns-menu` (docs/planner.css "compare picker" section) defaults
-   left-aligned, which would hang this one off the viewport edge. Compound
-   selector rather than `.ns-menu-right` alone: that base rule is defined
-   later in this file, and equal-specificity rules resolve by source order,
-   so a same-specificity override written earlier would silently lose. */
-.ns-menu.ns-menu-right {
-  left: auto;
-  right: 0;
+/* The overflow menu's trigger sits at the very bottom of the rail, so the
+   shared `.ns-menu` (below), which opens downward, was drawn off-screen:
+   "Show hidden alerts" (docs/REDESIGN-V5.md §4.3) lived in a menu nobody
+   could reach. Open upward instead, and anchor to the footer row rather than
+   the small trigger so the 190px panel stays inside the 240px rail (its
+   `overflow` would clip it otherwise). Compound selector: the base rule is
+   defined later in this file, and equal-specificity rules resolve by source
+   order, so a same-specificity override written earlier would silently lose. */
+.ns-rail-footer {
+  position: relative;
+}
+.ns-rail-footer .ns-head-menu {
+  position: static;
+}
+.ns-menu.ns-menu-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: auto;
 }
 .ns-menu-hint {
   float: right;
@@ -2059,28 +2137,6 @@ html.ns-tauri .ns-drag-strip {
       0 1px 4px rgba(18, 48, 76, 0.28),
       0 0 0 5px rgba(192, 57, 43, 0.16);
   }
-}
-
-/* The plan failing is not a detail to be discovered by hovering. */
-.ns-alarm {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 0 0 10px;
-  padding: 9px 13px;
-  border-radius: 11px;
-  border: 1px solid rgba(192, 57, 43, 0.28);
-  background: rgba(192, 57, 43, 0.06);
-  font-size: 12.5px;
-  color: var(--ink);
-}
-.ns-alarm-title {
-  font-weight: 700;
-  color: var(--danger, #c0392b);
-}
-.ns-alarm-note {
-  color: var(--muted);
 }
 
 /* ---- Return sensitivity fan ---------------------------------------------
@@ -3546,16 +3602,6 @@ html.ns-tauri .ns-drag-strip {
   cursor: pointer;
 }
 .ns-select:hover {
-  background: var(--bg);
-}
-.ns-compare-whatif-link {
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-  color: var(--accent);
-  font-weight: 500;
-}
-.ns-compare-whatif-link:hover {
   background: var(--bg);
 }
 

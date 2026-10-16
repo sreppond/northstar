@@ -222,3 +222,39 @@ describe('progress points', () => {
     expect(usePlanStore.getState().progressPoints).toHaveLength(0);
   });
 });
+
+describe('updateSettingsSilently (display preferences)', () => {
+  it('persists the patch without adding an undo step or clearing redo', () => {
+    const { plan, event } = houseEvent();
+    const state = usePlanStore.getState();
+    state.upsertEvent(plan.id, { ...event, startYear: event.startYear - 1 });
+    state.undo(); // leaves one redo entry
+    const { past, future } = usePlanStore.getState();
+
+    usePlanStore.getState().updateSettingsSilently(plan.id, { chartRange: '5y' });
+
+    const after = usePlanStore.getState();
+    expect(after.plans.find((p) => p.id === plan.id)?.settings.chartRange).toBe('5y');
+    expect(after.past).toHaveLength(past.length);
+    expect(after.future).toHaveLength(future.length);
+    expect(future.length).toBeGreaterThan(0);
+  });
+
+  it('survives undoing and redoing a real edit', () => {
+    const { plan, event } = houseEvent();
+    usePlanStore.getState().upsertEvent(plan.id, { ...event, startYear: event.startYear - 1 });
+    usePlanStore.getState().updateSettingsSilently(plan.id, { chartRange: '10y' });
+
+    usePlanStore.getState().undo();
+    expect(usePlanStore.getState().plans.find((p) => p.id === plan.id)?.settings.chartRange).toBe('10y');
+    usePlanStore.getState().redo();
+    expect(usePlanStore.getState().plans.find((p) => p.id === plan.id)?.settings.chartRange).toBe('10y');
+  });
+
+  it('updateSettings, by contrast, is an undo step', () => {
+    const { plan } = houseEvent();
+    const before = usePlanStore.getState().past.length;
+    usePlanStore.getState().updateSettings(plan.id, { chartRange: '5y' });
+    expect(usePlanStore.getState().past.length).toBe(before + 1);
+  });
+});
