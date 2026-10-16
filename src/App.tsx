@@ -34,6 +34,7 @@ import { AnnuityPage } from './planner/pages/AnnuityPage';
 import { ProgressPage } from './planner/pages/ProgressPage';
 import { ComparePage } from './planner/pages/ComparePage';
 import { ReportsPage } from './planner/pages/ReportsPage';
+import { DevChartsPage } from './planner/dev/DevChartsPage';
 
 /**
  * The gate in front of the planner (docs/REDESIGN.md §6 item 6). A
@@ -128,6 +129,7 @@ function PlannerShell() {
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          {import.meta.env.DEV && <Route path="/dev/charts" element={<DevChartsPage />} />}
           <Route path="*" element={<Navigate to="/overview" replace />} />
         </Routes>
       </main>
