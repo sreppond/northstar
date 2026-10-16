@@ -15,10 +15,10 @@
 import { useEffect, useRef } from 'react';
 import { NAV_ITEMS } from './nav';
 
-/** The first 9 rail destinations, in rail order — ⌘1–⌘9. Reports (the 10th
- *  item) intentionally has no number shortcut; nine is the limit a human
- *  reads off a keyboard's top row without counting. */
-const PAGE_SHORTCUTS = NAV_ITEMS.slice(0, 9);
+/** The first 7 rail destinations, in rail order — ⌘1–⌘7: the four main pages
+ *  and the three decisions (docs/REDESIGN-V5.md §2). The `more` group
+ *  (Scenarios, Reports) intentionally has no number; the palette reaches it. */
+const PAGE_SHORTCUTS = NAV_ITEMS.slice(0, 7);
 
 export type ShortcutAction =
   | { type: 'navigate'; path: string }

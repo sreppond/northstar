@@ -254,7 +254,7 @@ export function runPlan(plan: Plan): PlanResult {
       yearFraction *
       replacementFactorFor(suppressions, year, { isEarned: true, isBaseline: true }, eventStartYear);
     if (baselineIncome > EPSILON) {
-      income.push({ label: 'Baseline income', amount: baselineIncome, category: 'income' });
+      income.push({ label: 'Baseline income', amount: baselineIncome, category: 'income', taxable: true });
     }
     let taxableIncome = baselineIncome;
 
@@ -280,6 +280,9 @@ export function runPlan(plan: Plan): PlanResult {
         sourceEventId: cf.sourceEventId,
         category: cf.category,
         ...(cf.ownerId ? { ownerId: cf.ownerId } : {}),
+        // The event's own taxability, so a reader (incomeTax.ts) can tell a
+        // non-taxable income from a taxable one (docs/REDESIGN-V5.md §7.2).
+        taxable: cf.taxable,
       });
       if (cf.taxable) taxableIncome += amount;
     }

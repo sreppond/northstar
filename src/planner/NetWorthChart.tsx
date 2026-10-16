@@ -578,24 +578,6 @@ export function NetWorthChart({
       </div>
       )}
 
-      {/* A plan that runs out of money is the single most important thing this
-          screen can say, and it used to say it only as a table row you had to
-          scroll to. It leads now. */}
-      {markers.shortfallYears.length > 0 && (
-        <div className="ns-alarm" role="status">
-          <span className="ns-alarm-title">
-            This plan runs out of money in {markers.shortfallYears[0]}
-          </span>
-          <span className="ns-alarm-note">
-            {markers.shortfallYears.length === 1
-              ? `${money(markers.shortfallTotal)} of spending goes unfunded.`
-              : `${markers.shortfallYears.length} years fall short, ${money(
-                  markers.shortfallTotal,
-                )} unfunded in total.`}
-          </span>
-        </div>
-      )}
-
       {/* The chart scales with its viewBox, so squeezing it onto a phone makes
           the dots collide and the axis labels clip. Below ~700px it keeps its
           proportions and scrolls sideways instead, like the tables. */}

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { usePlanner } from './PlannerContext';
+import { useDismissals } from './useDismissals';
 
 /**
  * The header's overflow menu — everything that used to sit in a row of its
@@ -6,6 +8,9 @@ import { useEffect, useRef, useState } from 'react';
  * Redo. Those four are occasional or keyboard-served (⌘Z / ⇧⌘Z already wired
  * in `App.tsx`), unlike "Edit assumptions" and "+ Add event", which stay on
  * the surface because they are what a session is actually for.
+ *
+ * "Show hidden alerts (n)" restores every dismissed alert for the active plan
+ * (docs/REDESIGN-V5.md §4.3); it only appears when something is hidden.
  *
  * Same disclosure pattern as the plan row's "⋯" menu in `Sidebar.tsx`: a
  * button toggles `.ns-menu` open, and a mousedown outside it closes it.
@@ -27,6 +32,8 @@ export function HeaderMenu({
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const { planId } = usePlanner();
+  const { hiddenCount, restore } = useDismissals(planId);
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +65,7 @@ export function HeaderMenu({
       </button>
 
       {open && (
-        <div className="ns-menu ns-menu-right" role="menu">
+        <div className="ns-menu ns-menu-up" role="menu">
           {canUndo && (
             <button
               type="button"
@@ -96,6 +103,19 @@ export function HeaderMenu({
           >
             Import…
           </button>
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              className="ns-menu-item"
+              role="menuitem"
+              onClick={() => {
+                restore();
+                setOpen(false);
+              }}
+            >
+              Show hidden alerts ({hiddenCount})
+            </button>
+          )}
           <button
             type="button"
             className="ns-menu-item"

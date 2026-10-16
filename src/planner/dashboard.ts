@@ -16,7 +16,6 @@ import { summarize } from './presentation';
 import { accountClassColor } from './ui';
 import type { FanSeries } from './NetWorthChart';
 import { asOfDateLabel } from './format';
-import { planAsOfFraction, projectedNetWorthAt, summarizeProgress, yearFraction, type ProgressPoint } from './progress';
 import { savingsRatePercent } from './ledger';
 
 // --- Monarch status chip ----------------------------------------------------
@@ -337,44 +336,4 @@ export function retirementReadout(plan: Plan): RetirementReadout | undefined {
   const participant = plan.participants.find((p) => p.isIncluded);
   if (!participant) return undefined;
   return { age: event.startYear - participant.birthYear, year: event.startYear };
-}
-
-// --- plan vs. reality (docs/ROADMAP-10.md C4) --------------------------------
-
-export interface PlanVsReality {
-  /** actual − projected, signed. */
-  delta: number;
-  tone: 'in' | 'out';
-  /** The plan's own as-of date, formatted — "Ahead of plan by $12K since Sep
-      1": the divergence is measured from where the plan's own clock is
-      anchored, not from the logged point's own date. */
-  sinceLabel: string;
-}
-
-/**
- * How the latest logged actual (`progress.ts`'s `ProgressPoint`) compares to
- * what the plan itself projected for that same date — `projectedNetWorthAt`,
- * imported read-only from `progress.ts` rather than re-derived here. Absent
- * with no progress points logged yet, or once the gap rounds to nothing
- * (`money()`'s own "under $50 reads as $0" floor — a "$0 ahead of plan"
- * stat would just be noise).
- */
-export function planVsReality(
-  progressPoints: ProgressPoint[],
-  result: PlanResult,
-  plan: Pick<Plan, 'settings'>,
-): PlanVsReality | undefined {
-  const { latest } = summarizeProgress(progressPoints);
-  if (!latest) return undefined;
-
-  const asOf = planAsOfFraction(plan.settings);
-  const projected = projectedNetWorthAt(result, yearFraction(latest.date), asOf);
-  const delta = latest.netWorth - projected;
-  if (Math.abs(delta) < 50) return undefined;
-
-  return {
-    delta,
-    tone: delta >= 0 ? 'in' : 'out',
-    sinceLabel: asOfDateLabel(plan.settings.asOfDate ?? `${plan.settings.startYear}-01-01`),
-  };
 }

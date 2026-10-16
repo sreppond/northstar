@@ -69,6 +69,14 @@ interface PlanState {
   deleteGoal(planId: string, goalId: string): void;
   reorderGoals(planId: string, goalIds: string[]): void;
   updateSettings(planId: string, patch: Partial<Plan['settings']>): void;
+  /**
+   * `updateSettings` for display preferences (the chart range, docs/REDESIGN-V5.md
+   * §4.1): persists, but is NOT an undo step — a range click must not make ⌘Z
+   * "undo" a zoom, nor clear the redo stack. The patch is also applied to the
+   * undo/redo snapshots, so a later undo of a real edit doesn't snap the
+   * preference back to what it was then.
+   */
+  updateSettingsSilently(planId: string, patch: Partial<Plan['settings']>): void;
   /** `toastMessage`, when given, is what shows (with an Undo action) instead
    *  of `replacePlan`'s usual silence — used by the one caller that means
    *  something specific by "replace the whole plan" (Monarch import), not by
@@ -274,6 +282,18 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         plan.id === planId ? { ...plan, settings: { ...plan.settings, ...patch } } : plan,
       ),
     ));
+  },
+
+  updateSettingsSilently(planId, patch) {
+    const apply = (plans: Plan[]) =>
+      plans.map((plan) =>
+        plan.id === planId ? { ...plan, settings: { ...plan.settings, ...patch } } : plan,
+      );
+    set((state) => {
+      const plans = apply(state.plans);
+      persist(plans);
+      return { plans, past: state.past.map(apply), future: state.future.map(apply) };
+    });
   },
 
   replacePlan(plan, toastMessage) {

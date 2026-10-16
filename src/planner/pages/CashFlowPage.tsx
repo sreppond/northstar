@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, PiggyBank } from 'lucide-react';
 import { usePlanner } from '../PlannerContext';
-import { LedgerToolbar, LedgerCompareDiff } from '../LedgerToolbar';
+import { LedgerToolbar } from '../LedgerToolbar';
 import { CashFlowTab } from '../tabs/CashFlowTab';
 import { CashFlowTrend } from '../views/CashFlowTrend';
 import { planMetaLine, money, signedMoney, percent } from '../format';
@@ -108,7 +108,6 @@ export function CashFlowPage() {
       </SectionCard>
 
       <SectionCard title="Annual cash flow" flush actions={<LedgerToolbar showPager />}>
-        <LedgerCompareDiff />
         <CashFlowTab
           window={windowYears}
           events={plan.events}

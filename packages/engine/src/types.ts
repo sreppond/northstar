@@ -488,6 +488,12 @@ export interface LineItem {
    * "this year, once" instead of dividing it into a fake monthly cost.
    */
   oneTime?: boolean;
+  /**
+   * Income lines only: whether the engine counted this as ordinary taxable
+   * income (step 7's "Income tax"). Unset on lines that aren't event or
+   * baseline income (RMD, SEPP, termination proceeds) and on expenses.
+   */
+  taxable?: boolean;
 }
 
 export interface AccountYear {
