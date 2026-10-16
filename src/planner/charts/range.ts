@@ -7,9 +7,10 @@
  * without a component tree.
  */
 
-/** Unit A2 declares the identical literal union as the engine's
-    `ChartRangeKey`; at merge this switches to re-exporting that type. */
-export type RangeKey = '1y' | '3y' | '5y' | '10y' | '20y' | '40y' | 'all';
+import type { ChartRangeKey } from '@northstar/engine';
+
+/** The engine's own key, since the range persists on `PlanSettings.chartRange`. */
+export type RangeKey = ChartRangeKey;
 
 export const RANGE_KEYS: RangeKey[] = ['1y', '3y', '5y', '10y', '20y', '40y', 'all'];
 
