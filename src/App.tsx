@@ -24,6 +24,8 @@ import { ConnectDrawer } from './planner/drawer/ConnectDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
 import { OverviewPage } from './planner/pages/OverviewPage';
 import { AccountsPage } from './planner/pages/AccountsPage';
+import { BudgetPage } from './planner/pages/BudgetPage';
+import { FamilyPage } from './planner/pages/FamilyPage';
 import { CashFlowPage } from './planner/pages/CashFlowPage';
 import { EventsPage } from './planner/pages/EventsPage';
 import { RetirementPage } from './planner/pages/RetirementPage';
@@ -115,6 +117,8 @@ function PlannerShell() {
         <div className="ns-drag-strip" data-tauri-drag-region />
         <Routes>
           <Route path="/overview" element={<OverviewPage />} />
+          <Route path="/budget" element={<BudgetPage />} />
+          <Route path="/family" element={<FamilyPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/cashflow" element={<CashFlowPage />} />
           <Route path="/events" element={<EventsPage />} />

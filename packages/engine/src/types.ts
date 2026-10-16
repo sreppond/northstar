@@ -307,6 +307,12 @@ export interface BudgetLine {
   growth?: { kind: 'inflation' } | { kind: 'fixed'; rate: number } | { kind: 'none' };
   /** `saving` lines only. */
   accountId?: string;
+  /**
+   * Spans it doesn't apply, `[from, until)` each — daycare that stops while
+   * a parent is home with the kids (docs/REDESIGN-V4.md §4.3). A span whose
+   * anchors don't resolve pauses nothing.
+   */
+  pauses?: { from: Anchor; until: Anchor }[];
   isIncluded: boolean;
 }
 
@@ -439,6 +445,12 @@ export interface LineItem {
   budgetLineId?: string;
   /** Budget lines only: fixed / non-discretionary. */
   essential?: boolean;
+  /**
+   * A lump sum that lands once (a down payment, a wedding, a kid's arrival
+   * costs) rather than an annual rate — so a monthly budget can show it as
+   * "this year, once" instead of dividing it into a fake monthly cost.
+   */
+  oneTime?: boolean;
 }
 
 export interface AccountYear {

@@ -305,6 +305,7 @@ export function runPlan(plan: Plan): PlanResult {
           category: cf.category,
           ...(cf.ownerId ? { ownerId: cf.ownerId } : {}),
           ...(cf.budgetLineId ? { budgetLineId: cf.budgetLineId, essential: cf.essential ?? false } : {}),
+          ...(cf.recurring ? {} : { oneTime: true }),
         });
       }
     }

@@ -211,3 +211,24 @@ describe('horizonDelta', () => {
     expect(horizonDelta(base, ghost)).toEqual({ endYear: 2046, delta: 100_000 });
   });
 });
+
+describe('applyLevers on a household budget', () => {
+  it("scales adults' and shared lines, not a child's, toward the new total", () => {
+    const base = {
+      ...planFixture(),
+      participants: [
+        { id: 'a', name: 'A', birthYear: 1990, lifeExpectancy: 90, isIncluded: true },
+        { id: 'k', name: 'K', birthYear: 2028, lifeExpectancy: 90, isIncluded: true, role: 'child' as const },
+      ],
+      budget: [
+        { id: 'rent', name: 'Rent', owner: 'shared', category: 'housing' as const, essential: true, kind: 'expense' as const, cadence: 'monthly' as const, amount: 3_000, isIncluded: true },
+        { id: 'fun', name: 'Fun', owner: 'a', category: 'personal' as const, essential: false, kind: 'allowance' as const, cadence: 'monthly' as const, amount: 1_000, isIncluded: true },
+        { id: 'kid', name: 'Kid', owner: 'k', category: 'childcare' as const, essential: true, kind: 'expense' as const, cadence: 'monthly' as const, amount: 1_500, isIncluded: true },
+      ],
+    };
+    // $48K a year of adjustable lines; −$12K a year is a quarter less.
+    const next = applyLevers(base, { returnDelta: 0, spendingDelta: -12_000 });
+    expect(next.budget!.map((l) => l.amount)).toEqual([2_250, 750, 1_500]);
+    expect(next.settings.baselineExpenses).toBe(base.settings.baselineExpenses);
+  });
+});

@@ -661,7 +661,41 @@ green. Each phase ends with a Tauri rebuild so the installed app shows it.
     It's tested to keep net worth identical year by year where the
     semantics match.
 
-**Next — Phase 2.** The Budget and Family pages are where the migration is
-offered, with its review step (`changes` / `needsReview`). The `/mo` and
-today's-dollar toggles land there too. Known gap: retirement still stops
-every standing contribution household-wide, not just the retiree's.
+**Phase 2 — Budget and Family, Oct 16, 2026.**
+- **Setup.** Both pages open on a "Set up your household" card until the
+  plan has a budget. Review shows `toHouseholdModel`'s `changes` and
+  `needsReview`; one Apply, one undo. It also switches the plan to today's
+  dollars. New plans default to today's dollars.
+- **Budget** (`/budget`):
+  - Year stepper with a life-stage read ("Renting · Kid 1 (2)"), plus `/mo
+    · /yr` and `Today's $ · Future $` toggles.
+  - A one-sentence answer, a stat strip, and the 100% "Where each month
+    goes" bar.
+  - "Budget by year" columns stacked by person under an after-tax line
+    (25 years by default, or all), clickable.
+  - The budget table grouped Shared / each adult / each kid, plus "Saved on
+    purpose" and "Once this year" for lump sums.
+  - The `BudgetLineDrawer` with anchored starts and stops.
+  - "Try a change" levers (rent, allowance each, other fixed bills ±%) over
+    the Impact strip, with Keep / Save as scenario / Reset.
+- **Family** (`/family`):
+  - Members, and Add a child (stage template: daycare / nanny / parent,
+    public / private school, college, optional 529 with its own account,
+    plus a cost-by-age preview).
+  - Career tracks drawn from `careerSegments`.
+  - Kids' monthly cost by year.
+  - The "Step back from work" decision (`applyCareGap`: leave pay %, then
+    back-at %, childcare paused while home), showing pay, childcare and net
+    per month, then the Impact strip.
+- **Engine:**
+  - `BudgetLine.pauses`.
+  - `LineItem.oneTime`, so lump sums never read as a monthly cost.
+- **Also:**
+  - Rail group "Plan" → "Household" (Budget, Family, Accounts, Cash Flow,
+    Events); ⌘2 is now Budget.
+  - Overview's spending lever scales the budget's adult and shared lines
+    when the plan has one.
+
+**Next — Phase 3 (Home).** Known gaps:
+- Retirement still stops every standing contribution household-wide.
+- "Budget by year" draws the plan, not the draft.

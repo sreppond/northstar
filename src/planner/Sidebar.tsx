@@ -4,6 +4,8 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Wallet,
+  PiggyBank,
+  Users,
   ArrowLeftRight,
   CalendarRange,
   Sunrise,
@@ -40,6 +42,8 @@ import { planEndYear, withHorizon } from '@northstar/engine';
  */
 export const NAV_ITEMS = [
   { to: '/overview', label: 'Overview', Icon: LayoutDashboard, group: 'overview' },
+  { to: '/budget', label: 'Budget', Icon: PiggyBank, group: 'plan' },
+  { to: '/family', label: 'Family', Icon: Users, group: 'plan' },
   { to: '/accounts', label: 'Accounts', Icon: Wallet, group: 'plan' },
   { to: '/cashflow', label: 'Cash Flow', Icon: ArrowLeftRight, group: 'plan' },
   { to: '/events', label: 'Events', Icon: CalendarRange, group: 'plan' },
@@ -52,7 +56,8 @@ export const NAV_ITEMS = [
 ] as const;
 
 const GROUP_LABELS: Record<string, string> = {
-  plan: 'Plan',
+  // docs/REDESIGN-V4.md §2: who you are and what you spend.
+  plan: 'Household',
   goals: 'Goals',
   analysis: 'Analysis',
 };

@@ -34,8 +34,8 @@ describe('isTypingTarget', () => {
 describe('matchShortcut', () => {
   it('maps ⌘1..⌘9 to the first nine rail destinations', () => {
     expect(matchShortcut(key('1', { metaKey: true }))).toEqual({ type: 'navigate', path: '/overview' });
-    expect(matchShortcut(key('2', { metaKey: true }))).toEqual({ type: 'navigate', path: '/accounts' });
-    expect(matchShortcut(key('9', { metaKey: true }))).toEqual({ type: 'navigate', path: '/compare' });
+    expect(matchShortcut(key('2', { metaKey: true }))).toEqual({ type: 'navigate', path: '/budget' });
+    expect(matchShortcut(key('9', { metaKey: true }))).toEqual({ type: 'navigate', path: '/annuity' });
   });
 
   it('has no ⌘0 (only nine rail items get a number)', () => {

@@ -65,7 +65,9 @@ export function toHouseholdModel(plan: Plan): HouseholdMigration {
         ...base,
         id: `${id}-raising`,
         name: `${event.name} — everyday costs`,
-        category: 'childcare',
+        // Not 'childcare': this is the old event's all-in figure (food,
+        // clothes, care alike), and a parent at home only pauses childcare.
+        category: 'other',
         cadence: 'monthly',
         amount: config.annualCost / 12,
         from: age(0),
@@ -136,10 +138,15 @@ export function toHouseholdModel(plan: Plan): HouseholdMigration {
     return { ...e, config: { ...config, participantId: owner.id } };
   });
 
+  // A budget reads in today's dollars (§8) — "$4K a month" should mean $4K.
+  if (plan.settings.dollarMode !== 'todaysDollars') {
+    changes.push("Figures now show in today's dollars, so a monthly amount means the same thing in every year. Switch back any time.");
+  }
+
   return {
     plan: {
       ...plan,
-      settings: { ...plan.settings, baselineExpenses },
+      settings: { ...plan.settings, baselineExpenses, dollarMode: 'todaysDollars' },
       participants: [...adults, ...children],
       events: owned,
       budget,

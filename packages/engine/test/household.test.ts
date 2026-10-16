@@ -98,6 +98,20 @@ describe('budget lines', () => {
     expect(expensesIn(p, 2033).some((e) => e.budgetLineId === 'daycare')).toBe(false);
   });
 
+  it('skips the years a line is paused', () => {
+    const daycare = line({
+      id: 'daycare',
+      owner: 'kid1',
+      from: { kind: 'age', participantId: 'kid1', age: 0 },
+      until: { kind: 'age', participantId: 'kid1', age: 5 },
+      pauses: [{ from: { kind: 'year', year: 2028 }, until: { kind: 'year', year: 2030 } }],
+    });
+    const years = runPlan(household({ budget: [daycare] }))
+      .years.filter((y) => y.expenses.some((e) => e.budgetLineId === 'daycare'))
+      .map((y) => y.year);
+    expect(years).toEqual([2030, 2031, 2032]);
+  });
+
   it('pays a one-time line once, in its first year', () => {
     const p = household({
       budget: [line({ id: 'wedding', cadence: 'once', amount: 40_000, from: { kind: 'year', year: 2027 } })],

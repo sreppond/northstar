@@ -23,10 +23,13 @@ export function budgetLineYears(line: BudgetLine, scope: AnchorScope, ctx: Pick<
   if (from === undefined) return [];
   const until = line.until ? resolveAnchor(line.until, scope) : undefined;
 
+  const paused = (line.pauses ?? []).map((p) => [resolveAnchor(p.from, scope), resolveAnchor(p.until, scope)] as const);
+  const running = (year: number) => !paused.some(([a, b]) => a !== undefined && b !== undefined && year >= a && year < b);
+
   if (line.cadence === 'once') {
-    return from >= ctx.startYear && from <= ctx.endYear && (until === undefined || from < until) ? [from] : [];
+    return from >= ctx.startYear && from <= ctx.endYear && (until === undefined || from < until) && running(from) ? [from] : [];
   }
-  return yearRange(from, until === undefined ? ctx.endYear : until - 1, ctx as CompileContext);
+  return yearRange(from, until === undefined ? ctx.endYear : until - 1, ctx as CompileContext).filter(running);
 }
 
 /** Today's-dollar `amount` grown to `year`, per the line's growth rule. */

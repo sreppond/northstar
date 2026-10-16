@@ -99,6 +99,12 @@ interface PlanState {
   revertWhatIf(planId: string): void;
   /** Saves the edited plan under `name` as a new plan; the live plan reverts to the snapshot. */
   forkWhatIf(planId: string, name: string): void;
+  /**
+   * Keep a previewed change as its own plan (docs/REDESIGN-V4.md §1.4,
+   * "Save as scenario") without touching the active one — it shows up in
+   * the switcher and on Compare.
+   */
+  savePlanAs(plan: Plan, name: string): void;
 
   undo(): void;
   redo(): void;
@@ -370,6 +376,14 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     get().deletePlan(snapshot.id);
   },
 
+  savePlanAs(plan, name) {
+    const copy: Plan = { ...structuredClone(plan), id: newId(), name: name.trim() || `${plan.name} copy` };
+    delete copy.isWhatIfSnapshot;
+    delete copy.settings.compareToPlanId;
+    set((state) => commit(state, (plans) => [...plans, copy]));
+    toast(`Saved as "${copy.name}"`, { action: { label: 'Undo', onClick: () => get().undo() } });
+  },
+
   forkWhatIf(planId, name) {
     const { plans } = get();
     const plan = plans.find((p) => p.id === planId);
@@ -481,7 +495,8 @@ function blankPlan(id: string, name: string, like: Plan | undefined): Plan {
       horizon: like?.settings.horizon ?? { mode: 'age', age: DEFAULT_HORIZON_AGE },
       projectionYears: fallbackEnd - startYear + 1,
       inflationRate: like?.settings.inflationRate ?? 2.5,
-      dollarMode: like?.settings.dollarMode ?? 'futureDollars',
+      // docs/REDESIGN-V4.md §8: today's dollars by default — a budget reads in them.
+      dollarMode: like?.settings.dollarMode ?? 'todaysDollars',
       baselineIncome: 0,
       baselineExpenses: 0,
       incomeTaxRate: like?.settings.incomeTaxRate ?? 25,

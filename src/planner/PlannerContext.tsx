@@ -59,6 +59,7 @@ export interface PlannerContextValue {
   keepWhatIf(planId: string): void;
   revertWhatIf(planId: string): void;
   forkWhatIf(planId: string, name: string): void;
+  savePlanAs(plan: Plan, name: string): void;
 
   // -- Progress: the historical net-worth ledger --
   progressPoints: ProgressPoint[];
@@ -176,6 +177,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const keepWhatIf = usePlanStore((s) => s.keepWhatIf);
   const revertWhatIf = usePlanStore((s) => s.revertWhatIf);
   const forkWhatIf = usePlanStore((s) => s.forkWhatIf);
+  const savePlanAs = usePlanStore((s) => s.savePlanAs);
   const progressPoints = usePlanStore((s) => s.progressPoints);
   const upsertProgressPoint = usePlanStore((s) => s.upsertProgressPoint);
   const deleteProgressPoint = usePlanStore((s) => s.deleteProgressPoint);
@@ -389,6 +391,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     keepWhatIf,
     revertWhatIf,
     forkWhatIf,
+    savePlanAs,
 
     progressPoints,
     upsertProgressPoint,
