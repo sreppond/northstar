@@ -3,7 +3,8 @@ import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engi
 import { tableMoney } from '../format';
 import { accountDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
-import { Cell, type CellMagnitude } from './DataTable';
+import { Cell, YearHeadCell, type CellMagnitude } from './DataTable';
+import { useScrollToYear } from './useScrollToYear';
 import { GearIcon } from '../icons';
 import { ACCOUNT_ICON } from '../domainIcons';
 import { classBalances, missingAccountClasses } from '../ledger';
@@ -20,14 +21,21 @@ export function AccountsTab({
   window: years,
   accounts,
   highlightYear,
+  focusYear,
+  onFocusYear,
+  dangerYears,
   onEditType,
   opening,
 }: {
   window: YearSnapshot[];
   accounts: Account[];
   /** The scrubbed year (docs/REDESIGN.md §4.1) — null/undefined highlights
-      nothing. */
+      nothing. Alias of `focusYear` (docs/REDESIGN-V5.md §3.7). */
   highlightYear?: number | null;
+  /** Same contract as `DataTable`'s: highlighted + scrolled to centre. */
+  focusYear?: number | null;
+  onFocusYear?(year: number | null): void;
+  dangerYears?: number[];
   onEditType(accountClass: AccountClass): void;
   /** The plan's real "today" (docs/W3-REVIEW.md "A 'Today' column") — a
       leading column ahead of the projected years, so $168K (today) and
@@ -44,6 +52,10 @@ export function AccountsTab({
   // Called unconditionally — React hooks can't be called inside a `&&`.
   const breakpoint = useBreakpoint();
   const showOpening = Boolean(opening) && breakpoint !== 'phone';
+
+  const focus = focusYear !== undefined ? focusYear : highlightYear;
+  const { pickYear, scrollerProps } = useScrollToYear(focus, onFocusYear);
+  const isDanger = (y: number) => dangerYears?.includes(y) === true;
 
   const yearLabels = years.map((y) => y.year);
   // +1 for the leading "Today" column when there's an opening snapshot to
@@ -181,7 +193,8 @@ export function AccountsTab({
                   key={isToday ? 'today' : yearLabels[yearIndex]}
                   value={tableMoney(v)}
                   magnitude={magnitude}
-                  highlighted={!isToday && yearLabels[yearIndex] === highlightYear}
+                  highlighted={!isToday && yearLabels[yearIndex] === focus}
+                  danger={!isToday && isDanger(yearLabels[yearIndex])}
                   divider={isToday}
                 />
               );
@@ -191,16 +204,20 @@ export function AccountsTab({
       });
 
   return (
-    <div className="ns-table-scroll">
+    <div {...scrollerProps}>
       <div className="ns-grid ns-row-head" style={style}>
         {/* The SectionCard above already titles this "Balance sheet" —
             this column header just needs to say what its own rows are. */}
         <div>Account</div>
         {showOpening && <div className="ns-col-divider">Today</div>}
         {yearLabels.map((y) => (
-          <div key={y} className={y === highlightYear ? 'ns-col-scrub' : undefined}>
-            {y}
-          </div>
+          <YearHeadCell
+            key={y}
+            year={y}
+            focused={y === focus}
+            danger={isDanger(y)}
+            onFocusYear={pickYear}
+          />
         ))}
       </div>
 
@@ -208,7 +225,7 @@ export function AccountsTab({
         <div>Net worth</div>
         {showOpening && opening && <Cell value={tableMoney(opening.netWorth)} divider />}
         {years.map((y) => (
-          <Cell key={y.year} value={tableMoney(y.netWorth)} highlighted={y.year === highlightYear} />
+          <Cell key={y.year} value={tableMoney(y.netWorth)} highlighted={y.year === focus} danger={isDanger(y.year)} />
         ))}
       </div>
 
@@ -216,7 +233,7 @@ export function AccountsTab({
         <div>Assets</div>
         {showOpening && opening && <Cell value={tableMoney(opening.assets)} divider />}
         {years.map((y) => (
-          <Cell key={y.year} value={tableMoney(y.assets)} highlighted={y.year === highlightYear} />
+          <Cell key={y.year} value={tableMoney(y.assets)} highlighted={y.year === focus} danger={isDanger(y.year)} />
         ))}
       </div>
       {renderGroup(ASSET_CLASSES, false)}
@@ -226,7 +243,7 @@ export function AccountsTab({
         <div>Liabilities</div>
         {showOpening && opening && <Cell value={tableMoney(opening.liabilities)} divider />}
         {years.map((y) => (
-          <Cell key={y.year} value={tableMoney(y.liabilities)} highlighted={y.year === highlightYear} />
+          <Cell key={y.year} value={tableMoney(y.liabilities)} highlighted={y.year === focus} danger={isDanger(y.year)} />
         ))}
       </div>
       {renderGroup(LIABILITY_CLASSES, true)}

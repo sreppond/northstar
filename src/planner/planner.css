@@ -3670,6 +3670,177 @@ html.ns-tauri .ns-drag-strip {
   background: var(--surface-sub);
 }
 
+/* ---- ScrollTable (docs/REDESIGN-V5.md §3.7) ------------------------------
+   `DataTable` and `AccountsTab` carry `.ns-scroll-table` on their scroller:
+   every year gets a FIXED-width column, so a long plan overflows and scrolls
+   sideways (natively — two-finger trackpad and shift+wheel just work) instead
+   of squeezing figures. Other `.ns-table-scroll` users (Annuity, House,
+   Reports) keep the plain behaviour above. */
+.ns-scroll-table {
+  --ns-label-w: 268px;
+  --ns-col-w: 92px;
+  scroll-snap-type: x proximity;
+  /* Snap targets are the year headers, centred in the part of the scroller the
+     sticky label column doesn't cover. */
+  scroll-padding-inline-start: var(--ns-label-w);
+  scrollbar-width: thin;
+}
+@media (min-width: 1280px) {
+  .ns-scroll-table {
+    --ns-label-w: 300px;
+  }
+}
+@media (max-width: 640px) {
+  .ns-scroll-table {
+    --ns-label-w: 132px;
+  }
+}
+.ns-scroll-table .ns-grid {
+  grid-template-columns: var(--ns-label-w) repeat(var(--cols, 8), minmax(var(--ns-col-w), 1fr));
+  /* The same on every row, so rows line up however wide the scroller is. */
+  min-width: calc(var(--ns-label-w) + var(--cols, 8) * var(--ns-col-w));
+}
+.ns-scroll-table .ns-grid > div:not(:first-child) {
+  min-width: 0;
+}
+.ns-scroll-table .ns-row-head > div[data-year] {
+  scroll-snap-align: center;
+}
+
+/* Header row stays put when the table is tall enough to scroll vertically. */
+.ns-scroll-table .ns-row-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+/* The label column is a translucent material: figures slide under it, blurred,
+   rather than being cut off by an opaque slab (apple-design §12). Each row
+   kind mixes its own tint in, so the rows still read as rows. */
+.ns-scroll-table .ns-grid > div:first-child {
+  background: var(--material-bg);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+}
+.ns-scroll-table .ns-row-head > div:first-child {
+  background: color-mix(in srgb, var(--surface-sub) 60%, var(--material-bg));
+}
+.ns-scroll-table .ns-row-total > div:first-child {
+  background: color-mix(in srgb, var(--tint-row) 60%, var(--material-bg));
+}
+.ns-scroll-table .ns-row-child:hover > div:first-child {
+  background: color-mix(in srgb, var(--tint-row) 40%, var(--material-bg));
+}
+/* Once content has scrolled under the label, a hairline says so — and the
+   material firms up to the row's own solid colour. Chromium drops a
+   descendant's backdrop blur under a masked ancestor (the edge-fade mask
+   below), so any translucency here would let scrolled-under figures ghost
+   through the label unblurred. */
+.ns-scroll-table[data-fade-start] .ns-grid > div:first-child {
+  box-shadow: 1px 0 0 var(--rule-light);
+  background: var(--surface);
+}
+.ns-scroll-table[data-fade-start] .ns-row-head > div:first-child {
+  background: var(--surface-sub);
+}
+.ns-scroll-table[data-fade-start] .ns-row-total > div:first-child {
+  background: var(--tint-row);
+}
+.ns-scroll-table[data-fade-start] .ns-row-child:hover > div:first-child {
+  background: color-mix(in srgb, var(--tint-row) 70%, var(--surface));
+}
+/* Accounts' "Add" pills span the table's full width; keep them in view rather
+   than letting them scroll away with the years. */
+.ns-scroll-table > .ns-add-row-flush {
+  position: sticky;
+  left: 0;
+}
+
+/* Scroll-edge fades instead of arrows: the side with more content dissolves.
+   The label column is excluded from the left fade — it's the anchor, not
+   content. Driven by `data-fade-start` / `data-fade-end` (useScrollToYear). */
+.ns-scroll-table[data-fade-start] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 var(--ns-label-w),
+    transparent var(--ns-label-w),
+    #000 calc(var(--ns-label-w) + 36px)
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 var(--ns-label-w),
+    transparent var(--ns-label-w),
+    #000 calc(var(--ns-label-w) + 36px)
+  );
+}
+.ns-scroll-table[data-fade-end] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+}
+.ns-scroll-table[data-fade-start][data-fade-end] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 var(--ns-label-w),
+    transparent var(--ns-label-w),
+    #000 calc(var(--ns-label-w) + 36px),
+    #000 calc(100% - 44px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 var(--ns-label-w),
+    transparent var(--ns-label-w),
+    #000 calc(var(--ns-label-w) + 36px),
+    #000 calc(100% - 44px),
+    transparent
+  );
+}
+
+/* The year header as a pin toggle (docs/REDESIGN-V5.md §3.7). */
+.ns-year-btn {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.ns-year-btn:hover {
+  color: var(--ink);
+}
+.ns-year-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.ns-row-head > div.ns-col-scrub .ns-year-btn:hover {
+  color: var(--accent);
+}
+
+/* Short years (docs/REDESIGN-V5.md §4.2 item 7): a quiet wash down the column
+   and a small ✗ in the header. The header shows it in the danger ink. */
+.ns-col-danger {
+  background: var(--danger-wash);
+}
+.ns-row-head > div.ns-col-danger {
+  color: var(--danger);
+}
+.ns-year-short {
+  margin-right: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+/* A focused short year still reads as focused: stack the accent over the wash. */
+.ns-col-scrub.ns-col-danger {
+  background:
+    linear-gradient(color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent) 8%, transparent)),
+    var(--danger-wash);
+}
+
 /* S10 (docs/REDESIGN-V3.md review): `useBreakpoint.ts`'s tablet query is
    `(max-width:1023px)`, not 1024 — a 1024px iPad-landscape viewport must
    read as desktop (persistent rail), matching `Sidebar.tsx`'s choice of

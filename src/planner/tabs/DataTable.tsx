@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ZERO_DASH } from '../format';
+import { useScrollToYear } from './useScrollToYear';
 
 /** `grandchild`: one line inside an expanded life-change row (Cash Flow). */
 export type RowKind = 'total' | 'group' | 'child' | 'grandchild';
@@ -35,12 +36,16 @@ export function Cell({
   value,
   magnitude,
   highlighted,
+  danger,
   title,
   divider,
 }: {
   value: string;
   magnitude?: CellMagnitude;
   highlighted?: boolean;
+  /** A short year's column (docs/REDESIGN-V5.md §4.2 item 7) — a quiet
+      danger wash, so the shortfall reads down the whole column. */
+  danger?: boolean;
   /** A native tooltip for this one cell — Cash Flow's negative "Savings
       rate" cells (docs/ROADMAP-10.md C7), which name why that year went
       negative rather than leaving a bare "-12%" to look like an error. */
@@ -54,6 +59,7 @@ export function Cell({
   const classes = [
     value === ZERO_DASH ? 'ns-zero' : null,
     highlighted ? 'ns-col-scrub' : null,
+    danger ? 'ns-col-danger' : null,
     divider ? 'ns-col-divider' : null,
   ]
     .filter(Boolean)
@@ -120,8 +126,61 @@ export interface TableRow {
 }
 
 /**
- * The shared shape behind Accounts and Cash Flow: a 268px label column plus one
- * column per year in the visible window (docs/PLAN.md §7.5).
+ * A year column's header cell (docs/REDESIGN-V5.md §3.7). Carries `data-year`
+ * so `useScrollToYear` can find the column, and is the snap target for the
+ * scroller. With `onFocusYear` it is a toggle: click pins the year, click the
+ * pinned year again lets go. Without it, plain text, as before.
+ */
+export function YearHeadCell({
+  year,
+  focused,
+  danger,
+  sub,
+  onFocusYear,
+}: {
+  year: number;
+  focused?: boolean;
+  danger?: boolean;
+  sub?: string;
+  onFocusYear?(year: number | null): void;
+}) {
+  const classes = [focused ? 'ns-col-scrub' : null, danger ? 'ns-col-danger' : null]
+    .filter(Boolean)
+    .join(' ');
+  const label = (
+    <>
+      {danger && (
+        <span className="ns-year-short" role="img" aria-label="Plan runs short this year">
+          ✗
+        </span>
+      )}
+      {year}
+      {sub && <div className="ns-col-head-sub">{sub}</div>}
+    </>
+  );
+  return (
+    <div data-year={year} className={classes || undefined}>
+      {onFocusYear ? (
+        <button
+          type="button"
+          className="ns-year-btn"
+          aria-pressed={focused === true}
+          onClick={() => onFocusYear(focused ? null : year)}
+        >
+          {label}
+        </button>
+      ) : (
+        label
+      )}
+    </div>
+  );
+}
+
+/**
+ * The shared shape behind Cash Flow (and, via `Cell`/`YearHeadCell`, Accounts):
+ * a sticky label column plus one fixed-width column for EVERY year it is given,
+ * in a native sideways scroller (docs/REDESIGN-V5.md §3.7). A caller that still
+ * passes a paged window simply gets a table that scrolls if it overflows.
  */
 export function DataTable({
   caption,
@@ -129,6 +188,9 @@ export function DataTable({
   rows,
   empty,
   highlightYear,
+  focusYear,
+  onFocusYear,
+  dangerYears,
   columnSubLabel,
 }: {
   caption: string;
@@ -139,6 +201,16 @@ export function DataTable({
       highlights nothing — nobody's pointing at the chart, or the scrubbed
       year has paged out of this table's visible window. */
   highlightYear?: number | null;
+  /** The focused year: its column is highlighted, and when it changes from
+      outside the table scrolls it to centre. Wins over `highlightYear` (kept
+      as an alias) whenever it is passed, `null` included. */
+  focusYear?: number | null;
+  /** Called with a year when its header is clicked, or `null` when the
+      already-focused year's header is. Omit for non-interactive headers. */
+  onFocusYear?(year: number | null): void;
+  /** Years the plan runs short (docs/REDESIGN-V5.md §4.2 item 7): a danger
+      wash down the column and a ✗ in its header. */
+  dangerYears?: number[];
   /** A small mono sub-label under a year's column header — the stub-year
       flag (docs/ROADMAP-10.md C7 "the stub year is invisible"), built from
       `stubYearLabel` (`ledger.ts`) by the caller so every table renders the
@@ -146,20 +218,24 @@ export function DataTable({
   columnSubLabel?(year: number): string | undefined;
 }) {
   const style = { ['--cols' as string]: years.length };
+  const focus = focusYear !== undefined ? focusYear : highlightYear;
+  const { pickYear, scrollerProps } = useScrollToYear(focus, onFocusYear);
+  const isDanger = (y: number) => dangerYears?.includes(y) === true;
 
   return (
-    <div className="ns-table-scroll">
+    <div {...scrollerProps}>
       <div className="ns-grid ns-row-head" style={style}>
         <div>{caption}</div>
-        {years.map((y) => {
-          const sub = columnSubLabel?.(y);
-          return (
-            <div key={y} className={y === highlightYear ? 'ns-col-scrub' : undefined}>
-              {y}
-              {sub && <div className="ns-col-head-sub">{sub}</div>}
-            </div>
-          );
-        })}
+        {years.map((y) => (
+          <YearHeadCell
+            key={y}
+            year={y}
+            focused={y === focus}
+            danger={isDanger(y)}
+            sub={columnSubLabel?.(y)}
+            onFocusYear={pickYear}
+          />
+        ))}
       </div>
 
       {rows.length === 0 && <div className="ns-empty">{empty ?? 'Nothing to show.'}</div>}
@@ -207,7 +283,8 @@ export function DataTable({
                   key={i}
                   value={cell}
                   magnitude={magnitude}
-                  highlighted={years[i] === highlightYear}
+                  highlighted={years[i] === focus}
+                  danger={isDanger(years[i])}
                   title={row.cellTitles?.[i]}
                 />
               );

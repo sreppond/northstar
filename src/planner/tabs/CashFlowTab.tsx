@@ -32,6 +32,9 @@ export function CashFlowTab({
   window,
   events,
   highlightYear,
+  focusYear,
+  onFocusYear,
+  dangerYears,
   onEdit,
   onEditAssumptions,
   startYear,
@@ -42,6 +45,10 @@ export function CashFlowTab({
   /** The scrubbed year (docs/REDESIGN.md §4.1) — null/undefined highlights
       nothing. */
   highlightYear?: number | null;
+  /** Passed straight to `DataTable` (docs/REDESIGN-V5.md §3.7). */
+  focusYear?: number | null;
+  onFocusYear?(year: number | null): void;
+  dangerYears?: number[];
   onEdit(event: PlanEvent): void;
   onEditAssumptions(): void;
   /** The plan's own `settings.startYear`/`settings.asOfDate` — flags the
@@ -238,6 +245,9 @@ export function CashFlowTab({
       years={years}
       rows={rows}
       highlightYear={highlightYear}
+      focusYear={focusYear}
+      onFocusYear={onFocusYear}
+      dangerYears={dangerYears}
       columnSubLabel={
         startYear !== undefined ? (y) => stubYearLabel(y, startYear, asOfDate)?.short : undefined
       }
