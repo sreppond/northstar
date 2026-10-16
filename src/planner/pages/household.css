@@ -792,9 +792,9 @@
 .ns-sepp-warning {
   margin: 14px 0 0;
   padding: 10px 12px;
-  border-left: 3px solid var(--warn);
-  background: var(--surface-sub);
-  border-radius: 0 8px 8px 0;
+  border: 1px solid color-mix(in srgb, var(--warn) 28%, var(--border));
+  background: color-mix(in srgb, var(--warn) 6%, var(--surface));
+  border-radius: 8px;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--child-ink);
