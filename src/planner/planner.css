@@ -720,17 +720,134 @@ html.ns-tauri .ns-drag-strip {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ns-rail-plan-sub {
+.ns-rail-plan-chevron {
+  flex: none;
+  color: var(--rail-ink);
+}
+
+/* Desktop rail: the plan name and the horizon share one box
+   (docs/REDESIGN-V4.md §3) — the plan button gives up its own chrome to the
+   box, and the horizon line under it is a second, quieter button. */
+.ns-rail-planbox {
+  position: relative;
+  background: var(--chip);
+  border: 1px solid var(--rail-border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 6px;
+}
+.ns-rail-planbox .ns-rail-plan {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 6px;
+  padding: 5px 7px;
+  margin-bottom: 0;
+}
+.ns-rail-planbox .ns-rail-plan:hover,
+.ns-rail-horizon:hover,
+.ns-rail-horizon[aria-expanded='true'] {
+  background: var(--track);
+}
+.ns-rail-horizon {
+  font: inherit;
   font-family: var(--font-mono);
   font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
   color: var(--rail-ink);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 7px;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-soft), color 140ms var(--ease-soft);
+}
+.ns-rail-horizon:hover,
+.ns-rail-horizon[aria-expanded='true'] {
+  color: var(--ink);
+}
+.ns-rail-horizon span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ns-rail-plan-chevron {
+.ns-horizon-popover {
+  position: fixed;
+  z-index: 200;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: var(--fs-body);
+  width: 288px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(18, 48, 76, 0.16);
+  color: var(--ink);
+}
+.ns-horizon-title {
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.ns-horizon-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ns-horizon-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: var(--fs-body);
+}
+.ns-horizon-row .ns-horizon-input {
+  width: 72px;
   flex: none;
-  color: var(--rail-ink);
+  text-align: right;
+}
+.ns-horizon-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ns-horizon-preset {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.ns-horizon-preset:hover {
+  background: var(--bg);
+}
+.ns-horizon-preset.active {
+  background: var(--chip);
+  border-color: var(--border-strong);
+  font-weight: 500;
+}
+.ns-horizon-result {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ns-horizon-note {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 /* The search field standing in for the old bare "⌘K" stub — a real
@@ -1701,6 +1818,55 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-row-child:hover {
   background: #fafcfd;
+}
+/* One line inside an expanded life-change row (docs/REDESIGN-V4.md §1.5):
+   indented past its parent's caret, a step quieter. */
+.ns-row-grandchild > div {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-row-grandchild > div:first-child {
+  padding-left: 58px;
+}
+.ns-group-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-left: -22px;
+}
+.ns-group-cell > .ns-line-cell {
+  min-width: 0;
+  flex: 1;
+}
+.ns-group-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ns-group-toggle:hover {
+  color: var(--ink);
+  background: var(--chip);
+}
+.ns-group-toggle svg {
+  transition: transform 160ms var(--ease-soft);
+}
+.ns-group-toggle[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ns-group-toggle svg {
+    transition: none;
+  }
 }
 .ns-row-child > div {
   padding: 10px 20px 10px 34px;
@@ -4014,6 +4180,12 @@ html.ns-tauri .ns-drag-strip {
   stroke: var(--border-strong);
   stroke-width: 1;
 }
+.ns-mini-mark {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.5;
+}
 /* B2's "beyond plan horizon" marker — a lighter band, not a new hue (colour
    stays reserved for data), over the region Retirement extended the plan
    into just for this view. */
@@ -4078,52 +4250,6 @@ html.ns-tauri .ns-drag-strip {
   height: 10px;
   border-radius: 3px;
   display: inline-block;
-}
-
-/* The cash-flow Sankey (docs/BORROW.md-style port of Northstar v2's
-   Sankey.tsx) — hand-rolled SVG, same tone convention as everywhere else:
-   income green, expense orange, the savings/shortfall balancing flow in the
-   net-worth blue since it is a transfer, not new money either way. */
-.ns-sankey-wrap {
-  /* Its own flush SectionCard now (docs/REDESIGN-V3.md "Cash Flow"), rather
-     than sharing one with the annual table below it — no more internal
-     divider needed under the diagram. */
-  padding: 16px 20px 20px;
-}
-.ns-sankey {
-  display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-.ns-sankey-label {
-  font-size: 11px;
-  fill: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.ns-sankey-hub {
-  fill: var(--border-strong);
-}
-.ns-sankey-node-in {
-  fill: var(--in);
-}
-.ns-sankey-node-out {
-  fill: var(--out);
-}
-.ns-sankey-node-accent {
-  fill: var(--data-nw);
-}
-.ns-sankey-ribbon {
-  opacity: 0.16;
-}
-.ns-sankey-ribbon-in {
-  fill: var(--in);
-}
-.ns-sankey-ribbon-out {
-  fill: var(--out);
-}
-.ns-sankey-ribbon-accent {
-  fill: var(--data-nw);
 }
 
 /* --- House lens: one section per home (docs/REDESIGN-V3.md "House") ------- */

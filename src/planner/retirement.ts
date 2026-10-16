@@ -6,6 +6,7 @@
  * component can't easily be unit tested here, a plain module can.
  */
 import type { Plan, PlanEvent } from '@northstar/engine';
+import { withHorizonAtLeast } from '@northstar/engine';
 
 /** Clamp `value` into `[a, b]`, normalising the bounds first so a degenerate `a > b` never inverts the result. */
 export function clampYear(value: number, a: number, b: number): number {
@@ -15,22 +16,10 @@ export function clampYear(value: number, a: number, b: number): number {
 }
 
 /** A copy of `plan` whose simulated horizon reaches at least `targetEndYear`
-    (B2) — bumping whichever of the two things `runPlan` actually reads
-    determines the horizon (see run.ts): an included `endOfPlan` event's
-    year, if the plan has one, else `settings.projectionYears`. A no-op when
-    the plan already reaches far enough. */
+    (B2). A no-op when the plan already reaches far enough — see the
+    engine's `horizon.ts` for which setting decides the horizon. */
 export function extendPlanHorizon(plan: Plan, targetEndYear: number): Plan {
-  const endOfPlanEvent = plan.events.find((e) => e.kind === 'endOfPlan' && e.isIncluded);
-  if (endOfPlanEvent) {
-    if (endOfPlanEvent.startYear >= targetEndYear) return plan;
-    return {
-      ...plan,
-      events: plan.events.map((e) => (e.id === endOfPlanEvent.id ? { ...e, startYear: targetEndYear } : e)),
-    };
-  }
-  const neededProjectionYears = targetEndYear - plan.settings.startYear + 1;
-  if (neededProjectionYears <= plan.settings.projectionYears) return plan;
-  return { ...plan, settings: { ...plan.settings, projectionYears: neededProjectionYears } };
+  return withHorizonAtLeast(plan, targetEndYear);
 }
 
 /**

@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, PiggyBank } from 'lucide-react';
 import { usePlanner } from '../PlannerContext';
 import { LedgerToolbar, LedgerCompareDiff } from '../LedgerToolbar';
 import { CashFlowTab } from '../tabs/CashFlowTab';
-import { CashFlowSankey } from '../CashFlowSankey';
+import { CashFlowTrend } from '../views/CashFlowTrend';
 import { planMetaLine, money, signedMoney, percent } from '../format';
 import { cashFlowStats, moneyDelta, stubYearLabel } from '../ledger';
 import { Page, PageHeader, StatStrip, Stat, SectionCard, EmptyState } from '../ui';
@@ -19,6 +19,8 @@ export function CashFlowPage() {
   const previous = index > 0 ? years[index - 1] : undefined;
   const stats = snapshot ? cashFlowStats(snapshot, previous) : undefined;
   const stub = snapshot ? stubYearLabel(snapshot.year, plan.settings.startYear, plan.settings.asOfDate) : undefined;
+
+  const firstStub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
 
   const stepYear = (delta: number) => {
     const next = years[index + delta];
@@ -87,11 +89,19 @@ export function CashFlowPage() {
         </StatStrip>
       )}
 
-      <SectionCard title={snapshot ? `Where ${snapshot.year}'s money went` : 'Where the money went'} flush divider={false}>
+      {/* Replaces the single-year Sankey (docs/REDESIGN-V4.md §0 #7): the
+          question is WHEN money gets tight, which one year's flow can't show. */}
+      <SectionCard
+        title="Income, spending and savings"
+        meta={`By year · ${result.startYear}–${result.endYear}`}
+        divider={false}
+      >
         {snapshot ? (
-          <div className="ns-sankey-wrap">
-            <CashFlowSankey snapshot={snapshot} />
-          </div>
+          <CashFlowTrend
+            years={years}
+            markYear={snapshot.year}
+            stubYear={firstStub ? { year: plan.settings.startYear, label: firstStub.short } : undefined}
+          />
         ) : (
           <EmptyState icon={PiggyBank} title="Nothing to show" body="This plan has no projected years yet." />
         )}

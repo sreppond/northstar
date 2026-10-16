@@ -23,6 +23,7 @@
 import type { Participant, Plan, PlanEvent } from './types.js';
 import { runPlan } from './run.js';
 import { pathMarkers } from './markers.js';
+import { withHorizonAtLeast } from './horizon.js';
 import type { RetirementConfig } from './events/work.js';
 
 export interface FreedomAgeCandidate {
@@ -95,28 +96,10 @@ function planForRetirementCandidate(
     config: { ...opts.config, participantId: opts.participantId },
   };
 
-  return {
-    ...plan,
-    events: [
-      ...plan.events.filter((e) => e.kind !== 'retirement' && e.kind !== 'endOfPlan'),
-      candidate,
-      endOfPlanAtLeast(plan, opts.throughYear),
-    ],
-  };
-}
-
-/** The plan's own `endOfPlan` event, pushed out to `throughYear` if it is shorter. */
-function endOfPlanAtLeast(plan: Plan, throughYear: number): PlanEvent {
-  const existing = plan.events.find((e) => e.kind === 'endOfPlan');
-  return {
-    id: existing?.id ?? 'retirement-sweep-horizon',
-    kind: 'endOfPlan',
-    name: existing?.name ?? 'End of plan',
-    startYear: Math.max(existing?.startYear ?? -Infinity, throughYear),
-    isIncluded: true,
-    isRequired: true,
-    config: {},
-  };
+  return withHorizonAtLeast(
+    { ...plan, events: [...plan.events.filter((e) => e.kind !== 'retirement'), candidate] },
+    opts.throughYear,
+  );
 }
 
 // Re-exported only so callers importing from `@northstar/engine` can resolve

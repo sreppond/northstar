@@ -16,3 +16,4 @@ export * from './monarch.js';
 export * from './goals.js';
 export * from './retirement.js';
 export * from './freshness.js';
+export * from './horizon.js';

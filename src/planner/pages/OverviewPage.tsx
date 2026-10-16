@@ -34,6 +34,7 @@ import {
   StatStrip,
   StackedBar,
 } from '../ui';
+import { PlanCheckBanner } from '../PlanCheckBanner';
 import './overview.css';
 
 /**
@@ -199,6 +200,8 @@ export function OverviewPage() {
           </button>
         </div>
       )}
+
+      <PlanCheckBanner />
 
       {freshness.needsRollover && (
         <div className="ns-ov-banner">

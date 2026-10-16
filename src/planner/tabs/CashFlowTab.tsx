@@ -1,10 +1,19 @@
+import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import type { LineItem, PlanEvent, YearSnapshot } from '@northstar/engine';
 import { DataTable, type TableRow } from './DataTable';
 import { tableMoney, signedTableMoney, percent, ZERO_DASH } from '../format';
 import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { GearIcon } from '../icons';
-import { savedThisYear, savingsRateNote, savingsRatePercent, spendingThisYear, stubYearLabel } from '../ledger';
+import {
+  lifeChangeRows,
+  savedThisYear,
+  savingsRateNote,
+  savingsRatePercent,
+  spendingThisYear,
+  stubYearLabel,
+} from '../ledger';
 import type { Detail } from '../detail';
 
 /**
@@ -44,6 +53,59 @@ export function CashFlowTab({
   const years = window.map((y) => y.year);
   const rows: TableRow[] = [];
   const eventById = new Map(events.map((e) => [e.id, e]));
+  // Which life-change rows are open (docs/REDESIGN-V4.md §1.5). Collapsed by
+  // default: the point is one row per decision, with the detail on demand.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  /**
+   * Income or expense lines as life-change rows: one row per event, summed,
+   * expandable into its own lines when it produced more than one.
+   */
+  const pushLines = (prefix: string, lines: GroupedLine[], tone: 'income' | 'cost') => {
+    for (const row of lifeChangeRows(lines, (id) => eventById.get(id))) {
+      const key = `${prefix}-${row.key}`;
+      const open = expanded.has(key);
+      rows.push({
+        key,
+        kind: 'child',
+        label: row.parts ? (
+          <span className="ns-group-cell">
+            <button
+              type="button"
+              className="ns-group-toggle"
+              aria-expanded={open}
+              aria-label={`${open ? 'Collapse' : 'Expand'} ${row.label}`}
+              onClick={() => toggle(key)}
+            >
+              <ChevronRight size={13} strokeWidth={2} aria-hidden />
+            </button>
+            {rowLabel(row.label, row.sourceEventId)}
+          </span>
+        ) : (
+          rowLabel(row.label, row.sourceEventId)
+        ),
+        cells: row.cells.map(tableMoney),
+        values: row.cells,
+        bar: { tone, direction: 'diverging' },
+      });
+      if (!row.parts || !open) continue;
+      for (const part of row.parts) {
+        rows.push({
+          key: `${key}-${part.label}`,
+          kind: 'grandchild',
+          label: part.label,
+          cells: part.cells.map(tableMoney),
+        });
+      }
+    }
+  };
 
   /**
    * Every cash flow row carries a gear, and it always leads somewhere useful:
@@ -80,20 +142,11 @@ export function CashFlowTab({
     label: 'Income',
     cells: window.map((y) => tableMoney(y.totalIncome)),
   });
-  for (const { label, cells, sourceEventId } of groupLines(window, (y) => y.income)) {
-    rows.push({
-      key: `i-${label}`,
-      kind: 'child',
-      label: rowLabel(label, sourceEventId),
-      cells: cells.map(tableMoney),
-      // Diverging (docs/REDESIGN.md §4.1): every income line grows toward
-      // the SAME side, from a baseline shared across the whole table, so
-      // the table as a whole reads as one two-sided chart rather than each
-      // row inventing its own zero point the way Accounts' bars do.
-      values: cells,
-      bar: { tone: 'income', direction: 'diverging' },
-    });
-  }
+  // Diverging (docs/REDESIGN.md §4.1): every income line grows toward the
+  // SAME side, from a baseline shared across the whole table, so the table
+  // as a whole reads as one two-sided chart rather than each row inventing
+  // its own zero point the way Accounts' bars do.
+  pushLines('i', groupLines(window, (y) => y.income), 'income');
 
   const expenseTotals = window.map((y) => spendingThisYear(y) + y.totalTaxes);
   rows.push({
@@ -110,16 +163,7 @@ export function CashFlowTab({
     values: window.map((y) => y.totalTaxes),
     bar: { tone: 'cost', direction: 'diverging' },
   });
-  for (const { label, cells, sourceEventId } of groupLines(window, (y) => y.expenses)) {
-    rows.push({
-      key: `e-${label}`,
-      kind: 'child',
-      label: rowLabel(label, sourceEventId),
-      cells: cells.map(tableMoney),
-      values: cells,
-      bar: { tone: 'cost', direction: 'diverging' },
-    });
-  }
+  pushLines('e', groupLines(window, (y) => y.expenses), 'cost');
 
   const hasWithdrawals = window.some((y) => y.withdrawals.length > 0);
   if (hasWithdrawals) {

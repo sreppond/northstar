@@ -8,7 +8,7 @@
  * `planFreshness` isn't: `today` is an explicit argument so this stays as
  * testable as everything else this package derives.
  */
-import { accountExistsIn, runPlan, type Plan } from '@northstar/engine';
+import { accountExistsIn, planEndYear, runPlan, type Plan } from '@northstar/engine';
 
 /** `rollForward`'s result: the rolled plan, plus the metadata the UI needs to
     be honest about where the new balances came from (W3#4). */
@@ -85,13 +85,11 @@ export function rollForward(plan: Plan, today: Date): RollForwardResult {
   const oldStartYear = plan.settings.startYear;
   if (newStartYear <= oldStartYear) return { plan };
 
-  const endOfPlanEvent = plan.events.find((e) => e.kind === 'endOfPlan' && e.isIncluded);
-  // Mirrors `run.ts`'s own `endYear` derivation exactly, so this shrinks
-  // `projectionYears` by precisely the amount that keeps that formula
-  // landing on the SAME `endYear` afterward.
-  const oldEndYear = endOfPlanEvent
-    ? Math.max(oldStartYear, endOfPlanEvent.startYear)
-    : oldStartYear + Math.max(1, plan.settings.projectionYears) - 1;
+  // The same `planEndYear` `run.ts` uses, so this shrinks `projectionYears`
+  // by precisely the amount that keeps a projectionYears-only plan landing
+  // on the SAME `endYear` afterward (a `horizon` setting or `endOfPlan`
+  // event is absolute and unaffected either way).
+  const oldEndYear = planEndYear(plan);
 
   const newProjectionYears = Math.max(1, oldEndYear - newStartYear + 1);
 

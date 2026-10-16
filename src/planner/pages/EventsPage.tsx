@@ -7,6 +7,7 @@ import { planMetaLine } from '../format';
 import { eventStats } from '../ledger';
 import { rankImpact } from '../NetWorthChart';
 import { Page, PageHeader, StatStrip, Stat, SectionCard, EmptyState } from '../ui';
+import { PlanCheckBanner } from '../PlanCheckBanner';
 import './ledger.css';
 
 export function EventsPage() {
@@ -28,6 +29,8 @@ export function EventsPage() {
   return (
     <Page>
       <PageHeader title="Events" meta={planMetaLine(stored, result.endYear)} actions={addEventButton} />
+
+      <PlanCheckBanner />
 
       <StatStrip>
         <Stat

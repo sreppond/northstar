@@ -28,6 +28,7 @@ import {
   scheduledAnnualPayment,
 } from './accounts.js';
 import { annuityFeeForYear } from './annuity.js';
+import { planEndYear } from './horizon.js';
 import { sweepAllocationLabel } from './goals.js';
 import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
@@ -50,12 +51,9 @@ export function runPlan(plan: Plan): PlanResult {
   const startYear = settings.startYear;
 
   // --- resolve the horizon before compiling ---------------------------------
-  // `endOfPlan` sets it; otherwise fall back to projectionYears. Compilation
-  // needs the horizon, so this cannot wait for the compile pass.
-  const endOfPlanEvent = plan.events.find((e) => e.kind === 'endOfPlan' && e.isIncluded);
-  const endYear = endOfPlanEvent
-    ? Math.max(startYear, endOfPlanEvent.startYear)
-    : startYear + Math.max(1, settings.projectionYears) - 1;
+  // `horizon.ts` owns the precedence (setting > endOfPlan > projectionYears).
+  // Compilation needs the horizon, so this cannot wait for the compile pass.
+  const endYear = planEndYear(plan);
 
   const inflationAt = (year: number) =>
     Math.pow(1 + settings.inflationRate / 100, year - startYear);

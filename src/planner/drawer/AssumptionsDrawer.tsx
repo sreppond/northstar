@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Account, Goal, Plan, PriorityRule, RuleType } from '@northstar/engine';
-import { ACCOUNT_TYPES, isWithdrawable, mergeGoalRules, runPlan } from '@northstar/engine';
+import { ACCOUNT_TYPES, isWithdrawable, mergeGoalRules, runPlan, withHorizon } from '@northstar/engine';
 import { signedMoney, signedPercent } from '../format';
 import { Choice, Field, NumberInput } from './fields';
 import { GoalWaterfall } from './GoalWaterfall';
+import { HorizonFields } from '../HorizonControl';
 
 /**
  * Plan-level assumptions, the household, the Goals waterfall, and — behind a
@@ -122,6 +123,11 @@ export function AssumptionsDrawer({ draft, saved, accounts, onChange, onSave, on
                 onChange={(e) => setSetting('asOfDate', e.target.value || undefined)}
               />
             </Field>
+
+            <div className="ns-field">
+              <span className="ns-field-label">Plan runs</span>
+              <HorizonFields plan={draft} onChange={(h) => onChange(withHorizon(draft, h))} />
+            </div>
 
             <Field label="Yearly living expenses" impact={<Impact field={impacts.baselineExpenses} unit="currency" />}>
               <NumberInput

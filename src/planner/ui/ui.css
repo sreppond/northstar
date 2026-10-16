@@ -846,3 +846,41 @@
     width: 100%;
   }
 }
+
+/* Plan check banner (docs/REDESIGN-V4.md §1.8) — the same quiet row as
+   Overview's own banners, with a warn-toned glyph so it reads as "this
+   forecast is missing something", not as an error. */
+.ns-check-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: 13px;
+  color: var(--ink);
+}
+.ns-check-banner-icon {
+  flex: none;
+  color: var(--warn);
+}
+.ns-check-banner-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+}
+.ns-check-banner .ns-btn {
+  flex: none;
+}
+@media (max-width: 560px) {
+  .ns-check-banner {
+    flex-wrap: wrap;
+  }
+  .ns-check-banner-text {
+    flex-basis: calc(100% - 30px);
+  }
+  .ns-check-banner .ns-btn {
+    margin-left: 25px;
+  }
+}

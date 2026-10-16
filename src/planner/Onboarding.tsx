@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { newAccountOfType } from '@northstar/engine';
+import { newAccountOfType, planEndYear as resolvePlanEndYear } from '@northstar/engine';
 import type { Account } from '@northstar/engine';
 import { usePlanStore } from './store/planStore';
 import { AccountDrawer } from './drawer/AccountDrawer';
@@ -94,8 +94,7 @@ export function Onboarding({ onBegin, onFinish }: { onBegin(): void; onFinish():
     );
   }
 
-  const planEndYear =
-    plan.events.find((e) => e.kind === 'endOfPlan')?.startYear ?? plan.settings.startYear + 20;
+  const planEndYear = resolvePlanEndYear(plan);
 
   return (
     <div className="ns ns-auth-page">

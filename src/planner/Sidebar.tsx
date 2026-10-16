@@ -22,6 +22,8 @@ import { useBreakpoint } from './useBreakpoint';
 import { ThemeToggle } from './ThemeToggle';
 import { HeaderMenu } from './HeaderMenu';
 import { isTauri } from './monarchLocal';
+import { HorizonButton } from './HorizonControl';
+import { planEndYear, withHorizon } from '@northstar/engine';
 
 /**
  * The persistent nav rail's destinations, regrouped for v3
@@ -164,17 +166,17 @@ function MobileTopBar({
   );
 }
 
-/** The plan switcher trigger: name + a mono "2026–2046 · 21 yrs" sub-label
-    + a chevron, opening the existing plan-management overlay unchanged.
-    `compact` drops the sub-label for the mobile top bar, which has no
-    room for a second line next to the brand mark and menu button. */
+/** The plan switcher trigger: name + a chevron, opening the existing
+    plan-management overlay unchanged. On the desktop rail it shares its box
+    with the horizon button ("2026–2091 · to age 95"), which opens the
+    horizon popover (docs/REDESIGN-V4.md §3) — the sub-label used to be a
+    read-only figure, which is exactly why nobody could find where the
+    horizon was set. `compact` (the mobile top bar) has no room for the
+    second line; the horizon stays reachable from Settings there. */
 function PlanSwitcherTrigger({ compact }: { compact?: boolean }) {
-  const { stored, result, setSidebarOpen } = usePlanner();
-  // +1: both end points count (X1, docs/REDESIGN-V3.md review) — 2026-2046
-  // is 21 plan years, not the 20 a bare subtraction gives.
-  const years = result.endYear - stored.settings.startYear + 1;
+  const { stored, setSidebarOpen, replacePlan } = usePlanner();
 
-  return (
+  const trigger = (
     <button
       type="button"
       className={`ns-rail-plan${compact ? ' ns-rail-plan-compact' : ''}`}
@@ -183,14 +185,26 @@ function PlanSwitcherTrigger({ compact }: { compact?: boolean }) {
     >
       <span className="ns-rail-plan-text">
         <span className="ns-rail-plan-name">{stored.name}</span>
-        {!compact && (
-          <span className="ns-rail-plan-sub ns-num">
-            {stored.settings.startYear}–{result.endYear} · {years} yrs
-          </span>
-        )}
       </span>
       <ChevronsUpDown size={14} strokeWidth={1.75} aria-hidden className="ns-rail-plan-chevron" />
     </button>
+  );
+  if (compact) return trigger;
+
+  return (
+    <div className="ns-rail-planbox">
+      {trigger}
+      <HorizonButton
+        plan={stored}
+        onApply={(horizon) => {
+          const next = withHorizon(stored, horizon);
+          const end = planEndYear(next);
+          // Switching "until an age" ↔ "through a year" can land on the same
+          // year — still worth saving, not worth announcing.
+          replacePlan(next, end !== planEndYear(stored) ? `Plan now runs through ${end}` : undefined);
+        }}
+      />
+    </div>
   );
 }
 

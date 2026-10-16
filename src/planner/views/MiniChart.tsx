@@ -39,6 +39,15 @@ export interface ChartSeries {
   values: number[];
   /** Fills the area under the line, for the one series that reads as a volume. */
   fill?: boolean;
+  /** The area's lower edge, index for index — 0 when unset. A stacked chart
+      (Accounts' balances by bucket) passes the layer below's running total,
+      so each fill covers only its own band rather than reaching to zero. */
+  fillTo?: number[];
+  /** Fill opacity — 0.14 by default, a wash under one line. A stacked chart's
+      bands ARE the data and need to read as solid colour. */
+  fillOpacity?: number;
+  /** Line width in px; 0 draws the fill alone. Defaults to 2. */
+  lineWidth?: number;
   dashed?: boolean;
   /** A filled dot at every real (non-`NaN`) data point — Progress's "actual"
       series, where each point is a real logged reading rather than an
@@ -174,6 +183,7 @@ export function MiniChart({
   bandFrom,
   bandLabel,
   stubYear,
+  markYear,
 }: {
   /** The shared x-domain every series' `values` is sampled at, index for
       index — real numeric positions (a plain year, or Progress's fractional
@@ -207,6 +217,9 @@ export function MiniChart({
       letting a partial year's chart pass as a full one. Built from
       `stubYearLabel` (`ledger.ts`) so every page uses the same wording. */
   stubYear?: { year: number; label: string };
+  /** A dashed vertical rule at this x-domain value — the year a page is
+      currently looking at (Cash Flow's year stepper). */
+  markYear?: number;
 }) {
   const [containerRef, width] = useMeasuredWidth();
 
@@ -250,8 +263,16 @@ export function MiniChart({
     return d.trim();
   };
 
-  const areaFor = (values: number[], stepAt?: number) => {
+  const areaFor = (values: number[], stepAt?: number, fillTo?: number[]) => {
     if (!values.every(Number.isFinite)) return '';
+    if (fillTo) {
+      // Back along the lower edge, right to left, closing the band.
+      const back = fillTo
+        .map((v, i) => `L${xFor(i).toFixed(1)},${yFor(v).toFixed(1)}`)
+        .reverse()
+        .join(' ');
+      return `${pathFor(values, stepAt)} ${back} Z`;
+    }
     return `${pathFor(values, stepAt)} L${xFor(values.length - 1).toFixed(1)},${yFor(0).toFixed(1)} L${xFor(0).toFixed(1)},${yFor(0).toFixed(1)} Z`;
   };
 
@@ -341,6 +362,16 @@ export function MiniChart({
           <line x1={LEFT} x2={RIGHT_EDGE} y1={zeroY} y2={zeroY} className="ns-mini-zero" />
         )}
 
+        {markYear !== undefined && markYear >= xMin && markYear <= xMax && (
+          <line
+            x1={LEFT + ((markYear - xMin) / xSpan) * (RIGHT_EDGE - LEFT)}
+            x2={LEFT + ((markYear - xMin) / xSpan) * (RIGHT_EDGE - LEFT)}
+            y1={TOP}
+            y2={BOTTOM}
+            className="ns-mini-mark"
+          />
+        )}
+
         {xTicks.map(({ y, i, label }) => {
           // The end ticks anchor inward rather than centering, or their label
           // would overhang past the plot's edge (and the card holding it).
@@ -360,21 +391,29 @@ export function MiniChart({
 
         {series.map((s) =>
           s.fill ? (
-            <path key={s.label} d={areaFor(s.values, s.stepAt)} fill={s.color} opacity={0.14} stroke="none" />
+            <path
+              key={s.label}
+              d={areaFor(s.values, s.stepAt, s.fillTo)}
+              fill={s.color}
+              opacity={s.fillOpacity ?? 0.14}
+              stroke="none"
+            />
           ) : null,
         )}
-        {series.map((s) => (
+        {series.map((s) =>
+          s.lineWidth === 0 ? null : (
           <path
             key={s.label}
             d={pathFor(s.values, s.stepAt)}
             fill="none"
             stroke={s.color}
-            strokeWidth={2}
+            strokeWidth={s.lineWidth ?? 2}
             strokeDasharray={s.dashed ? '5 4' : undefined}
             strokeLinejoin="round"
             strokeLinecap="round"
           />
-        ))}
+          ),
+        )}
         {series.map((s) =>
           s.dots
             ? s.values.map((v, i) =>

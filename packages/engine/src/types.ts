@@ -260,6 +260,15 @@ export interface Goal {
   linkedEventId?: string;
 }
 
+/**
+ * The plan's horizon as a household thinks of it: a calendar year, or "until
+ * someone turns N". `age` with no `participantId` means the YOUNGEST
+ * included participant — the one whose life the plan must outlast.
+ */
+export type HorizonSetting =
+  | { mode: 'year'; year: number }
+  | { mode: 'age'; age: number; participantId?: string };
+
 export interface PlanSettings {
   startYear: number;
   /**
@@ -273,6 +282,13 @@ export interface PlanSettings {
    * first always gets regardless.
    */
   asOfDate?: string;
+  /**
+   * How far the projection runs (docs/REDESIGN-V4.md §3). When set it wins
+   * over both an `endOfPlan` event and `projectionYears` — see `horizon.ts`.
+   * Unset on every plan saved before it existed, which keep resolving the
+   * old way.
+   */
+  horizon?: HorizonSetting;
   projectionYears: number;
   /** Percent per year. Applied to baseline flows and any event marked inflating. */
   inflationRate: number;
