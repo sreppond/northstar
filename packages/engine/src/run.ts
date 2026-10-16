@@ -34,6 +34,8 @@ import { sweepAllocationLabel } from './goals.js';
 import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
 import { requiredMinimumDistribution, RMD_START_AGE } from './rmd.js';
+import { mandatoryEndYear, seppMethodPayment } from './sepp.js';
+import { costBasisTax, proRataTax } from './tax.js';
 import {
   type CashFlowItem,
   type CompileContext,
@@ -178,6 +180,8 @@ export function runPlan(plan: Plan): PlanResult {
   // Cost-basis accounts only (docs/PLAN.md §4.5a): remaining after-tax
   // principal, which only ever falls as withdrawals draw it down.
   const remainingBasis = new Map<string, number>();
+  // A fixed-method SEPP's payment, locked in the year it starts (sepp.ts).
+  const seppFixedPayment = new Map<string, number>();
   const years: YearSnapshot[] = [];
 
   // --- phase B: simulate -----------------------------------------------------
@@ -335,6 +339,18 @@ export function runPlan(plan: Plan): PlanResult {
       }
     }
 
+    // 5.5. SEPP LOCK -- an account inside its committed SEPP window
+    //      (Account.seppElection) takes no contributions and no ordinary
+    //      withdrawals this year; its payment is step 7.6.
+    const seppLocked = new Set<string>();
+    for (const account of accounts) {
+      const e = account.seppElection;
+      if (!e || account.isLiability || closed.has(account.id) || !accountExistsIn(account, year)) continue;
+      const age = ageForAccount(account.id, year);
+      if (age === undefined) continue;
+      if (year >= e.startYear && year <= mandatoryEndYear(e.startYear, year - age)) seppLocked.add(account.id);
+    }
+
     // 6. CONTRIBUTIONS -- standing plus event-driven. Employer match never
     //    touches cash flow.
     const contributionsThisYear: ContributionItem[] = [];
@@ -343,7 +359,7 @@ export function runPlan(plan: Plan): PlanResult {
 
     if (!contributionsStopped) {
       for (const account of accounts) {
-        if (account.isLiability || closed.has(account.id)) continue;
+        if (account.isLiability || closed.has(account.id) || seppLocked.has(account.id)) continue;
         if (!accountExistsIn(account, year)) continue;
         const standing = (account.yearlyPaycheckContribution ?? 0) * yearFraction;
         if (standing <= EPSILON) continue;
@@ -364,7 +380,7 @@ export function runPlan(plan: Plan): PlanResult {
         });
       }
       for (const c of contributionsByYear.get(year) ?? []) {
-        if (closed.has(c.accountId)) continue;
+        if (closed.has(c.accountId) || seppLocked.has(c.accountId)) continue;
         contributionsThisYear.push(
           c.recurring ? { ...c, amount: c.amount * yearFraction } : c,
         );
@@ -441,6 +457,55 @@ export function runPlan(plan: Plan): PlanResult {
       }
     }
 
+    // 7.6. SEPP -- the committed payment, paid before the shortfall waterfall
+    //      can draw on anything (docs/REDESIGN-V4.md §4.8). No penalty: that
+    //      is the whole point of the exception. Gain comes out first for a
+    //      nonqualified contract (LIFO), pro-rata for a qualified one —
+    //      the same split `priority.ts` uses for an ordinary withdrawal.
+    for (const account of accounts) {
+      if (!seppLocked.has(account.id)) continue;
+      const e = account.seppElection!;
+      const age = ageForAccount(account.id, year)!;
+      const open = balances.get(account.id) ?? 0;
+      if (open <= EPSILON) continue;
+
+      let payment: number;
+      if (e.method === 'rmd') {
+        payment = seppMethodPayment(open, age, 'rmd', e.ratePercent).annualPayment;
+      } else {
+        if (!seppFixedPayment.has(account.id)) {
+          seppFixedPayment.set(account.id, e.annualPayment ?? seppMethodPayment(open, age, e.method, e.ratePercent).annualPayment);
+        }
+        payment = seppFixedPayment.get(account.id)!;
+      }
+      const amount = Math.min(open, payment * yearFraction);
+      if (amount <= EPSILON) continue;
+
+      const rate = account.withdrawalTaxRate / 100;
+      const basis = remainingBasis.get(account.id);
+      let tax: number;
+      if (basis !== undefined) {
+        const split = (account.isQualifiedAnnuity ? proRataTax : costBasisTax)(amount, open, basis, rate);
+        tax = split.tax;
+        remainingBasis.set(account.id, Math.max(0, basis - split.basisUsed));
+      } else {
+        tax = amount * rate * (Math.min(100, Math.max(0, account.taxableWithdrawalPercent)) / 100);
+      }
+
+      balances.set(account.id, open - amount);
+      withdrawalsByAccount.set(account.id, (withdrawalsByAccount.get(account.id) ?? 0) + amount);
+      income.push({
+        label: `SEPP — ${account.name}`,
+        amount,
+        accountId: account.id,
+        category: 'sepp',
+        ...(account.ownerParticipantId ? { ownerId: account.ownerParticipantId } : {}),
+      });
+      if (tax > EPSILON) {
+        taxes.push({ label: `SEPP tax — ${account.name}`, amount: tax, accountId: account.id, category: 'tax' });
+      }
+    }
+
     // 8. NET
     const totalIncome = sum(income.map((l) => l.amount));
     const expenseTotal = sum(expenses.map((l) => l.amount));
@@ -455,6 +520,7 @@ export function runPlan(plan: Plan): PlanResult {
       remainingBasis,
       ageForAccount: (id) => ageForAccount(id, year),
       planStartYear: startYear,
+      lockedAccountIds: seppLocked,
     };
 
     const contributionsByAccount = new Map<string, number>();

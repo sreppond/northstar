@@ -716,3 +716,86 @@
   background: var(--out-tint);
   color: var(--out-deep);
 }
+
+/* --- annuity & SEPP (docs/REDESIGN-V4.md §4.8) ----------------------------- */
+.ns-sepp-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ns-sbars svg {
+  display: block;
+  outline: none;
+}
+.ns-sbars svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.ns-sbars-col {
+  cursor: pointer;
+}
+.ns-sbars-bar {
+  fill: color-mix(in srgb, var(--data-nw) 38%, var(--surface));
+  transition: fill 120ms var(--ease-soft);
+}
+.ns-sbars-col:hover .ns-sbars-bar {
+  fill: color-mix(in srgb, var(--data-nw) 60%, var(--surface));
+}
+.ns-sbars-bar-selected,
+.ns-sbars-col:hover .ns-sbars-bar-selected {
+  fill: var(--data-nw);
+}
+.ns-sepp-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+.ns-sepp-foot .ns-hh-note {
+  margin: 0;
+}
+.ns-sepp-rate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-sepp-rate .ns-input-wrap,
+.ns-sepp-rate input {
+  width: 110px;
+}
+.ns-sepp-table-wrap {
+  max-height: 520px;
+  overflow: auto;
+}
+.ns-sepp-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+.ns-sepp-table td,
+.ns-sepp-table th {
+  padding: 8px 12px;
+}
+.ns-sepp-table td:first-child,
+.ns-sepp-table th:first-child {
+  padding-left: 20px;
+}
+.ns-sepp-locked td {
+  background: color-mix(in srgb, var(--data-nw) 6%, var(--surface));
+}
+.ns-sepp-warning {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--warn);
+  background: var(--surface-sub);
+  border-radius: 0 8px 8px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--child-ink);
+}

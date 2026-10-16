@@ -731,6 +731,33 @@ green. Each phase ends with a Tauri rebuild so the installed app shows it.
   - `NAV_ITEMS` moved to `nav.ts`, breaking the Sidebar ↔ shortcuts cycle
     that broke hot reload.
 
-**Next — Phase 4 (Annuity & SEPP).** Known gaps:
+**Phase 4 — Annuity & SEPP, Oct 16, 2026.**
+- **Tables:** `seppTables.ts` is ported from v2's verified copy. The Single
+  Life Table now covers ages 0–120 and fixes v1's values at ages 41/43/47/49
+  (44.8 / 42.9 / 39.0 / 37.1). A test re-derives it from the mortality table
+  (curtate + ½).
+- **Engine:** `Account.seppElection` (start year, method, rate, optional
+  pinned payment).
+  - Step 5.5 locks the account from its start through the later of 5 years
+    or age 60: no contributions, and nothing from the allocation or
+    withdrawal rules.
+  - Step 7.6 pays it before the waterfall: no penalty, gain first (LIFO) for
+    nonqualified, pro-rata for qualified, contract fees still deducted.
+  - Fixed methods lock the payment in the first year; RMD recomputes it
+    every year.
+  - Helpers: `withSeppElection`, `seppStartOptions` (largest payment per
+    start year, sized on that year's projected balance) and `seppYearRows`.
+- **Annuity & SEPP page:**
+  - One-sentence answer and a stat strip.
+  - Largest SEPP by start year (bars, click or ←/→), with the method and an
+    interest rate that is capped and explained.
+  - With vs without chart, windowed through the lock + 10 years: balance
+    both ways, paid out so far, and basis left.
+  - Year-by-year table with the lock years shaded.
+  - Impact strip with Keep / Save as scenario / Reset, or Remove the SEPP
+    once kept, plus a commitment warning.
+  - Contract details below, following the selected account.
+
+**Next — Phase 5 (Retirement).** Known gaps:
 - Retirement still stops every standing contribution household-wide.
 - "Budget by year" draws the plan, not the draft.
