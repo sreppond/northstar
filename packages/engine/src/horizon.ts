@@ -37,7 +37,9 @@ export function planEndYear(plan: Pick<Plan, 'settings' | 'events' | 'participan
 export function horizonYear(horizon: HorizonSetting, participants: Participant[]): number | undefined {
   if (horizon.mode === 'year') return horizon.year;
 
-  const included = participants.filter((p) => p.isIncluded);
+  // Adults only: the plan has to outlast the household's lifetimes, not run
+  // until a newborn turns 95.
+  const included = participants.filter((p) => p.isIncluded && p.role !== 'child');
   if (horizon.participantId) {
     const p = included.find((x) => x.id === horizon.participantId);
     return p ? p.birthYear + horizon.age : undefined;

@@ -17,7 +17,19 @@ export interface CashFlowItem {
   kind: 'income' | 'expense';
   amount: number;
   label: string;
-  sourceEventId: string;
+  /** Unset only for a budget line's flows, which carry `budgetLineId` instead. */
+  sourceEventId?: string;
+  /** Whose line this is (a participant id); unset means the household's. */
+  ownerId?: string;
+  budgetLineId?: string;
+  /** Budget lines only: fixed / non-discretionary. */
+  essential?: boolean;
+  /**
+   * Expense only: scaled by the year's spending multipliers (retirement's
+   * "spend 20% less", a career break's change). Baseline living expenses
+   * always are; a budget line is unless it belongs to a child.
+   */
+  scalesWithSpending?: boolean;
   /** Income only: subject to `incomeTaxRate`. */
   taxable?: boolean;
   /** Income only: wages, which retirement and career breaks suppress. */
@@ -44,6 +56,8 @@ export interface ContributionItem {
   fromPaycheck: boolean;
   /** Reduces taxable income (traditional 401k and similar). */
   pretax: boolean;
+  ownerId?: string;
+  budgetLineId?: string;
   /** See `CashFlowItem.recurring`. */
   recurring?: boolean;
 }
@@ -61,6 +75,13 @@ export interface ContributionItem {
 export interface IncomeSuppression {
   fromYear: number;
   toYear: number;
+  /**
+   * Whose income this cuts. Set, it leaves alone any line owned by someone
+   * else — Spencer retiring does not stop Sarah's salary — while lines with
+   * no owner (baseline income, unassigned events) are still cut, exactly as
+   * every suppression always did.
+   */
+  participantId?: string;
   /** 0 = income fully stops; 60 = it drops to 60% of what it would have been. */
   replacementPercent: number;
   sourceEventId: string;
@@ -122,6 +143,8 @@ export interface CompiledEvent {
 export interface CompileContext {
   settings: PlanSettings;
   participants: Participant[];
+  /** Every event in the plan — for resolving an `Anchor` to another event. */
+  events: PlanEvent[];
   startYear: number;
   /** Last year of the projection, resolved before other events compile. */
   endYear: number;

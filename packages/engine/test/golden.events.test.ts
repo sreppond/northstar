@@ -91,10 +91,10 @@ describe('Golden: home appreciation and purchase costs', () => {
 
     const upkeep2027 = result.years
       .find((y) => y.year === 2027)!
-      .expenses.find((e) => e.label.includes('upkeep'))!;
+      .expenses.find((e) => e.label.includes('property tax'))!;
     const upkeep2028 = result.years
       .find((y) => y.year === 2028)!
-      .expenses.find((e) => e.label.includes('upkeep'))!;
+      .expenses.find((e) => e.label.includes('property tax'))!;
 
     // Hand check: elapsedYears(2027) = f + (2027 - 2026 - 1) = f ≈ 0.50137.
     // value2027 = 1,000,000 * 1.04^f ≈ 1,019,858.70, propertyTax ≈ 11,218.45.

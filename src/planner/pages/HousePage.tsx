@@ -3,6 +3,7 @@ import { usePlanner } from '../PlannerContext';
 import { HouseForecastView } from '../views/HouseForecastView';
 import { planMetaLine } from '../format';
 import { EmptyState, Page, PageHeader } from '../ui';
+import { PlanCheckBanner } from '../PlanCheckBanner';
 
 export function HousePage() {
   const { plan, result, stored, editor } = usePlanner();
@@ -11,6 +12,7 @@ export function HousePage() {
   return (
     <Page>
       <PageHeader title="House" meta={planMetaLine(stored, result.endYear)} />
+      <PlanCheckBanner only={['rent-after-purchase']} />
 
       {hasHome ? (
         <HouseForecastView plan={plan} result={result} />

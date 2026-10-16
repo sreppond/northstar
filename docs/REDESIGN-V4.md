@@ -628,7 +628,40 @@ green. Each phase ends with a Tauri rebuild so the installed app shows it.
   chart by year. Table rows are grouped per life change and can be
   expanded.
 
-Not yet done from §5: the `buyAHome` carrying cost is still one line
-(splitting it touches golden tests, so it moves to Phase 1 with the rest of
-the model work). The `/mo` and today's-dollar toggles land with the Budget
-page in Phase 2.
+**Phase 1 — household model, Oct 16, 2026.**
+- Engine (all additive; plans saved before this behave exactly as they did):
+  - `Participant.role` (adult / child). Children never set the horizon or
+    own accounts.
+  - `Anchor` + `anchors.ts`: a year, "when <event>" (+offset), or "when
+    <person> is N".
+  - `BudgetLine` + `budget.ts`: amounts are monthly or one-time, in today's
+    dollars. Each line has an owner, a category and an essential flag, and
+    is a spend or a save. It compiles into the same flows as events.
+    Retirement and career-break spending changes scale adult and shared
+    lines but not a child's.
+  - `LineItem.ownerId / budgetLineId / essential`.
+  - Ownership:
+    - `participantId` on job, newJob, income and careerBreak.
+    - Suppressions are owner-aware, so one partner retiring or switching
+      jobs no longer cuts the other's pay.
+    - `job.phases` (full / part / leave / off, anchored) scale salary, bonus
+      and 401(k).
+  - `buyAHome` now emits property tax, insurance, upkeep and HOA as separate
+    lines.
+- App:
+  - "Work over time" editor in the job drawer, with "when <event>" starts.
+  - A "Person" picker on income-type events.
+  - More plan checks: rent after purchase, wage-like income not marked
+    earned, unowned income with two adults, and a fixed return ≥ 12%.
+  - Event hover cards summarize schedules instead of printing "[object
+    Object]".
+  - `toHouseholdModel` (src/planner/household.ts) migrates kids → child
+    members + age-anchored lines, living expenses → "Other shared
+    spending", and pay → its owner where the name makes it unambiguous.
+    It's tested to keep net worth identical year by year where the
+    semantics match.
+
+**Next — Phase 2.** The Budget and Family pages are where the migration is
+offered, with its review step (`changes` / `needsReview`). The `/mo` and
+today's-dollar toggles land there too. Known gap: retirement still stops
+every standing contribution household-wide, not just the retiree's.

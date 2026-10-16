@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { PlanEvent } from '../types.js';
+import { anchorSchema, resolveAnchor } from '../anchors.js';
+import type { Anchor, PlanEvent } from '../types.js';
 import {
   type CompileContext,
   type CompiledEvent,
@@ -18,6 +19,8 @@ import {
  * schedules (docs/REDESIGN.md §2.1).
  */
 const employmentFields = {
+  /** Whose job this is. Unset on plans from before ownership existed. */
+  participantId: z.string().optional(),
   salary: z.number().min(0),
   bonusPercent: z.number().min(0).default(0),
   /** Paid once, in the first year. */
@@ -70,8 +73,41 @@ export const jobConfig = z.object({
       }),
     )
     .default([]),
+  /**
+   * How much of the job is worked, over time (docs/REDESIGN-V4.md §4.3):
+   * full-time until the first phase, then each phase until the next. A leave
+   * or a part-time stretch scales salary, bonus and 401(k) together — RSU
+   * vests and a signing bonus are already earned and are left alone. A
+   * phase's start is an `Anchor`, so "leave from when the baby arrives"
+   * moves with the baby.
+   */
+  phases: z
+    .array(
+      z.object({
+        from: anchorSchema,
+        mode: z.enum(['full', 'part', 'leave', 'off']),
+        /** Part-time: share of full pay (default 60). Leave: share paid (default 0). */
+        percent: z.number().min(0).max(100).optional(),
+      }),
+    )
+    .default([]),
 });
 export type JobConfig = z.infer<typeof jobConfig>;
+export type WorkPhase = JobConfig['phases'][number];
+
+/** Share of full pay a phase pays. */
+export function workPhaseShare(phase: Pick<WorkPhase, 'mode' | 'percent'>): number {
+  switch (phase.mode) {
+    case 'full':
+      return 1;
+    case 'part':
+      return (phase.percent ?? 60) / 100;
+    case 'leave':
+      return (phase.percent ?? 0) / 100;
+    case 'off':
+      return 0;
+  }
+}
 
 /**
  * The one compiler both kinds run through. `newJob` calls it with empty
@@ -81,6 +117,27 @@ export type JobConfig = z.infer<typeof jobConfig>;
 function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileContext): CompiledEvent {
   const out = emptyCompiled(event.id);
   const end = config.endYear ?? ctx.endYear;
+  const ownerId = config.participantId;
+
+  // Phases resolved once, earliest first; an anchor that resolves to nothing
+  // (its event switched off) simply drops out.
+  const phases = config.phases
+    // The cast only matters to a non-strict consumer (the app's tsconfig),
+    // where zod infers every object field as optional.
+    .map((p) => ({
+      year: resolveAnchor(p.from as Anchor, { events: ctx.events, participants: ctx.participants }),
+      share: workPhaseShare(p),
+    }))
+    .filter((p): p is { year: number; share: number } => p.year !== undefined)
+    .sort((a, b) => a.year - b.year);
+  const shareFor = (year: number): number => {
+    let share = 1;
+    for (const p of phases) {
+      if (p.year <= year) share = p.share;
+      else break;
+    }
+    return share;
+  };
 
   if (config.replacesEarnedIncome) {
     out.incomeSuppressions.push({
@@ -88,6 +145,8 @@ function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileCont
       toYear: end,
       replacementPercent: 0,
       sourceEventId: event.id,
+      // A new job replaces its OWN holder's earlier pay, not their partner's.
+      participantId: ownerId,
       // Anything starting this year or later is a separate decision, not the
       // job being replaced. This is also what stops the rule eating its own
       // salary, since this event starts in exactly that year.
@@ -102,6 +161,7 @@ function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileCont
       amount: config.signingBonus,
       label: `${event.name} — signing bonus`,
       sourceEventId: event.id,
+      ownerId,
       taxable: true,
       // Not marked earned: a suppression should never claw back a bonus that
       // was already paid out.
@@ -121,6 +181,7 @@ function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileCont
       amount: vest.amount,
       label: `${event.name} — RSU vest`,
       sourceEventId: event.id,
+      ownerId,
       taxable: true,
       isEarned: false,
     });
@@ -143,8 +204,10 @@ function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileCont
   };
 
   for (const year of yearRange(event.startYear, end, ctx)) {
-    const base = baseSalaryFor(year);
+    const share = shareFor(year);
+    const base = baseSalaryFor(year) * share;
     const total = base * (1 + config.bonusPercent / 100);
+    if (total <= 0) continue;
 
     out.cashFlows.push({
       year,
@@ -152,6 +215,7 @@ function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileCont
       amount: total,
       label: event.name,
       sourceEventId: event.id,
+      ownerId,
       taxable: true,
       isEarned: true,
       recurring: true,
@@ -166,6 +230,7 @@ function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileCont
         amount: base * (config.retirementContributionPercent / 100),
         label: `${event.name} — contribution`,
         sourceEventId: event.id,
+        ownerId,
         fromPaycheck: true,
         pretax: config.contributionIsPretax,
         recurring: true,
@@ -179,6 +244,7 @@ function compileEmployment(event: PlanEvent, config: JobConfig, ctx: CompileCont
         amount: base * (config.employerMatchPercent / 100),
         label: `${event.name} — employer match`,
         sourceEventId: event.id,
+        ownerId,
         fromPaycheck: false,
         pretax: true,
         recurring: true,
@@ -209,7 +275,7 @@ export const newJob: EventModule<NewJobConfig> = {
   }),
 
   compile(event: PlanEvent, config: NewJobConfig, ctx: CompileContext) {
-    return compileEmployment(event, { ...config, rsuVesting: [], compSteps: [] }, ctx);
+    return compileEmployment(event, { ...config, rsuVesting: [], compSteps: [], phases: [] }, ctx);
   },
 };
 
@@ -234,6 +300,7 @@ export const job: EventModule<JobConfig> = {
     contributionIsPretax: true,
     rsuVesting: [],
     compSteps: [],
+    phases: [],
   }),
 
   compile(event: PlanEvent, config: JobConfig, ctx: CompileContext) {
@@ -246,6 +313,8 @@ export const job: EventModule<JobConfig> = {
 // ---------------------------------------------------------------------------
 
 export const careerBreakConfig = z.object({
+  /** Whose break. Unset: every earner's pay is cut, as before ownership existed. */
+  participantId: z.string().optional(),
   durationYears: z.number().int().min(1).default(1),
   /** 0 = income fully stops. */
   incomeReplacementPercent: z.number().min(0).max(100).default(0),
@@ -281,6 +350,7 @@ export const careerBreak: EventModule<CareerBreakConfig> = {
       toYear: lastYear,
       replacementPercent: config.incomeReplacementPercent,
       sourceEventId: event.id,
+      participantId: config.participantId,
     });
 
     if (config.spendingChangePercent !== 0) {
@@ -360,6 +430,7 @@ export const retirement: EventModule<RetirementConfig> = {
       sourceEventId: event.id,
       retentionByEventId: config.incomeRetentionByEvent,
       includeUnearned: config.affectsUnearnedIncome,
+      participantId: config.participantId,
     });
 
     out.expenseMultipliers.push({
@@ -410,6 +481,7 @@ export const socialSecurity: EventModule<SocialSecurityConfig> = {
         amount: taxable,
         label: event.name,
         sourceEventId: event.id,
+        ownerId: config.participantId,
         taxable: true,
         isEarned: false,
         recurring: true,
@@ -422,6 +494,7 @@ export const socialSecurity: EventModule<SocialSecurityConfig> = {
           amount: benefit - taxable,
           label: `${event.name} — untaxed portion`,
           sourceEventId: event.id,
+          ownerId: config.participantId,
           taxable: false,
           isEarned: false,
           recurring: true,

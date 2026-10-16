@@ -30,7 +30,7 @@ export function EventsPage() {
     <Page>
       <PageHeader title="Events" meta={planMetaLine(stored, result.endYear)} actions={addEventButton} />
 
-      <PlanCheckBanner />
+      <PlanCheckBanner only={['horizon', 'unearned-wages', 'unowned-income', 'rent-after-purchase']} />
 
       <StatStrip>
         <Stat

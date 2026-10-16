@@ -229,11 +229,84 @@ export interface PriorityRule {
   sourceGoalId?: string;
 }
 
+/**
+ * `child` members exist so their costs can follow their age (a budget line
+ * anchored to "age 0–4") and be read per person (docs/REDESIGN-V4.md §4.3).
+ * They never earn, own accounts, retire, or set the horizon. Unset means
+ * adult — every participant saved before roles existed was one.
+ */
+export type ParticipantRole = 'adult' | 'child';
+
 export interface Participant {
   id: string;
   name: string;
   birthYear: number;
   lifeExpectancy: number;
+  isIncluded: boolean;
+  role?: ParticipantRole;
+}
+
+/**
+ * A year expressed as "when something happens" rather than a bare number
+ * (docs/REDESIGN-V4.md §1.7), so a budget line or a career phase moves with
+ * the thing it depends on: rent ends when the home is bought, daycare follows
+ * a child's age, a leave starts when the baby arrives. `anchors.ts` resolves
+ * these; an anchor to an excluded or deleted event, or a missing person,
+ * resolves to nothing.
+ */
+export type Anchor =
+  | { kind: 'year'; year: number }
+  | { kind: 'event'; eventId: string; offset?: number }
+  | { kind: 'age'; participantId: string; age: number };
+
+export type BudgetCategory =
+  | 'housing'
+  | 'food'
+  | 'utilities'
+  | 'transport'
+  | 'insurance'
+  | 'health'
+  | 'childcare'
+  | 'education'
+  | 'personal'
+  | 'travel'
+  | 'giving'
+  | 'other';
+
+/**
+ * One line of the household budget (docs/REDESIGN-V4.md §4.2): "Rent, shared,
+ * $4,200 a month until we buy", "Spencer's allowance, $4,000 a month",
+ * "Kid 1 — daycare, ages 0–4".
+ *
+ * Amounts are in TODAY'S dollars — what the household would say the line
+ * costs now — and grow from the plan's start year (with inflation unless
+ * `growth` says otherwise), so "$4K a month" means the same thing in every
+ * year of the plan.
+ */
+export interface BudgetLine {
+  id: string;
+  name: string;
+  /** `'shared'` for the household pool, else the participant it belongs to. */
+  owner: 'shared' | string;
+  category: BudgetCategory;
+  /** Fixed / non-discretionary (rent, insurance) vs flexible. */
+  essential: boolean;
+  /**
+   * `expense` and `allowance` are spending; `saving` moves money into
+   * `accountId` (a 529, a home fund) — out of cash flow but not spent.
+   */
+  kind: 'expense' | 'allowance' | 'saving';
+  /** `monthly`: `amount` per month. `once`: `amount` in total, in the `from` year. */
+  cadence: 'monthly' | 'once';
+  amount: number;
+  /** First year it applies (inclusive). Unset: from the plan's start. */
+  from?: Anchor;
+  /** First year it no longer applies (exclusive). Unset: to the horizon. */
+  until?: Anchor;
+  /** Default inflation. `fixed` grows at its own rate (tuition, childcare). */
+  growth?: { kind: 'inflation' } | { kind: 'fixed'; rate: number } | { kind: 'none' };
+  /** `saving` lines only. */
+  accountId?: string;
   isIncluded: boolean;
 }
 
@@ -330,6 +403,12 @@ export interface Plan {
    */
   goals?: Goal[];
   /**
+   * The household budget (docs/REDESIGN-V4.md §4.2). Optional so every plan
+   * saved before it existed stays valid; such a plan spends through
+   * `settings.baselineExpenses` alone, exactly as before.
+   */
+  budget?: BudgetLine[];
+  /**
    * Marks a plan as a hidden "before" snapshot created by a What-If
    * (Compare page): a real plan the undo stack and localStorage carry like
    * any other, but excluded from every human-facing plan list (the switcher,
@@ -354,6 +433,12 @@ export interface LineItem {
   sourceEventId?: string;
   accountId?: string;
   category?: string;
+  /** Whose line this is — a participant id. Unset: the household's (shared). */
+  ownerId?: string;
+  /** Set when a budget line produced it. */
+  budgetLineId?: string;
+  /** Budget lines only: fixed / non-discretionary. */
+  essential?: boolean;
 }
 
 export interface AccountYear {

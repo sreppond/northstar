@@ -850,6 +850,11 @@
 /* Plan check banner (docs/REDESIGN-V4.md §1.8) — the same quiet row as
    Overview's own banners, with a warn-toned glyph so it reads as "this
    forecast is missing something", not as an error. */
+.ns-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .ns-check-banner {
   display: flex;
   align-items: center;

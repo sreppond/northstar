@@ -8,6 +8,7 @@ import { AccountsTab } from '../tabs/AccountsTab';
 import { asOfDateLabel, planMetaLine, money } from '../format';
 import { assetMixToday, missingAccountClasses, netWorthStats, stubYearLabel } from '../ledger';
 import { BalanceTrajectory } from '../views/BalanceTrajectory';
+import { PlanCheckBanner } from '../PlanCheckBanner';
 import { Page, PageHeader, StatStrip, Stat, SectionCard, StackedBar } from '../ui';
 import './ledger.css';
 
@@ -45,6 +46,8 @@ export function AccountsPage() {
         meta={planMetaLine(stored, result.endYear)}
         actions={<AddAccountMenu missing={missing} onPick={(accountClass) => setAccountDraft(structuredClone(newAccountOfType(accountClass)))} />}
       />
+
+      <PlanCheckBanner only={['high-growth']} />
 
       <StatStrip>
         {/* No delta tag here (docs/ROADMAP-10.md C1) — a "+$3.85M" pill next

@@ -9,7 +9,7 @@ export function RetirementPage() {
   return (
     <Page>
       <PageHeader title="Retirement" meta={planMetaLine(stored, result.endYear)} />
-      <PlanCheckBanner />
+      <PlanCheckBanner only={['horizon', 'unearned-wages', 'high-growth']} />
       <RetirementForecastView plan={plan} result={result} onSetRetirementYear={onSetRetirementYear} />
     </Page>
   );
