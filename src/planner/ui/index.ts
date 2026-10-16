@@ -11,3 +11,5 @@ export { StackedBar, accountClassColor, type StackedBarSegment } from './Stacked
 export { ProgressBar } from './ProgressBar';
 export { EmptyState } from './EmptyState';
 export { Eyebrow } from './Eyebrow';
+export { Sheet, type SheetProps } from './Sheet';
+export { Alert, DismissibleAlert, type AlertTone, type AlertAction } from './Alert';

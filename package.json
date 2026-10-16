@@ -21,12 +21,11 @@
     "monarch:sync": "node scripts/monarch-sync.mjs"
   },
   "dependencies": {
-    "@fontsource/ibm-plex-mono": "^5.3.0",
-    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@northstar/engine": "*",
     "@tauri-apps/api": "^2.11.1",
     "@vitejs/plugin-react": "^5.0.4",
     "lucide-react": "^1.39.0",
+    "motion": "13.5.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.18.3",

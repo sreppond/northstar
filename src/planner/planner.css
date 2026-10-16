@@ -52,13 +52,24 @@
 :root {
   color-scheme: light;
 
-  /* -- typography: IBM Plex Sans is the UI/body voice (borrowed from
-     Northstar v2 — docs/BORROW.md-style port, see git history); IBM Plex
-     Mono is the data voice — axis labels, small metadata, timestamps
-     (docs/REDESIGN.md §5.3), an even tighter pairing now that both are IBM
-     Plex. Never the hero figure: that stays proportional sans on purpose, so a
-     display number reads as a number rather than a printout. -- */
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* -- typography (docs/REDESIGN-V5.md §1.7, apple-design skill §15): the
+     platform font. This is a Mac app, and SF Pro ships optical sizing,
+     tracking tables and tabular numerals that a bundled face would have to
+     fake. Figures are the same face with `font-variant-numeric:
+     tabular-nums` (set once on `.ns` below), not a second monospace voice.
+     --font-code is the one real mono, for genuine code (<code>, pasted
+     text). --font-mono survives only as an alias of --font-sans so the page
+     stylesheets that still say `var(--font-mono)` render in the system face
+     until their own units sweep the reference out. -- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --font-code: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  --font-mono: var(--font-sans);
+
+  /* Size-specific tracking and leading (skill §15): large type reads too
+     loose as it grows, so display sizes tighten; body stays near 0. */
+  --track-display: -0.02em;
+  --track-title: -0.012em;
+  --lh-display: 1.05;
 
   /* -- type scale (docs/REDESIGN-V3.md review S7): the redesign's CSS had
      accreted 15 distinct font sizes across ui.css and the page stylesheets.
@@ -179,6 +190,27 @@
      --danger above but a notch down in severity (a nudge, not an error). */
   --warn: #9c6b06;
 
+  /* -- v5 foundations (docs/REDESIGN-V5.md §1, §3, §4.2) -- */
+  /* The pinned-year line: near-ink on a light ground, white on a dark one
+     (§1.3). Not --ink itself, so charts can re-theme it without touching
+     text. */
+  --pin: #14161a;
+  /* "Runs dry": a wash for tinted columns/bands, and the hatch stroke for
+     shortfall bands and the Unfunded donut slice. Never colour alone: every
+     use pairs with an icon or a label (§4.2). */
+  --danger-wash: rgba(184, 40, 63, 0.08);
+  --danger-hatch: rgba(184, 40, 63, 0.42);
+  /* Line glow behind chart series (§3.2); stronger in the dark. */
+  --glow-opacity: 0.3;
+  /* Translucent chrome (§1.6, skill §12): rail, sticky headers, sheets.
+     --material-blur is a full backdrop-filter value, not a radius. */
+  --material-bg: rgba(255, 255, 255, 0.84);
+  --material-blur: blur(20px) saturate(1.6);
+  /* CSS fallbacks for what motion's spring does in JS (§1.5): critically
+     damped, no overshoot. This curve is the sheet's resting shape. */
+  --spring-duration: 0.38s;
+  --ease-damped: cubic-bezier(0.32, 0.72, 0, 1);
+
   /* Light source. Every shadow is tinted with the ink hue rather than black —
      a neutral shadow on a cool page looks like dirt. --sh-k scales the whole
      set for a dark ground, where the same alphas would vanish; --lit-* scale
@@ -268,7 +300,11 @@
     var(--bg);
   background-attachment: fixed;
   color: var(--ink);
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
+  /* Tabular figures everywhere (docs/REDESIGN-V5.md §1.7): columns that
+     jitter as values change read as amateur, and this replaces the old mono
+     'data voice'. Inherited, so nothing needs to opt in. */
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -353,6 +389,12 @@
     --danger: #e0496c;
     --warn: #d9a441;
 
+    --pin: #ffffff;
+    --danger-wash: rgba(224, 73, 108, 0.14);
+    --danger-hatch: rgba(224, 73, 108, 0.5);
+    --glow-opacity: 0.55;
+    --material-bg: rgba(24, 27, 34, 0.82);
+
     --sh: 0 0 0;
     --sh-k: 2.6;
     --lit-a: 0.055;
@@ -423,6 +465,12 @@
   --danger: #e0496c;
   --warn: #d9a441;
 
+  --pin: #ffffff;
+  --danger-wash: rgba(224, 73, 108, 0.14);
+  --danger-hatch: rgba(224, 73, 108, 0.5);
+  --glow-opacity: 0.55;
+  --material-bg: rgba(24, 27, 34, 0.82);
+
   --sh: 0 0 0;
   --sh-k: 2.6;
   --lit-a: 0.055;
@@ -430,6 +478,19 @@
   --gloss-a: 0.13;
   --glow-1: #0e1a26;
   --glow-2: #0d161f;
+}
+
+/* Reduced transparency (skill §14): translucent chrome becomes a solid
+   surface with no blur. --surface is already theme-aware, so one rule
+   covers light and dark. */
+@media (prefers-reduced-transparency: reduce) {
+  /* Doubled :root so this ties the dark block's `:root:not([data-theme])`
+     specificity and wins by order. */
+  :root:root,
+  :root:root[data-theme='dark'] {
+    --material-bg: var(--surface);
+    --material-blur: none;
+  }
 }
 
 .ns *,
@@ -750,7 +811,7 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-rail-horizon {
   font: inherit;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   display: flex;
   align-items: center;
@@ -777,7 +838,7 @@ html.ns-tauri .ns-drag-strip {
 .ns-horizon-popover {
   position: fixed;
   z-index: 200;
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--fs-body);
   width: 288px;
   padding: 14px;
@@ -788,7 +849,7 @@ html.ns-tauri .ns-drag-strip {
   color: var(--ink);
 }
 .ns-horizon-title {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-eyebrow);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -819,7 +880,7 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-horizon-preset {
   font: inherit;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--ink);
   background: var(--surface);
@@ -886,7 +947,7 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-rail-search kbd {
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
 }
 
@@ -903,7 +964,7 @@ html.ns-tauri .ns-drag-strip {
    of them with no label of its own: it isn't a member of any group. */
 .ns-rail-eyebrow {
   margin: 12px 10px 4px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-eyebrow);
   /* S7: 600 read heavier than the references for a mono small-caps label —
      matches the same drop on `.ns-eyebrow` in ui.css. */
@@ -953,7 +1014,7 @@ html.ns-tauri .ns-drag-strip {
    the page's own EmptyState action rather than duplicating its copy. */
 .ns-rail-link-hint {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1024,7 +1085,7 @@ html.ns-tauri .ns-drag-strip {
 .ns-menu-hint {
   float: right;
   margin-left: 16px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   color: var(--muted-light);
 }
@@ -1191,8 +1252,10 @@ html.ns-tauri .ns-drag-strip {
   background: var(--surface-sub);
   border-color: var(--border-strong);
 }
+/* Feedback on pointer-down, not on release (docs/REDESIGN-V5.md §1.5,
+   apple-design skill §1): 0.97 reads as pressed without the v3 jelly squash. */
 .ns-btn:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 /* Disabled controls stay flat on the page — nothing to press, nothing to
@@ -1365,7 +1428,7 @@ html.ns-tauri .ns-drag-strip {
 .ns-y-tick,
 .ns-x-tick {
   position: absolute;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   letter-spacing: 0.03em;
   color: var(--muted-light);
@@ -1433,7 +1496,7 @@ html.ns-tauri .ns-drag-strip {
   position: absolute;
   transform: translate(-50%, -100%);
   margin-top: -6px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1687,8 +1750,8 @@ html.ns-tauri .ns-drag-strip {
 .ns-tooltip-value {
   font-size: 20px;
   font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
   font-variant-numeric: tabular-nums;
 }
 .ns-tooltip-flow {
@@ -1708,7 +1771,7 @@ html.ns-tauri .ns-drag-strip {
 /* A static readout, not a control — no gloss (docs/REDESIGN.md §5.2), and
    set in the mono data voice like the rest of the chart's small metadata. */
 .ns-ref {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1732,7 +1795,7 @@ html.ns-tauri .ns-drag-strip {
   gap: 8px;
 }
 .ns-window-label {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   letter-spacing: 0.02em;
   color: var(--muted);
@@ -2218,7 +2281,9 @@ html.ns-tauri .ns-drag-strip {
      the ticks and bars end up overlapping on a narrow card instead of the
      row scrolling. `minmax(420px, 1fr)` gives the track a real floor so
      `.ns-table-scroll`'s `overflow-x: auto` has something to trigger on. */
-  grid-template-columns: 268px minmax(420px, 1fr);
+  /* 276, not 268: the system face is ~3px wider on "Second child" and the
+     name truncated at desktop width. */
+  grid-template-columns: 276px minmax(420px, 1fr);
   border-bottom: 1px solid var(--rule);
   background: var(--surface-sub);
 }
@@ -2253,7 +2318,7 @@ html.ns-tauri .ns-drag-strip {
      the ticks and bars end up overlapping on a narrow card instead of the
      row scrolling. `minmax(420px, 1fr)` gives the track a real floor so
      `.ns-table-scroll`'s `overflow-x: auto` has something to trigger on. */
-  grid-template-columns: 268px minmax(420px, 1fr);
+  grid-template-columns: 276px minmax(420px, 1fr); /* matches .ns-gantt-head */
   border-bottom: 1px solid var(--rule-light);
 }
 .ns-gantt-label {
@@ -2569,7 +2634,7 @@ html.ns-tauri .ns-drag-strip {
    follows the existing money-in/money-out convention rather than adding a
    third hue: richer at the horizon reads as --in, poorer as --out. */
 .ns-field-impact {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   letter-spacing: 0.01em;
   color: var(--muted);
@@ -2980,7 +3045,7 @@ html.ns-tauri .ns-drag-strip {
 /* A phase with no percent to set (full-time, not working) — the column
    still states the share so every row reads the same way across. */
 .ns-sched-na {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
   color: var(--muted);
   padding-left: 10px;
@@ -3372,7 +3437,7 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-palette-hint {
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   letter-spacing: 0.02em;
   color: var(--muted-light);
@@ -3449,7 +3514,7 @@ html.ns-tauri .ns-drag-strip {
   margin: 0;
 }
 .ns-shortcut-row kbd {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   color: var(--muted);
   background: var(--chip);
@@ -4086,6 +4151,8 @@ html.ns-tauri .ns-drag-strip {
   display: block;
   font-size: 20px;
   font-weight: 700;
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
   color: var(--ink);
   margin-top: 2px;
 }
@@ -4115,7 +4182,7 @@ html.ns-tauri .ns-drag-strip {
   padding: 0 10px;
   font-size: 11px;
   font-weight: 600;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--on-inverse);
   white-space: nowrap;
   overflow: hidden;
@@ -4207,7 +4274,7 @@ html.ns-tauri .ns-drag-strip {
   fill: var(--surface-sub);
 }
 .ns-mini-band-label {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 9.5px;
   font-weight: 600;
   text-transform: uppercase;
@@ -4388,7 +4455,8 @@ html.ns-tauri .ns-drag-strip {
    rather than an ordinary settings form. */
 .ns-sepp-form input,
 .ns-sepp-form select {
-  font-family: var(--font-mono);
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
 /* A horizontal set of tappable option-cards, each showing its own tradeoff,
@@ -4432,7 +4500,7 @@ html.ns-tauri .ns-drag-strip {
   color: var(--muted-light);
 }
 .ns-sepp-option-payment {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 17px;
   font-weight: 700;
   color: var(--ink);
@@ -4449,7 +4517,7 @@ html.ns-tauri .ns-drag-strip {
   color: var(--muted);
 }
 .ns-sepp-option-balance {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   color: var(--muted-light);
   font-variant-numeric: tabular-nums;
@@ -4560,7 +4628,7 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-freedom-slider-year {
   display: block;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
@@ -4859,7 +4927,7 @@ html.ns-tauri .ns-drag-strip {
 /* Reports' stub-year row (docs/ROADMAP-10.md C7): a small mono sub-label
    under that row's Year cell so its figures don't pass as a full year's. */
 .ns-table-year-sub {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 500;
   color: var(--muted);
