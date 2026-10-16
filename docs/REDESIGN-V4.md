@@ -696,6 +696,41 @@ green. Each phase ends with a Tauri rebuild so the installed app shows it.
   - Overview's spending lever scales the budget's adult and shared lines
     when the plan has one.
 
-**Next — Phase 3 (Home).** Known gaps:
+**Phase 3 — Home, Oct 16, 2026.**
+- **Engine** (`affordability.ts`):
+  - `withHomePurchase` moves the plan's own home, or adds a hypothetical
+    one. Anchors such as rent "until Buy a home" follow it.
+  - `readHome` reads the house-poor numbers:
+    - housing ÷ after-tax income and the savings rate, both for the first
+      full year;
+    - cash and taxable investments left after closing, in months of
+      spending;
+    - any shortfall within 10 years.
+  - `maxAffordablePrice` bisects over `runPlan`, truncated to the 10-year
+    carry window. `affordabilityCurve` covers every candidate year: about
+    30ms for 12 years, so no worker is needed.
+  - Zones come from §8: ≤25% / ≥15% / ≥6 mo is comfortable; ≤35% / ≥5% /
+    ≥3 mo is a stretch.
+- **Home page** (`/house`, rail label "Home"):
+  - A one-sentence answer.
+  - The affordability map: year × price, shaded comfortable / stretch /
+    house-poor. Click it to try a purchase; a ring marks the saved one.
+  - Levers for price, year, down payment and rate, over the Impact strip
+    (compared with renting when the plan has no home yet). Keep adds or
+    moves the purchase.
+  - The house-poor scorecard.
+  - What owning costs each month, part by part, against the rent it
+    replaces.
+  - The budget before and after.
+  - A price ladder: comfortable max, stretch max, and the price being
+    tried, each a full plan run.
+  - The cash cushion, buying vs renting.
+  - The existing ownership arc, under "Owning it".
+- **Also:**
+  - The rail's "Goals" group is now "Decisions".
+  - `NAV_ITEMS` moved to `nav.ts`, breaking the Sidebar ↔ shortcuts cycle
+    that broke hot reload.
+
+**Next — Phase 4 (Annuity & SEPP).** Known gaps:
 - Retirement still stops every standing contribution household-wide.
 - "Budget by year" draws the plan, not the draft.

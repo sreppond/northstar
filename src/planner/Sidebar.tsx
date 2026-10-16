@@ -2,24 +2,13 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Wallet,
-  PiggyBank,
-  Users,
-  ArrowLeftRight,
-  CalendarRange,
-  Sunrise,
-  Home,
-  Umbrella,
-  TrendingUp,
-  GitCompare,
-  Table2,
   Settings as SettingsIcon,
   Search,
   ChevronsUpDown,
   Menu,
 } from 'lucide-react';
 import { usePlanner } from './PlannerContext';
+import { GROUP_LABELS, NAV_ITEMS } from './nav';
 import { useBreakpoint } from './useBreakpoint';
 import { ThemeToggle } from './ThemeToggle';
 import { HeaderMenu } from './HeaderMenu';
@@ -27,40 +16,9 @@ import { isTauri } from './monarchLocal';
 import { HorizonButton } from './HorizonControl';
 import { planEndYear, withHorizon } from '@northstar/engine';
 
-/**
- * The persistent nav rail's destinations, regrouped for v3
- * (docs/REDESIGN-V3.md "Target information architecture"): Overview stands
- * alone above every group; PLAN is the ledger someone authors (Accounts,
- * Cash Flow, Events); GOALS are the lenses that judge the ledger against a
- * target (Retirement, House, Annuity); ANALYSIS is reading about the plan
- * rather than editing it (Progress, Compare, Reports). The old rail mixed
- * the ledger and the goal lenses into one "plan" bucket — two different
- * jobs sharing one label.
- *
- * Exported so `CommandPalette.tsx` can list the exact same destinations
- * rather than a second copy that could drift.
- */
-export const NAV_ITEMS = [
-  { to: '/overview', label: 'Overview', Icon: LayoutDashboard, group: 'overview' },
-  { to: '/budget', label: 'Budget', Icon: PiggyBank, group: 'plan' },
-  { to: '/family', label: 'Family', Icon: Users, group: 'plan' },
-  { to: '/accounts', label: 'Accounts', Icon: Wallet, group: 'plan' },
-  { to: '/cashflow', label: 'Cash Flow', Icon: ArrowLeftRight, group: 'plan' },
-  { to: '/events', label: 'Events', Icon: CalendarRange, group: 'plan' },
-  { to: '/retirement', label: 'Retirement', Icon: Sunrise, group: 'goals' },
-  { to: '/house', label: 'House', Icon: Home, group: 'goals' },
-  { to: '/annuity', label: 'Annuity', Icon: Umbrella, group: 'goals' },
-  { to: '/progress', label: 'Progress', Icon: TrendingUp, group: 'analysis' },
-  { to: '/compare', label: 'Compare', Icon: GitCompare, group: 'analysis' },
-  { to: '/reports', label: 'Reports', Icon: Table2, group: 'analysis' },
-] as const;
+export { NAV_ITEMS };
 
-const GROUP_LABELS: Record<string, string> = {
-  // docs/REDESIGN-V4.md §2: who you are and what you spend.
-  plan: 'Household',
-  goals: 'Goals',
-  analysis: 'Analysis',
-};
+
 
 /**
  * Picks the layout, not just the styling: a persistent column on desktop, a
