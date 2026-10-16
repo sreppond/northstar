@@ -28,6 +28,8 @@ import {
   scheduledAnnualPayment,
 } from './accounts.js';
 import { annuityFeeForYear } from './annuity.js';
+import { planEndYear } from './horizon.js';
+import { compileBudget } from './budget.js';
 import { sweepAllocationLabel } from './goals.js';
 import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
@@ -50,12 +52,9 @@ export function runPlan(plan: Plan): PlanResult {
   const startYear = settings.startYear;
 
   // --- resolve the horizon before compiling ---------------------------------
-  // `endOfPlan` sets it; otherwise fall back to projectionYears. Compilation
-  // needs the horizon, so this cannot wait for the compile pass.
-  const endOfPlanEvent = plan.events.find((e) => e.kind === 'endOfPlan' && e.isIncluded);
-  const endYear = endOfPlanEvent
-    ? Math.max(startYear, endOfPlanEvent.startYear)
-    : startYear + Math.max(1, settings.projectionYears) - 1;
+  // `horizon.ts` owns the precedence (setting > endOfPlan > projectionYears).
+  // Compilation needs the horizon, so this cannot wait for the compile pass.
+  const endYear = planEndYear(plan);
 
   const inflationAt = (year: number) =>
     Math.pow(1 + settings.inflationRate / 100, year - startYear);
@@ -63,6 +62,7 @@ export function runPlan(plan: Plan): PlanResult {
   const ctx: CompileContext = {
     settings,
     participants: plan.participants,
+    events: plan.events,
     startYear,
     endYear,
     inflationAt,
@@ -74,6 +74,10 @@ export function runPlan(plan: Plan): PlanResult {
     .filter((e) => e.isIncluded)
     .map((e) => compileEvent(e, ctx, failures));
   for (const f of failures) warnings.push(f.message);
+
+  // The household budget compiles into the same schedules (budget.ts).
+  const budget = compileBudget(plan, ctx);
+  warnings.push(...budget.warnings);
 
   // --- assemble the account set ---------------------------------------------
   const planAccounts = plan.accounts.filter((a) => a.isIncluded);
@@ -126,11 +130,11 @@ export function runPlan(plan: Plan): PlanResult {
 
   // --- index compiled output by year ----------------------------------------
   const cashFlowsByYear = groupBy(
-    compiled.flatMap((c) => c.cashFlows),
+    [...compiled.flatMap((c) => c.cashFlows), ...budget.cashFlows],
     (cf) => cf.year,
   );
   const contributionsByYear = groupBy(
-    compiled.flatMap((c) => c.contributions),
+    [...compiled.flatMap((c) => c.contributions), ...budget.contributions],
     (c) => c.year,
   );
   const terminationsByYear = groupBy(
@@ -149,7 +153,8 @@ export function runPlan(plan: Plan): PlanResult {
 
   // --- participant ages ------------------------------------------------------
   const included = plan.participants.filter((p) => p.isIncluded);
-  const oldest = included.reduce<(typeof included)[number] | undefined>(
+  // Children never own accounts, so the fallback owner is the oldest ADULT.
+  const oldest = included.filter((p) => p.role !== 'child').reduce<(typeof included)[number] | undefined>(
     (acc, p) => (acc === undefined || p.birthYear < acc.birthYear ? p : acc),
     undefined,
   );
@@ -258,6 +263,7 @@ export function runPlan(plan: Plan): PlanResult {
           year,
           {
             sourceEventId: cf.sourceEventId,
+            ownerId: cf.ownerId,
             isEarned: cf.isEarned ?? false,
             isBaseline: false,
           },
@@ -269,6 +275,7 @@ export function runPlan(plan: Plan): PlanResult {
         amount,
         sourceEventId: cf.sourceEventId,
         category: cf.category,
+        ...(cf.ownerId ? { ownerId: cf.ownerId } : {}),
       });
       if (cf.taxable) taxableIncome += amount;
     }
@@ -283,8 +290,10 @@ export function runPlan(plan: Plan): PlanResult {
       expenses.push({ label: 'Living expenses', amount: baselineExpenses, category: 'living' });
     }
 
+    const spendingFactor = expenseFactor(expenseMultipliers, year);
     for (const cf of yearFlows.filter((f) => f.kind === 'expense')) {
-      const amount = cf.amount * (cf.recurring ? yearFraction : 1);
+      const amount =
+        cf.amount * (cf.recurring ? yearFraction : 1) * (cf.scalesWithSpending ? spendingFactor : 1);
       if (amount <= EPSILON) continue;
       if (cf.category === 'tax') {
         taxes.push({ label: cf.label, amount, sourceEventId: cf.sourceEventId });
@@ -294,6 +303,9 @@ export function runPlan(plan: Plan): PlanResult {
           amount,
           sourceEventId: cf.sourceEventId,
           category: cf.category,
+          ...(cf.ownerId ? { ownerId: cf.ownerId } : {}),
+          ...(cf.budgetLineId ? { budgetLineId: cf.budgetLineId, essential: cf.essential ?? false } : {}),
+          ...(cf.recurring ? {} : { oneTime: true }),
         });
       }
     }
@@ -371,6 +383,8 @@ export function runPlan(plan: Plan): PlanResult {
         accountId: c.accountId,
         sourceEventId: c.sourceEventId || undefined,
         category: 'contribution',
+        ...(c.ownerId ? { ownerId: c.ownerId } : {}),
+        ...(c.budgetLineId ? { budgetLineId: c.budgetLineId } : {}),
       });
     }
 
@@ -692,13 +706,15 @@ function zeroRow(account: Account, open: number): AccountYear {
 function replacementFactorFor(
   suppressions: IncomeSuppression[],
   year: number,
-  line: { sourceEventId?: string; isEarned: boolean; isBaseline: boolean },
+  line: { sourceEventId?: string; ownerId?: string; isEarned: boolean; isBaseline: boolean },
   eventStartYear: Map<string, number>,
 ): number {
   let factor = 1;
 
   for (const s of suppressions) {
     if (year < s.fromYear || year > s.toYear) continue;
+    // Someone else's retirement or leave does not touch this line.
+    if (s.participantId && line.ownerId && line.ownerId !== s.participantId) continue;
     if (!line.isEarned && !s.includeUnearned) continue;
     if (line.isBaseline && s.affectsBaseline === false) continue;
 

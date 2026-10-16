@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { Account, EventKind, Participant, PlanEvent } from '@northstar/engine';
+import type { Account, EventKind, Participant, PlanEvent, WorkPhase } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
 import { labelFor } from '../presentation';
 import { IconBadge } from '../IconBadge';
 import { describeSchema } from './schemaForm';
 import { ConfigField, Field } from './fields';
-import { CompStepsEditor, RsuVestingEditor } from './JobSchedules';
+import { CompStepsEditor, RsuVestingEditor, WorkPhasesEditor } from './JobSchedules';
 
 /**
  * The right-side event editor.
@@ -103,8 +103,9 @@ export function EventDrawer({
   /** Id-shaped config fields that should be pickers, not free text. */
   const choices = useMemo(
     () => ({
+      // Only adults earn, retire or take leave.
       participantId: participants
-        .filter((p) => p.isIncluded)
+        .filter((p) => p.isIncluded && p.role !== 'child')
         .map((p) => ({ value: p.id, label: p.name })),
       contributionAccountId: accounts
         .filter((a) => !a.isLiability && !a.isSynthetic)
@@ -220,6 +221,15 @@ export function EventDrawer({
                     startYear={draft.startYear}
                     endYear={planEndYear}
                     onChange={(next) => setConfig('compSteps', next)}
+                  />
+                  <WorkPhasesEditor
+                    value={(config.phases ?? []) as WorkPhase[]}
+                    startYear={draft.startYear}
+                    endYear={planEndYear}
+                    events={allEvents}
+                    participants={participants}
+                    ownEventId={draft.id}
+                    onChange={(next) => setConfig('phases', next)}
                   />
                 </>
               )}

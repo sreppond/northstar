@@ -136,6 +136,130 @@ export function assetMixToday(years: YearSnapshot[], opening?: OpeningSnapshot):
   })).filter((s) => s.value >= 1);
 }
 
+/** One cash-flow row as `lifeChangeRows` groups it — see there. */
+export interface LifeChangeRow {
+  key: string;
+  label: string;
+  sourceEventId?: string;
+  cells: number[];
+  /** The individual lines, when one life change produced more than one. */
+  parts?: { label: string; cells: number[] }[];
+}
+
+/**
+ * One row per life change rather than per line (docs/REDESIGN-V4.md §1.5):
+ * buying a home produces a down payment, a mortgage payment and carrying
+ * costs, and a kid produces upfront, annual and college lines — read as five
+ * unrelated rows, the table can't say what the house costs. Lines from the
+ * same event collapse into a row named after the event, summed, with the
+ * lines themselves kept as `parts` (labelled without the repeated event-name
+ * prefix). A life change with one line, and any line with no event (baseline
+ * spending, taxes), stays a plain row. Order follows first appearance.
+ */
+export function lifeChangeRows(
+  lines: { label: string; cells: number[]; sourceEventId?: string }[],
+  eventOf: (eventId: string) => Pick<PlanEvent, 'name' | 'kind'> | undefined,
+): LifeChangeRow[] {
+  const rows: LifeChangeRow[] = [];
+  const byEvent = new Map<string, { label: string; cells: number[] }[]>();
+
+  for (const line of lines) {
+    const event = line.sourceEventId ? eventOf(line.sourceEventId) : undefined;
+    if (!line.sourceEventId || event === undefined) {
+      rows.push({ key: `line:${line.label}`, label: line.label, cells: line.cells });
+      continue;
+    }
+    let parts = byEvent.get(line.sourceEventId);
+    if (!parts) {
+      parts = [];
+      byEvent.set(line.sourceEventId, parts);
+      rows.push({ key: `event:${line.sourceEventId}`, label: event.name, sourceEventId: line.sourceEventId, cells: [] });
+    }
+    parts.push({ label: partLabel(line.label, event), cells: line.cells });
+  }
+
+  return rows.map((row) => {
+    const parts = row.sourceEventId ? byEvent.get(row.sourceEventId) : undefined;
+    if (!parts) return row;
+    if (parts.length === 1) {
+      // A single line keeps its own, more specific label ("Amazon — signing bonus").
+      const only = lines.find((l) => l.sourceEventId === row.sourceEventId)!;
+      return { ...row, label: only.label, cells: parts[0].cells };
+    }
+    const cells = parts[0].cells.map((_, i) => parts.reduce((sum, p) => sum + p.cells[i], 0));
+    return { ...row, cells, parts };
+  });
+}
+
+/** What an event's own un-suffixed line IS, once it sits under the event's name. */
+const BARE_LINE_LABEL: Partial<Record<PlanEvent['kind'], string>> = {
+  job: 'Salary',
+  newJob: 'Salary',
+  haveAKid: 'Annual cost',
+  annualExpense: 'Annual cost',
+  income: 'Income',
+};
+
+function partLabel(label: string, event: Pick<PlanEvent, 'name' | 'kind'>): string {
+  if (label === event.name) return BARE_LINE_LABEL[event.kind] ?? 'Ongoing';
+  const prefix = `${event.name} — `;
+  const stripped = label.startsWith(prefix) ? label.slice(prefix.length) : label;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
+/** One band of `balanceStack` — an asset class's balance, stacked on the ones below it. */
+export interface BalanceLayer {
+  key: AccountClass;
+  label: string;
+  color: string;
+  /** The band's lower edge each year (the running total of every layer below). */
+  lower: number[];
+  /** The band's upper edge each year (`lower` + this class's own balance). */
+  upper: number[];
+}
+
+/**
+ * Net worth over time, broken into what it's made of (docs/REDESIGN-V4.md
+ * §4.4): every asset class as a stacked band above zero, debt as a single
+ * band below it, and net worth as the line through the middle — so the
+ * Accounts page shows the whole trajectory before the year-by-year table.
+ * Classes that are never non-trivial across the whole span are left out.
+ */
+export function balanceStack(years: YearSnapshot[]): {
+  years: number[];
+  layers: BalanceLayer[];
+  debt: number[];
+  netWorth: number[];
+} {
+  const running = years.map(() => 0);
+  const layers: BalanceLayer[] = [];
+
+  for (const accountClass of ASSET_CLASSES) {
+    const own = years.map((y) =>
+      y.accounts
+        .filter((a) => !a.isLiability && a.accountClass === accountClass)
+        .reduce((sum, a) => sum + a.close, 0),
+    );
+    if (own.every((v) => v < 1)) continue;
+    const lower = [...running];
+    own.forEach((v, i) => (running[i] += v));
+    layers.push({
+      key: accountClass,
+      label: ACCOUNT_TYPES[accountClass].label,
+      color: accountClassColor(accountClass),
+      lower,
+      upper: [...running],
+    });
+  }
+
+  return {
+    years: years.map((y) => y.year),
+    layers,
+    debt: years.map((y) => -y.liabilities),
+    netWorth: years.map((y) => y.netWorth),
+  };
+}
+
 /**
  * Contributions paid from a paycheck or an allocation rule this year.
  * `run.ts` pushes these into `expenses` (category `'contribution'`) so the

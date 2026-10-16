@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { Plan, PlanResult } from '@northstar/engine';
 import { deflate, headlineReturnRate, runPlan } from '@northstar/engine';
-import { applyLevers, horizonDelta, type LeverInputs } from './levers';
+import { applyLevers, horizonDelta, livingSpendingAnnual, type LeverInputs } from './levers';
 import type { GhostSeries } from './NetWorthChart';
 import { DeltaTag, type DeltaTone } from './ui';
 import { money, percent, signedMoney, signedPercent } from './format';
@@ -146,7 +146,7 @@ export function Levers({
               <label htmlFor="lever-spending">Annual spending</label>
               <span className="ns-ov-lever-value ns-num">
                 {signedMoney(levers.spendingDelta)}/yr
-                <span className="ns-ov-lever-sub"> → {money(stored.settings.baselineExpenses + levers.spendingDelta)}/yr</span>
+                <span className="ns-ov-lever-sub"> → {money(livingSpendingAnnual(stored) + levers.spendingDelta)}/yr</span>
               </span>
             </div>
             <input

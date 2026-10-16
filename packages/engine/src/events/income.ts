@@ -3,6 +3,8 @@ import type { PlanEvent } from '../types.js';
 import { type CompileContext, type EventModule, emptyCompiled, yearRange } from './kit.js';
 
 export const incomeConfig = z.object({
+  /** Whose income. Unset: the household's. */
+  participantId: z.string().optional(),
   amount: z.number().min(0),
   endYear: z.number().int().optional(),
   /** Percent per year on top of the base amount. */
@@ -32,6 +34,7 @@ export const income: EventModule<IncomeConfig> = {
         amount: config.amount * Math.pow(1 + config.growthRate / 100, elapsed),
         label: event.name,
         sourceEventId: event.id,
+        ownerId: config.participantId,
         taxable: config.isTaxable,
         isEarned: config.isEarned,
         recurring: true,

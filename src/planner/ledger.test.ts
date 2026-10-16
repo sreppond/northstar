@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Account, AccountYear, OpeningSnapshot, PlanEvent, YearSnapshot } from '@northstar/engine';
 import {
   assetMixToday,
+  balanceStack,
+  lifeChangeRows,
   cashFlowStats,
   classBalances,
   deltaTone,
@@ -427,5 +429,95 @@ describe('savingsRateNote', () => {
     // fires, but "Living expenses" (the biggest NON-contribution line) is
     // named, not the bigger-looking contribution.
     expect(note).toBe('Negative because spending outpaced income this year — largely Living expenses.');
+  });
+});
+
+describe('balanceStack', () => {
+  const years = [
+    year({
+      year: 2026,
+      accounts: [
+        accountYear({ accountId: 'c', accountClass: 'cash', close: 10 }),
+        accountYear({ accountId: 't', accountClass: 'taxableInvestment', close: 100 }),
+        accountYear({ accountId: 'h', accountClass: 'realEstate', close: 0 }),
+      ],
+      liabilities: 0,
+      netWorth: 110,
+    }),
+    year({
+      year: 2027,
+      accounts: [
+        accountYear({ accountId: 'c', accountClass: 'cash', close: 20 }),
+        accountYear({ accountId: 't', accountClass: 'taxableInvestment', close: 50 }),
+        accountYear({ accountId: 'h', accountClass: 'realEstate', close: 500 }),
+        accountYear({ accountId: 'm', accountClass: 'mortgage', isLiability: true, close: 400 }),
+      ],
+      liabilities: 400,
+      netWorth: 170,
+    }),
+  ];
+
+  it('stacks each asset class on the ones below it, in class order', () => {
+    const { layers } = balanceStack(years);
+    expect(layers.map((l) => l.key)).toEqual(['cash', 'taxableInvestment', 'realEstate']);
+    expect(layers[1].lower).toEqual([10, 20]);
+    expect(layers[1].upper).toEqual([110, 70]);
+    expect(layers[2].upper).toEqual([110, 570]);
+  });
+
+  it('puts debt below zero and carries net worth through', () => {
+    const { debt, netWorth, years: xs } = balanceStack(years);
+    expect(debt).toEqual([-0, -400]);
+    expect(netWorth).toEqual([110, 170]);
+    expect(xs).toEqual([2026, 2027]);
+  });
+
+  it('leaves out a class that is empty the whole way', () => {
+    const { layers } = balanceStack(years.slice(0, 1));
+    expect(layers.map((l) => l.key)).toEqual(['cash', 'taxableInvestment']);
+  });
+});
+
+describe('lifeChangeRows', () => {
+  const events: Record<string, Pick<PlanEvent, 'name' | 'kind'>> = {
+    home: { name: 'Buy a home', kind: 'buyAHome' },
+    kid: { name: 'First child', kind: 'haveAKid' },
+    job: { name: 'Amazon', kind: 'job' },
+  };
+  const nameOf = (id: string) => events[id];
+
+  it('folds a life change with several lines into one summed row with parts', () => {
+    const rows = lifeChangeRows(
+      [
+        { label: 'Living expenses', cells: [100, 100] },
+        { label: 'Buy a home — down payment & closing', cells: [50, 0], sourceEventId: 'home' },
+        { label: 'Buy a home — mortgage payment', cells: [10, 12], sourceEventId: 'home' },
+        { label: 'First child', cells: [5, 5], sourceEventId: 'kid' },
+      ],
+      nameOf,
+    );
+    expect(rows.map((r) => r.label)).toEqual(['Living expenses', 'Buy a home', 'First child']);
+    expect(rows[1].cells).toEqual([60, 12]);
+    expect(rows[1].parts?.map((p) => p.label)).toEqual(['Down payment & closing', 'Mortgage payment']);
+    expect(rows[2].parts).toBeUndefined();
+  });
+
+  it('keeps a lone line\'s own label and names the bare event line by its kind', () => {
+    const rows = lifeChangeRows(
+      [
+        { label: 'Amazon — signing bonus', cells: [1], sourceEventId: 'job' },
+        { label: 'First child', cells: [2], sourceEventId: 'kid' },
+        { label: 'First child — college', cells: [3], sourceEventId: 'kid' },
+      ],
+      nameOf,
+    );
+    expect(rows[0].label).toBe('Amazon — signing bonus');
+    expect(rows[1].parts?.map((p) => p.label)).toEqual(['Annual cost', 'College']);
+  });
+
+  it('treats a line whose event no longer exists as a plain row', () => {
+    const rows = lifeChangeRows([{ label: 'Ghost', cells: [1], sourceEventId: 'gone' }], nameOf);
+    expect(rows[0].label).toBe('Ghost');
+    expect(rows[0].parts).toBeUndefined();
   });
 });

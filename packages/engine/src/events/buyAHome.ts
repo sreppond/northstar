@@ -142,18 +142,26 @@ export const buyAHome: EventModule<BuyAHomeConfig> = {
       const insurance = config.insuranceAnnual * inflation;
       const hoa = config.hoaMonthly * 12 * inflation;
 
-      const carrying = propertyTax + maintenance + insurance + hoa;
-      if (carrying <= 0) continue;
-
-      out.cashFlows.push({
-        year,
-        kind: 'expense',
-        amount: carrying,
-        label: `${event.name} — tax, insurance & upkeep`,
-        sourceEventId: event.id,
-        category: 'housing',
-        recurring: true,
-      });
+      // One line per cost (docs/REDESIGN-V4.md §4.6) — the house-poor
+      // question is answered by WHICH of these is large, not by their sum.
+      const parts: [string, number][] = [
+        ['property tax', propertyTax],
+        ['insurance', insurance],
+        ['upkeep', maintenance],
+        ['HOA', hoa],
+      ];
+      for (const [what, amount] of parts) {
+        if (amount <= 0) continue;
+        out.cashFlows.push({
+          year,
+          kind: 'expense',
+          amount,
+          label: `${event.name} — ${what}`,
+          sourceEventId: event.id,
+          category: 'housing',
+          recurring: true,
+        });
+      }
     }
 
     // --- optional sale -----------------------------------------------------

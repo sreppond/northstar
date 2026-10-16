@@ -118,6 +118,20 @@ export function eventDetail(event: PlanEvent, plan?: Plan): Detail {
   for (const field of fields) {
     const raw = config[field.name];
     if (raw === undefined || raw === null || raw === '') continue;
+    // Schedules (RSU vests, comp steps, work phases) and per-event records
+    // have no single value to print — a count says what's there without the
+    // "[object Object]" a plain String() gave them.
+    if (field.kind === 'custom') {
+      const count = Array.isArray(raw) ? raw.length : typeof raw === 'object' ? Object.keys(raw).length : 0;
+      if (count === 0) continue;
+      detailRows.push({ label: field.label, value: `${count} ${count === 1 ? 'entry' : 'entries'}` });
+      continue;
+    }
+    if (field.name === 'participantId') {
+      const person = plan?.participants.find((p) => p.id === raw);
+      detailRows.push({ label: field.label, value: person?.name ?? String(raw) });
+      continue;
+    }
     detailRows.push({ label: field.label, value: formatUnit(raw, field.unit) });
   }
 

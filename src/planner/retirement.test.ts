@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Plan, PlanEvent } from '@northstar/engine';
-import { runPlan } from '@northstar/engine';
+import { planEndYear, runPlan } from '@northstar/engine';
 import { clampYear, extendPlanHorizon, planForRetirementPreview } from './retirement';
 
 // Same shape as diff.test.ts's own `plan()` fixture — a real, runnable Plan
@@ -56,7 +56,7 @@ describe('extendPlanHorizon', () => {
     expect(extendPlanHorizon(p, 2060)).toBe(p);
   });
 
-  it('pushes an included endOfPlan event out to the target year instead of touching projectionYears', () => {
+  it('replaces a shorter endOfPlan event with an explicit horizon setting at the target year', () => {
     const endOfPlan: PlanEvent = {
       id: 'eop',
       kind: 'endOfPlan',
@@ -67,7 +67,9 @@ describe('extendPlanHorizon', () => {
     };
     const p = plan({ events: [endOfPlan] });
     const extended = extendPlanHorizon(p, 2060);
-    expect(extended.events.find((e) => e.id === 'eop')?.startYear).toBe(2060);
+    expect(extended.events.some((e) => e.id === 'eop')).toBe(false);
+    expect(extended.settings.horizon).toEqual({ mode: 'year', year: 2060 });
+    expect(planEndYear(extended)).toBe(2060);
   });
 
   it('leaves an endOfPlan event alone when it already reaches the target', () => {

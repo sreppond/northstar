@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { ZERO_DASH } from '../format';
 
-export type RowKind = 'total' | 'group' | 'child';
+/** `grandchild`: one line inside an expanded life-change row (Cash Flow). */
+export type RowKind = 'total' | 'group' | 'child' | 'grandchild';
 
 /**
  * A magnitude bar behind one cell (docs/REDESIGN.md §4.1, DESIGN-DIRECTION.md
@@ -171,7 +172,11 @@ export function DataTable({
           row.bar && row.values ? Math.max(1, ...row.values.map((v) => Math.abs(v))) : 0;
 
         return (
-          <div key={row.key} className={`ns-grid ns-row-${row.kind}`} style={style}>
+          <div
+            key={row.key}
+            className={`ns-grid ${row.kind === 'grandchild' ? 'ns-row-child ns-row-grandchild' : `ns-row-${row.kind}`}`}
+            style={style}
+          >
             <div title={typeof row.label === 'string' ? row.label : undefined}>{row.label}</div>
             {row.cells.map((cell, i) => {
               const value = row.values?.[i];

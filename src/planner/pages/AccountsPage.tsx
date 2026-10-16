@@ -6,7 +6,9 @@ import { usePlanner } from '../PlannerContext';
 import { LedgerToolbar, LedgerCompareDiff } from '../LedgerToolbar';
 import { AccountsTab } from '../tabs/AccountsTab';
 import { asOfDateLabel, planMetaLine, money } from '../format';
-import { assetMixToday, missingAccountClasses, netWorthStats } from '../ledger';
+import { assetMixToday, missingAccountClasses, netWorthStats, stubYearLabel } from '../ledger';
+import { BalanceTrajectory } from '../views/BalanceTrajectory';
+import { PlanCheckBanner } from '../PlanCheckBanner';
 import { Page, PageHeader, StatStrip, Stat, SectionCard, StackedBar } from '../ui';
 import './ledger.css';
 
@@ -23,6 +25,8 @@ export function AccountsPage() {
   const mix = assetMixToday(result.years, result.opening);
   const asOf = stored.settings.asOfDate ?? `${stored.settings.startYear}-01-01`;
   const asOfLabel = asOfDateLabel(asOf);
+  const stub = stubYearLabel(result.startYear, stored.settings.startYear, stored.settings.asOfDate);
+  const stubYear = stub ? { year: result.startYear, label: stub.short } : undefined;
 
   const missing = [
     ...missingAccountClasses(ASSET_CLASSES, false, allAccounts, result.years).map((accountClass) => ({
@@ -42,6 +46,8 @@ export function AccountsPage() {
         meta={planMetaLine(stored, result.endYear)}
         actions={<AddAccountMenu missing={missing} onPick={(accountClass) => setAccountDraft(structuredClone(newAccountOfType(accountClass)))} />}
       />
+
+      <PlanCheckBanner only={['high-growth']} />
 
       <StatStrip>
         {/* No delta tag here (docs/ROADMAP-10.md C1) — a "+$3.85M" pill next
@@ -72,6 +78,16 @@ export function AccountsPage() {
           explain={`Cash and taxable-investment balances as of ${asOfLabel} — the two buckets you could spend without a withdrawal penalty or triggering a tax event.`}
         />
       </StatStrip>
+
+      {result.years.length > 1 && (
+        <SectionCard
+          title="Net worth trajectory"
+          meta={`What it's made of · ${result.startYear}–${result.endYear}`}
+          divider={false}
+        >
+          <BalanceTrajectory years={result.years} stubYear={stubYear} />
+        </SectionCard>
+      )}
 
       {mix.length > 0 && (
         <SectionCard title="Where it sits" meta="Today" divider={false}>

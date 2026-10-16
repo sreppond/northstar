@@ -50,6 +50,7 @@ export function useEventEditor(): EventEditor {
       config: mod.defaults({
         settings: plan.settings,
         participants: plan.participants,
+        events: plan.events,
         startYear: plan.settings.startYear,
         endYear: startYear,
         inflationAt: () => 1,

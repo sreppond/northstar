@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Account, Goal, Plan, PlanEvent } from '@northstar/engine';
-import { mergeGoalRules } from '@northstar/engine';
+import { DEFAULT_HORIZON_AGE, mergeGoalRules, planEndYear } from '@northstar/engine';
 import { SAMPLE_PLANS } from '../samplePlan';
 import type { ProgressPoint } from '../progress';
 import { toast } from '../ui/Toast';
@@ -99,6 +99,12 @@ interface PlanState {
   revertWhatIf(planId: string): void;
   /** Saves the edited plan under `name` as a new plan; the live plan reverts to the snapshot. */
   forkWhatIf(planId: string, name: string): void;
+  /**
+   * Keep a previewed change as its own plan (docs/REDESIGN-V4.md §1.4,
+   * "Save as scenario") without touching the active one — it shows up in
+   * the switcher and on Compare.
+   */
+  savePlanAs(plan: Plan, name: string): void;
 
   undo(): void;
   redo(): void;
@@ -285,8 +291,8 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   startPlan(name, birthYear) {
     const id = newId();
     // `blankPlan` with no `like` plan already produces exactly the right
-    // shape for a genuine first run — no accounts, no financial data, just
-    // the required end-of-plan event — the one thing missing is a household,
+    // shape for a genuine first run — no accounts, no financial data, a
+    // lifetime horizon — the one thing missing is a household,
     // since there is no earlier plan to borrow one from.
     const plan = blankPlan(id, name.trim() || 'My plan', undefined);
     plan.participants = [
@@ -368,6 +374,14 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     delete restored.settings.compareToPlanId;
     get().replacePlan(restored);
     get().deletePlan(snapshot.id);
+  },
+
+  savePlanAs(plan, name) {
+    const copy: Plan = { ...structuredClone(plan), id: newId(), name: name.trim() || `${plan.name} copy` };
+    delete copy.isWhatIfSnapshot;
+    delete copy.settings.compareToPlanId;
+    set((state) => commit(state, (plans) => [...plans, copy]));
+    toast(`Saved as "${copy.name}"`, { action: { label: 'Undo', onClick: () => get().undo() } });
   },
 
   forkWhatIf(planId, name) {
@@ -457,14 +471,16 @@ function todayISO(): string {
 }
 
 /**
- * A genuinely empty plan: no accounts, no events but the required horizon.
+ * A genuinely empty plan: no accounts, no events, a lifetime horizon.
  * It borrows the household and start year from an existing plan, since those
  * describe the person rather than the scenario, but nothing financial —
  * inheriting the sample balance sheet made every new scenario a lie.
  */
 function blankPlan(id: string, name: string, like: Plan | undefined): Plan {
   const startYear = like?.settings.startYear ?? new Date().getFullYear();
-  const horizon = like?.events.find((e) => e.kind === 'endOfPlan')?.startYear ?? startYear + 20;
+  // The fallback span `projectionYears` gives when the age-based horizon has
+  // nobody to measure against yet (`startPlan` adds the household after).
+  const fallbackEnd = like ? planEndYear(like) : startYear + 20;
 
   return {
     id,
@@ -474,26 +490,20 @@ function blankPlan(id: string, name: string, like: Plan | undefined): Plan {
       // A brand-new scenario's balances are current as of right now — the
       // first year of its own projection is whatever is left of this one.
       asOfDate: todayISO(),
-      projectionYears: horizon - startYear + 1,
+      // docs/REDESIGN-V4.md §3: a plan runs through the household's lifetime
+      // by default, so retirement is never past the end of it.
+      horizon: like?.settings.horizon ?? { mode: 'age', age: DEFAULT_HORIZON_AGE },
+      projectionYears: fallbackEnd - startYear + 1,
       inflationRate: like?.settings.inflationRate ?? 2.5,
-      dollarMode: like?.settings.dollarMode ?? 'futureDollars',
+      // docs/REDESIGN-V4.md §8: today's dollars by default — a budget reads in them.
+      dollarMode: like?.settings.dollarMode ?? 'todaysDollars',
       baselineIncome: 0,
       baselineExpenses: 0,
       incomeTaxRate: like?.settings.incomeTaxRate ?? 25,
     },
     participants: like ? structuredClone(like.participants) : [],
     accounts: [],
-    events: [
-      {
-        id: `end-${id}`,
-        kind: 'endOfPlan',
-        name: 'End of plan',
-        startYear: horizon,
-        isIncluded: true,
-        isRequired: true,
-        config: {},
-      },
-    ],
+    events: [],
     rules: [],
   };
 }

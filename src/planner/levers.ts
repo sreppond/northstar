@@ -43,7 +43,18 @@ export function applyLevers(plan: Plan, levers: LeverInputs): Plan {
   // than re-deriving the same narrow rule here.
   let next = withReturnShift(plan, levers.returnDelta);
 
-  if (levers.spendingDelta !== 0) {
+  if (levers.spendingDelta !== 0 && adjustableBudgetAnnual(next) > 0) {
+    // A household-budget plan (docs/REDESIGN-V4.md §4.2) spends through its
+    // lines, not `baselineExpenses` — so the lever scales the adults' and
+    // shared lines by whatever share of them `spendingDelta` is. Kids' costs
+    // and savings lines are not "spending" the household chooses.
+    const total = adjustableBudgetAnnual(next);
+    const factor = Math.max(0, (total + levers.spendingDelta) / total);
+    next = {
+      ...next,
+      budget: next.budget!.map((l) => (isAdjustable(next, l) ? { ...l, amount: l.amount * factor } : l)),
+    };
+  } else if (levers.spendingDelta !== 0) {
     next = {
       ...next,
       settings: {
@@ -89,4 +100,19 @@ export function horizonDelta(base: PlanResult, ghost: PlanResult): { endYear: nu
     r.years.find((y) => y.year === base.endYear)?.netWorth ?? r.years[r.years.length - 1]?.netWorth ?? 0;
 
   return { endYear: base.endYear, delta: endOf(ghost) - endOf(base) };
+}
+
+function isAdjustable(plan: Plan, line: NonNullable<Plan['budget']>[number]): boolean {
+  const child = plan.participants.some((p) => p.id === line.owner && p.role === 'child');
+  return line.isIncluded && line.kind !== 'saving' && line.cadence === 'monthly' && !child;
+}
+
+/** Yearly, today's dollars: the budget lines the spending lever scales. 0 for a plan with no budget. */
+export function adjustableBudgetAnnual(plan: Plan): number {
+  return (plan.budget ?? []).filter((l) => isAdjustable(plan, l)).reduce((sum, l) => sum + l.amount * 12, 0);
+}
+
+/** What the spending lever is a change TO — baseline living expenses plus any adjustable budget. */
+export function livingSpendingAnnual(plan: Plan): number {
+  return plan.settings.baselineExpenses + adjustableBudgetAnnual(plan);
 }
