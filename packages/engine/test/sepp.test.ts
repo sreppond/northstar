@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MORTALITY_RATES,
   amortizedSeppPayment,
   annuityFactor,
   lifeExpectancyFactor,
@@ -15,12 +16,30 @@ describe('lifeExpectancyFactor', () => {
     expect(lifeExpectancyFactor(60)).toBe(27.1);
   });
 
-  it('clamps below the table rather than extrapolating', () => {
-    expect(lifeExpectancyFactor(5)).toBe(lifeExpectancyFactor(20));
+  it('reads the full IRS table (ages 0–120), not a 20–70 slice', () => {
+    expect(lifeExpectancyFactor(5)).toBe(79.8);
+    expect(lifeExpectancyFactor(95)).toBe(4.0);
   });
 
-  it('clamps above the table rather than extrapolating', () => {
-    expect(lifeExpectancyFactor(95)).toBe(lifeExpectancyFactor(70));
+  it('carries the corrected values v1 used to get wrong (Pub. 590-B Table I)', () => {
+    expect([41, 43, 47, 49].map(lifeExpectancyFactor)).toEqual([44.8, 42.9, 39.0, 37.1]);
+  });
+
+  it('clamps past the ends of the table rather than extrapolating', () => {
+    expect(lifeExpectancyFactor(130)).toBe(lifeExpectancyFactor(120));
+    expect(lifeExpectancyFactor(-3)).toBe(lifeExpectancyFactor(0));
+  });
+
+  it('agrees with the mortality table it was derived from (curtate + ½, to the tenth)', () => {
+    for (const age of [0, 30, 41, 47, 50, 70, 90]) {
+      let survival = 1;
+      let curtate = 0;
+      for (let a = age; a < 120; a++) {
+        survival *= 1 - MORTALITY_RATES[a];
+        curtate += survival;
+      }
+      expect(curtate + 0.5, `age ${age}`).toBeCloseTo(lifeExpectancyFactor(age), 0);
+    }
   });
 });
 

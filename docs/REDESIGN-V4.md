@@ -696,6 +696,68 @@ green. Each phase ends with a Tauri rebuild so the installed app shows it.
   - Overview's spending lever scales the budget's adult and shared lines
     when the plan has one.
 
-**Next — Phase 3 (Home).** Known gaps:
+**Phase 3 — Home, Oct 16, 2026.**
+- **Engine** (`affordability.ts`):
+  - `withHomePurchase` moves the plan's own home, or adds a hypothetical
+    one. Anchors such as rent "until Buy a home" follow it.
+  - `readHome` reads the house-poor numbers:
+    - housing ÷ after-tax income and the savings rate, both for the first
+      full year;
+    - cash and taxable investments left after closing, in months of
+      spending;
+    - any shortfall within 10 years.
+  - `maxAffordablePrice` bisects over `runPlan`, truncated to the 10-year
+    carry window. `affordabilityCurve` covers every candidate year: about
+    30ms for 12 years, so no worker is needed.
+  - Zones come from §8: ≤25% / ≥15% / ≥6 mo is comfortable; ≤35% / ≥5% /
+    ≥3 mo is a stretch.
+- **Home page** (`/house`, rail label "Home"):
+  - A one-sentence answer.
+  - The affordability map: year × price, shaded comfortable / stretch /
+    house-poor. Click it to try a purchase; a ring marks the saved one.
+  - Levers for price, year, down payment and rate, over the Impact strip
+    (compared with renting when the plan has no home yet). Keep adds or
+    moves the purchase.
+  - The house-poor scorecard.
+  - What owning costs each month, part by part, against the rent it
+    replaces.
+  - The budget before and after.
+  - A price ladder: comfortable max, stretch max, and the price being
+    tried, each a full plan run.
+  - The cash cushion, buying vs renting.
+  - The existing ownership arc, under "Owning it".
+- **Also:**
+  - The rail's "Goals" group is now "Decisions".
+  - `NAV_ITEMS` moved to `nav.ts`, breaking the Sidebar ↔ shortcuts cycle
+    that broke hot reload.
+
+**Phase 4 — Annuity & SEPP, Oct 16, 2026.**
+- **Tables:** `seppTables.ts` is ported from v2's verified copy. The Single
+  Life Table now covers ages 0–120 and fixes v1's values at ages 41/43/47/49
+  (44.8 / 42.9 / 39.0 / 37.1). A test re-derives it from the mortality table
+  (curtate + ½).
+- **Engine:** `Account.seppElection` (start year, method, rate, optional
+  pinned payment).
+  - Step 5.5 locks the account from its start through the later of 5 years
+    or age 60: no contributions, and nothing from the allocation or
+    withdrawal rules.
+  - Step 7.6 pays it before the waterfall: no penalty, gain first (LIFO) for
+    nonqualified, pro-rata for qualified, contract fees still deducted.
+  - Fixed methods lock the payment in the first year; RMD recomputes it
+    every year.
+  - Helpers: `withSeppElection`, `seppStartOptions` (largest payment per
+    start year, sized on that year's projected balance) and `seppYearRows`.
+- **Annuity & SEPP page:**
+  - One-sentence answer and a stat strip.
+  - Largest SEPP by start year (bars, click or ←/→), with the method and an
+    interest rate that is capped and explained.
+  - With vs without chart, windowed through the lock + 10 years: balance
+    both ways, paid out so far, and basis left.
+  - Year-by-year table with the lock years shaded.
+  - Impact strip with Keep / Save as scenario / Reset, or Remove the SEPP
+    once kept, plus a commitment warning.
+  - Contract details below, following the selected account.
+
+**Next — Phase 5 (Retirement).** Known gaps:
 - Retirement still stops every standing contribution household-wide.
 - "Budget by year" draws the plan, not the draft.

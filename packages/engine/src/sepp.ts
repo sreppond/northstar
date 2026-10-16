@@ -43,8 +43,10 @@
  *   - `SINGLE_LIFE_EXPECTANCY_TABLE` reproduces the IRS Single Life
  *     Expectancy Table (Table I) that has applied since 2022, and
  *     `MORTALITY_RATES` reproduces Treas. Reg. §1.401(a)(9)-9(e)'s mortality
- *     table — both from training data rather than a live fetch of
- *     Publication 590-B / the Treasury Register. Verify the current tables
+ *     table — both now read from `seppTables.ts`, transcribed from the primary
+ *     sources and cross-checked against each other (ported from Northstar
+ *     v2, which found this file's earlier copy off by 0.1 at ages 41, 43,
+ *     47 and 49). Still verify against the current Publication 590-B
  *     before relying on a real SEPP election.
  *   - **Decision taken:** the RMD method here reads its divisor from the
  *     SAME `SINGLE_LIFE_EXPECTANCY_TABLE` / `lifeExpectancyFactor` the
@@ -74,6 +76,14 @@
  *     overstate what the IRS allows, only decline to show one way to make
  *     the payment even smaller, which nobody sizing a SEPP is looking for.
  */
+import {
+  MAX_TABLE_AGE,
+  MORTALITY_RATES,
+  SINGLE_LIFE_TABLE,
+  annuityFactor as tableAnnuityFactor,
+  singleLifeExpectancy,
+} from './seppTables.js';
+import type { Account, Plan, PlanResult, SeppElection } from './types.js';
 
 /**
  * IRS Single Life Expectancy Table (Table I), effective for distribution
@@ -81,59 +91,7 @@
  * age attained in the distribution year — the "IRS rules on age definition"
  * this module's age comes from.
  */
-export const SINGLE_LIFE_EXPECTANCY_TABLE: Record<number, number> = {
-  20: 65.0,
-  21: 64.1,
-  22: 63.1,
-  23: 62.1,
-  24: 61.1,
-  25: 60.2,
-  26: 59.2,
-  27: 58.2,
-  28: 57.3,
-  29: 56.3,
-  30: 55.3,
-  31: 54.4,
-  32: 53.4,
-  33: 52.5,
-  34: 51.5,
-  35: 50.5,
-  36: 49.6,
-  37: 48.6,
-  38: 47.7,
-  39: 46.7,
-  40: 45.7,
-  41: 44.7,
-  42: 43.8,
-  43: 42.8,
-  44: 41.9,
-  45: 41.0,
-  46: 40.0,
-  47: 39.1,
-  48: 38.1,
-  49: 37.2,
-  50: 36.2,
-  51: 35.3,
-  52: 34.3,
-  53: 33.4,
-  54: 32.5,
-  55: 31.6,
-  56: 30.6,
-  57: 29.8,
-  58: 28.9,
-  59: 28.0,
-  60: 27.1,
-  61: 26.2,
-  62: 25.4,
-  63: 24.5,
-  64: 23.7,
-  65: 22.9,
-  66: 22.0,
-  67: 21.2,
-  68: 20.4,
-  69: 19.6,
-  70: 18.8,
-};
+export const SINGLE_LIFE_EXPECTANCY_TABLE: Readonly<Record<number, number>> = SINGLE_LIFE_TABLE;
 
 /**
  * Only a starting point — see the module doc. Roughly in line with 120% of
@@ -160,11 +118,7 @@ export type SeppMethod = 'amortization' | 'annuitization' | 'rmd';
 
 /** Nearest tabulated factor, clamped to the table's ends rather than extrapolated. */
 export function lifeExpectancyFactor(age: number): number {
-  const ages = Object.keys(SINGLE_LIFE_EXPECTANCY_TABLE).map(Number);
-  const min = Math.min(...ages);
-  const max = Math.max(...ages);
-  const clamped = Math.round(Math.max(min, Math.min(max, age)));
-  return SINGLE_LIFE_EXPECTANCY_TABLE[clamped];
+  return singleLifeExpectancy(Math.round(age));
 }
 
 /**
@@ -178,36 +132,10 @@ export function lifeExpectancyFactor(age: number): number {
  * build a full annuity factor. Ages 115–120 are all 0.4 in the published
  * table.
  */
-export const MORTALITY_RATES: Record<number, number> = {
-  0: 0.001762, 1: 0.000441, 2: 0.000292, 3: 0.000232, 4: 0.000177,
-  5: 0.000161, 6: 0.000153, 7: 0.000145, 8: 0.000132, 9: 0.000127,
-  10: 0.000128, 11: 0.000135, 12: 0.000146, 13: 0.000164, 14: 0.000192,
-  15: 0.000223, 16: 0.000253, 17: 0.000276, 18: 0.000293, 19: 0.000304,
-  20: 0.000313, 21: 0.000343, 22: 0.000377, 23: 0.000421, 24: 0.000466,
-  25: 0.00052, 26: 0.000581, 27: 0.00063, 28: 0.000677, 29: 0.00072,
-  30: 0.000763, 31: 0.000799, 32: 0.000824, 33: 0.000833, 34: 0.00083,
-  35: 0.000823, 36: 0.000819, 37: 0.000824, 38: 0.000836, 39: 0.000853,
-  40: 0.000879, 41: 0.000909, 42: 0.000945, 43: 0.00098, 44: 0.001019,
-  45: 0.001065, 46: 0.001132, 47: 0.001225, 48: 0.001345, 49: 0.001485,
-  50: 0.001656, 51: 0.001874, 52: 0.002121, 53: 0.002397, 54: 0.002701,
-  55: 0.003032, 56: 0.00339, 57: 0.003774, 58: 0.004181, 59: 0.004613,
-  60: 0.005071, 61: 0.005554, 62: 0.006071, 63: 0.006624, 64: 0.007225,
-  65: 0.007884, 66: 0.008238, 67: 0.008659, 68: 0.009163, 69: 0.009767,
-  70: 0.010491, 71: 0.011358, 72: 0.012385, 73: 0.013598, 74: 0.015014,
-  75: 0.01667, 76: 0.018587, 77: 0.020815, 78: 0.023391, 79: 0.026387,
-  80: 0.02985, 81: 0.033883, 82: 0.038544, 83: 0.04388, 84: 0.049956,
-  85: 0.056799, 86: 0.064436, 87: 0.072882, 88: 0.082137, 89: 0.092172,
-  90: 0.102919, 91: 0.114344, 92: 0.126605, 93: 0.139936, 94: 0.154844,
-  95: 0.171902, 96: 0.18721, 97: 0.204659, 98: 0.222921, 99: 0.241884,
-  100: 0.261476, 101: 0.281536, 102: 0.301847, 103: 0.322371, 104: 0.34294,
-  105: 0.361261, 106: 0.372886, 107: 0.381098, 108: 0.383358, 109: 0.385709,
-  110: 0.388092, 111: 0.390353, 112: 0.392822, 113: 0.395188, 114: 0.397567,
-  115: 0.4, 116: 0.4, 117: 0.4, 118: 0.4, 119: 0.4,
-  120: 0.4,
-};
+export { MORTALITY_RATES };
 
 /** The oldest age `MORTALITY_RATES` is defined for. */
-export const MAX_MORTALITY_AGE = 120;
+export const MAX_MORTALITY_AGE = MAX_TABLE_AGE;
 
 /**
  * Fixed Annuitization Method's divisor: the present value, at `ratePercent`,
@@ -230,16 +158,7 @@ export const MAX_MORTALITY_AGE = 120;
  * `MAX_MORTALITY_AGE` rather than extrapolating past the table.
  */
 export function annuityFactor(age: number, ratePercent: number): number {
-  const startAge = Math.max(0, Math.min(MAX_MORTALITY_AGE, Math.floor(age)));
-  const discount = 1 / (1 + ratePercent / 100);
-  let survival = 1;
-  let factor = 1; // the t = 0 payment, made at the start (annuity-due)
-  for (let t = 1; t <= MAX_MORTALITY_AGE - startAge + 1; t++) {
-    const mortalityAge = Math.min(MAX_MORTALITY_AGE, startAge + t - 1);
-    survival *= 1 - MORTALITY_RATES[mortalityAge];
-    factor += survival * Math.pow(discount, t);
-  }
-  return factor;
+  return tableAnnuityFactor(age, ratePercent);
 }
 
 /**
@@ -466,4 +385,121 @@ export function seppStartAgeSweep(params: {
         balanceAtReference: last ? last.close : startingBalance,
       };
     });
+}
+
+// ---------------------------------------------------------------------------
+// A SEPP inside the plan (Account.seppElection, run.ts step 7.6)
+// ---------------------------------------------------------------------------
+
+/** `plan` with `accountId`'s SEPP set — or removed, with `undefined`. */
+export function withSeppElection(plan: Plan, accountId: string, election: SeppElection | undefined): Plan {
+  return {
+    ...plan,
+    accounts: plan.accounts.map((a) => {
+      if (a.id !== accountId) return a;
+      const next = { ...a };
+      if (election) next.seppElection = election;
+      else delete next.seppElection;
+      return next;
+    }),
+  };
+}
+
+/** Whose age a SEPP on `account` runs on: its owner, else the oldest adult — the same rule `runPlan` uses. */
+export function seppOwnerBirthYear(plan: Plan, account: Account): number | undefined {
+  const adults = plan.participants.filter((p) => p.isIncluded && p.role !== 'child');
+  const owner = account.ownerParticipantId ? adults.find((p) => p.id === account.ownerParticipantId) : undefined;
+  if (owner) return owner.birthYear;
+  return adults.length ? Math.min(...adults.map((p) => p.birthYear)) : undefined;
+}
+
+export interface SeppStartOption {
+  startYear: number;
+  age: number;
+  /** The balance the payment is sized from: the account at the start of `startYear`, with no SEPP. */
+  balance: number;
+  annualPayment: number;
+  lockedUntil: number;
+}
+
+/**
+ * "How much is the SEPP I could begin taking in that year?" — for each
+ * candidate start year, the payment the method allows on the balance the
+ * account would have by then (read from a run of the plan without any SEPP
+ * on it, so contract fees and every other flow are already in it).
+ */
+export function seppStartOptions(
+  plan: Plan,
+  withoutSepp: PlanResult,
+  accountId: string,
+  years: number[],
+  method: SeppMethod,
+  ratePercent: number,
+): SeppStartOption[] {
+  const account = plan.accounts.find((a) => a.id === accountId);
+  const birthYear = account ? seppOwnerBirthYear(plan, account) : undefined;
+  if (!account || birthYear === undefined) return [];
+  return years.flatMap((startYear) => {
+    const before = withoutSepp.years.find((y) => y.year === startYear - 1)?.accounts.find((a) => a.accountId === accountId);
+    const balance = before ? before.close : startYear <= withoutSepp.startYear ? account.initialBalance : 0;
+    if (balance <= 0) return [];
+    const age = startYear - birthYear;
+    return [
+      {
+        startYear,
+        age,
+        balance,
+        annualPayment: seppMethodPayment(balance, age, method, ratePercent).annualPayment,
+        lockedUntil: mandatoryEndYear(startYear, birthYear),
+      },
+    ];
+  });
+}
+
+export interface SeppYearRow {
+  year: number;
+  age?: number;
+  open: number;
+  /** Growth net of contract fees. */
+  growth: number;
+  fees: number;
+  payment: number;
+  /** The part of `payment` that is gain (taxable); the rest is basis coming back tax-free. */
+  taxable: number;
+  tax: number;
+  close: number;
+  basisLeft?: number;
+  locked: boolean;
+}
+
+/** The account year by year as `runPlan` ran it — the Annuity page's table. */
+export function seppYearRows(plan: Plan, result: PlanResult, accountId: string): SeppYearRow[] {
+  const account = plan.accounts.find((a) => a.id === accountId);
+  const birthYear = account ? seppOwnerBirthYear(plan, account) : undefined;
+  const e = account?.seppElection;
+  let prevBasis = account?.nonTaxableBase;
+  return result.years.flatMap((y) => {
+    const row = y.accounts.find((a) => a.accountId === accountId);
+    if (!row) return [];
+    const payment = y.income.filter((l) => l.accountId === accountId && l.category === 'sepp').reduce((s, l) => s + l.amount, 0);
+    const tax = y.taxes.filter((l) => l.accountId === accountId && l.label.startsWith('SEPP tax')).reduce((s, l) => s + l.amount, 0);
+    const basisLeft = row.nonTaxableBaseRemaining;
+    const basisUsed = prevBasis !== undefined && basisLeft !== undefined ? Math.max(0, prevBasis - basisLeft) : 0;
+    prevBasis = basisLeft ?? prevBasis;
+    return [
+      {
+        year: y.year,
+        age: birthYear !== undefined ? y.year - birthYear : undefined,
+        open: row.open,
+        growth: row.growth,
+        fees: row.annuityFeesDeducted ?? 0,
+        payment,
+        taxable: Math.max(0, payment - basisUsed),
+        tax,
+        close: row.close,
+        basisLeft,
+        locked: !!e && birthYear !== undefined && y.year >= e.startYear && y.year <= mandatoryEndYear(e.startYear, birthYear),
+      },
+    ];
+  });
 }

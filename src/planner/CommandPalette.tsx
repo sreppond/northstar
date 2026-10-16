@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { NAV_ITEMS } from './Sidebar';
+import { NAV_ITEMS } from './nav';
 import { usePlanner } from './PlannerContext';
 import { openShortcutSheet } from './ShortcutSheet';
 import { toast } from './ui/Toast';

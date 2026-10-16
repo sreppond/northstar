@@ -13,7 +13,7 @@
  * `window`/`document`, and it's a thin dispatcher over the same function.
  */
 import { useEffect, useRef } from 'react';
-import { NAV_ITEMS } from './Sidebar';
+import { NAV_ITEMS } from './nav';
 
 /** The first 9 rail destinations, in rail order — ⌘1–⌘9. Reports (the 10th
  *  item) intentionally has no number shortcut; nine is the limit a human

@@ -181,6 +181,16 @@ export interface Account {
    */
   isQualifiedAnnuity?: boolean;
 
+  /**
+   * A committed SEPP (§72(t), or §72(q) for a nonqualified annuity —
+   * docs/REDESIGN-V4.md §4.8). The engine pays it every year from
+   * `startYear` until the later of five years or age 60, BEFORE the ordinary
+   * withdrawal rules run, with no early-withdrawal penalty, and keeps every
+   * other withdrawal and contribution away from the account while it is
+   * locked — changing the schedule is what voids the exception.
+   */
+  seppElection?: SeppElection;
+
   // --- contributions ------------------------------------------------------
   /** Standing annual contribution out of pay. */
   yearlyPaycheckContribution?: number;
@@ -192,6 +202,19 @@ export interface Account {
   linkedInterestRate?: number;
   linkedPlannedPayment?: number;
   linkedMinimumPayment?: number;
+}
+
+export interface SeppElection {
+  startYear: number;
+  method: 'amortization' | 'annuitization' | 'rmd';
+  /** Interest rate the fixed methods size the payment at (percent). */
+  ratePercent: number;
+  /**
+   * The payment actually committed to, when known — a SEPP already under way
+   * before the plan's start year can't be re-derived from today's balance.
+   * Ignored by the `rmd` method, which recomputes every year.
+   */
+  annualPayment?: number;
 }
 
 export interface PlanEvent {

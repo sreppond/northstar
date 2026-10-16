@@ -37,10 +37,12 @@ export function isAnnuityContract(account: Account): boolean {
   );
 }
 
-export function AnnuityForecastView({ plan, result }: { plan: Plan; result: PlanResult }) {
-  const candidates = plan.accounts.filter((a) => !a.isSynthetic && isAnnuityContract(a));
+/** `accountId`: show just that contract (the Annuity & SEPP page drives the choice); unset, the view offers its own picker. */
+export function AnnuityForecastView({ plan, result, accountId }: { plan: Plan; result: PlanResult; accountId?: string }) {
+  const all = plan.accounts.filter((a) => !a.isSynthetic && isAnnuityContract(a));
+  const candidates = accountId ? all.filter((a) => a.id === accountId) : all;
   if (candidates.length === 0) return null;
-  return <AnnuityContent plan={plan} result={result} candidates={candidates} />;
+  return <AnnuityContent key={candidates[0].id} plan={plan} result={result} candidates={candidates} />;
 }
 
 function AnnuityContent({

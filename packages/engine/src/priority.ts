@@ -72,6 +72,11 @@ export interface WaterfallContext {
   /** The plan's start year — an account without its own `startYear` is
    * treated as issued then, for `contractYearFor`. */
   planStartYear: number;
+  /**
+   * Accounts under a SEPP lock this year: no ordinary withdrawal may touch
+   * them and no surplus may land in them (either would modify the schedule).
+   */
+  lockedAccountIds?: Set<string>;
 }
 
 /** Withdrawal gating: `withdrawalTiming` plus `withdrawalStartingYear`. */
@@ -107,6 +112,7 @@ export function planWithdrawals(
 
     const account = ctx.accounts.get(rule.accountId);
     if (!account) continue;
+    if (ctx.lockedAccountIds?.has(account.id)) continue;
     if (!isWithdrawable(account, ctx.year)) continue;
 
     const available = ctx.balances.get(rule.accountId) ?? 0;
@@ -194,6 +200,7 @@ export function planAllocations(
 
     const account = ctx.accounts.get(rule.accountId);
     if (!account || !account.isIncluded) continue;
+    if (ctx.lockedAccountIds?.has(account.id)) continue;
     // Routing surplus at a debt means paying it down, capped at what is owed.
     const owed = account.isLiability ? (ctx.balances.get(rule.accountId) ?? 0) : Infinity;
     if (owed <= EPSILON) continue;
