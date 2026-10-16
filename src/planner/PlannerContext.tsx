@@ -16,6 +16,7 @@ import type {
   PlanEvent,
   PlanFreshness,
   RetirementConfig,
+  ChartRangeKey,
 } from '@northstar/engine';
 import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './store/planStore';
@@ -30,6 +31,7 @@ import { asOfDateLabel, cagr } from './format';
 import { heroReading } from './reading';
 import { useGlobalShortcuts } from './shortcuts';
 import { openShortcutSheet } from './ShortcutSheet';
+import { planHealth, type PlanHealth } from './health';
 
 /**
  * Everything the routed pages (`pages/*.tsx`) need, computed once here rather
@@ -94,6 +96,18 @@ export interface PlannerContextValue {
   // -- the instrument: scrub + drag-through-time --
   scrubYear: number | null;
   setScrubYear(year: number | null): void;
+  /**
+   * The year pinned by clicking any time chart, app-wide (docs/REDESIGN-V5.md
+   * §4.1). Hover stays local to each chart. `scrubYear` above stays until the
+   * page units migrate off it. Resets to null when the active plan changes.
+   */
+  focusYear: number | null;
+  setFocusYear(year: number | null): void;
+  /** Range for every time chart; persisted per plan in `settings.chartRange`, default `'all'`. */
+  chartRange: ChartRangeKey;
+  setChartRange(range: ChartRangeKey): void;
+  /** Does the plan run out of money, and the spendable-money series (docs/REDESIGN-V5.md §4.2). */
+  health: PlanHealth;
   dragDraft: PlanEvent | null;
   setDragDraft(event: PlanEvent | null): void;
   selected: ChartSelection | null;
@@ -189,6 +203,12 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const localMonarch = useLocalMonarch();
 
   const [scrubYear, setScrubYear] = useState<number | null>(null);
+  // Keyed by plan so a pin never carries into another plan: the stored year
+  // is only honoured while its plan is the active one, with no effect pass
+  // (and no frame showing the old plan's pin).
+  const [focus, setFocus] = useState<{ planId: string; year: number | null }>({ planId, year: null });
+  const focusYear = focus.planId === planId ? focus.year : null;
+  const setFocusYear = (year: number | null) => setFocus({ planId, year });
   const [dragDraft, setDragDraft] = useState<PlanEvent | null>(null);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
@@ -302,6 +322,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   };
 
   const markers = useMemo(() => pathMarkers(result), [result]);
+  // Passed `plan` so "spendable" can honour each account's withdrawal gates.
+  const health = useMemo(() => planHealth(result, plan), [result, plan]);
+
+  // Persisted through `updateSettings` so it survives reloads per plan. Read
+  // from `stored`, not the draft-composed `plan`: it is a display preference,
+  // not something an in-progress edit should flicker.
+  const chartRange: ChartRangeKey = stored.settings.chartRange ?? 'all';
+  const setChartRange = (range: ChartRangeKey) => {
+    // A no-op pick must not land on the undo stack (updateSettings commits).
+    if (range !== chartRange) updateSettings(stored.id, { chartRange: range });
+  };
 
   const allAccounts: Account[] = useMemo(() => {
     const synthetic = new Map<string, Account>();
@@ -421,6 +452,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
     scrubYear,
     setScrubYear,
+    focusYear,
+    setFocusYear,
+    chartRange,
+    setChartRange,
+    health,
     dragDraft,
     setDragDraft,
     selected,

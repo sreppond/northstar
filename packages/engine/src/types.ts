@@ -371,6 +371,14 @@ export type HorizonSetting =
   | { mode: 'year'; year: number }
   | { mode: 'age'; age: number; participantId?: string };
 
+/**
+ * How much of the timeline the app's time charts show (docs/REDESIGN-V5.md
+ * §3.4): the next N years from today, or the whole plan. Display-only, like
+ * `compareToPlanId` -- `runPlan` ignores it. The app declares the same union
+ * in `charts/range.ts`; keep the literals identical.
+ */
+export type ChartRangeKey = '1y' | '3y' | '5y' | '10y' | '20y' | '40y' | 'all';
+
 export interface PlanSettings {
   startYear: number;
   /**
@@ -406,6 +414,12 @@ export interface PlanSettings {
    * `runPlan` ignores it; the UI runs the other plan separately.
    */
   compareToPlanId?: string;
+  /**
+   * The chart range last chosen for this plan (docs/REDESIGN-V5.md §4.1).
+   * Optional and display-only -- `runPlan` ignores it, and a plan saved before
+   * it existed reads as `'all'`.
+   */
+  chartRange?: ChartRangeKey;
   /**
    * How a linked Monarch account maps onto an `AccountClass`, keyed by Monarch
    * account id. Import metadata only — `runPlan` ignores it.
