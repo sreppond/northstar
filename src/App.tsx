@@ -1,10 +1,5 @@
 import { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import '@fontsource/ibm-plex-sans/400.css';
-import '@fontsource/ibm-plex-sans/500.css';
-import '@fontsource/ibm-plex-sans/700.css';
-import '@fontsource/ibm-plex-mono/400.css';
-import '@fontsource/ibm-plex-mono/500.css';
 import './planner/planner.css';
 import './planner/ui/ui.css';
 import './planner/pages/analysis.css';
@@ -34,6 +29,7 @@ import { AnnuityPage } from './planner/pages/AnnuityPage';
 import { ProgressPage } from './planner/pages/ProgressPage';
 import { ComparePage } from './planner/pages/ComparePage';
 import { ReportsPage } from './planner/pages/ReportsPage';
+import { DevUiPage } from './planner/dev/DevUiPage';
 
 /**
  * The gate in front of the planner (docs/REDESIGN.md §6 item 6). A
@@ -128,6 +124,7 @@ function PlannerShell() {
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          {import.meta.env.DEV && <Route path="/dev/ui" element={<DevUiPage />} />}
           <Route path="*" element={<Navigate to="/overview" replace />} />
         </Routes>
       </main>

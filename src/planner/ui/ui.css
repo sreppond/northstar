@@ -47,12 +47,14 @@
   margin: 0;
   font-size: clamp(22px, 2.4vw, 27px);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  /* Size-specific tracking (docs/REDESIGN-V5.md §1.7): large type tightens. */
+  letter-spacing: var(--track-display);
+  line-height: 1.1;
   color: var(--ink-deep);
 }
 .ns-page-meta {
   margin: 6px 0 0;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-meta);
   color: var(--muted);
 }
@@ -69,7 +71,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-eyebrow);
   color: var(--muted);
   background: var(--chip);
@@ -87,7 +89,7 @@
 /* --- eyebrow ---------------------------------------------------------------- */
 
 .ns-eyebrow {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-eyebrow);
   /* S7: 600 read heavier than the references for a mono small-caps label. */
   font-weight: 500;
@@ -147,7 +149,7 @@
   margin-top: 6px;
 }
 .ns-explain-body code {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 12px;
   background: rgba(255, 255, 255, 0.14);
   padding: 1px 5px;
@@ -159,7 +161,7 @@
 .ns-ui-badge {
   display: inline-flex;
   align-items: center;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-eyebrow);
   font-weight: 600;
   text-transform: uppercase;
@@ -188,7 +190,7 @@
 .ns-ui-delta {
   display: inline-flex;
   align-items: center;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-eyebrow);
   font-weight: 600;
   padding: 2px 7px;
@@ -276,21 +278,20 @@
 .ns-ui-stat-pressable[aria-pressed='true'] {
   background: var(--chip);
 }
-/* Deliberately not .ns-num — proportional figures, the same reason the old
-   hero figure stayed proportional (docs/REDESIGN-V3.md keeps "colour is
-   data" company): a display-size number should read as a number, not a
-   printout. Tabular-nums is for grids of small figures read as a column. */
+/* Display figures: -0.02em tracking and tight leading (docs/REDESIGN-V5.md
+   §1.7). Tabular figures now come from `.ns` for everything, which also
+   keeps a scrubbed readout from jittering as digits change. */
 .ns-ui-stat-value {
   font-size: 26px;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
+  letter-spacing: var(--track-display);
+  line-height: var(--lh-display);
   color: var(--ink-deep);
 }
 .ns-ui-stat-xl .ns-ui-stat-value {
   font-size: clamp(34px, 4vw, 48px);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--track-display);
 }
 .ns-ui-stat-sub {
   font-size: 12.5px;
@@ -382,7 +383,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -392,6 +393,8 @@
 .ns-ui-statcard-value {
   font-size: 21px;
   font-weight: 600;
+  letter-spacing: var(--track-display);
+  line-height: var(--lh-display);
   color: var(--ink-deep);
 }
 .ns-ui-statcard-foot {
@@ -399,7 +402,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   color: var(--muted);
 }
@@ -446,12 +449,20 @@
   color: var(--ink-deep);
 }
 .ns-ui-section-meta {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-eyebrow);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
   white-space: nowrap;
+}
+/* The system face runs a touch wider than Plex did in small caps, so a long
+   meta line (Annuity's "Future dollars — what the contract statements will
+   show") clipped at the card edge on a phone. Let it wrap there. */
+@media (max-width: 640px) {
+  .ns-ui-section-meta {
+    white-space: normal;
+  }
 }
 .ns-ui-section-actions {
   flex: none;
@@ -887,5 +898,124 @@
   }
   .ns-check-banner .ns-btn {
     margin-left: 25px;
+  }
+}
+
+/* --- alert (docs/REDESIGN-V5.md §4.3) -----------------------------------
+ * Three tones, three icon shapes: tone is never colour alone (§1.8). Danger
+ * ("runs dry") must read as an error, so it gets a full hairline border in
+ * the danger hue and a tinted wash, not the quiet chip the warnings use. A
+ * full border, not a side accent stripe (see the SEPP warning, c285c63).
+ *
+ * Dismissal collapses height + opacity in 200ms. Height can't transition to
+ * `auto`, so the wrapper is a one-row grid whose row goes 1fr -> 0fr — that
+ * animates the real content height with no measuring. */
+.ns-alert-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 200ms var(--ease-damped),
+    opacity 200ms var(--ease-damped);
+}
+.ns-alert-collapsing {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+.ns-alert-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ns-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  color: var(--ink);
+}
+.ns-alert-icon {
+  flex: none;
+}
+.ns-alert-text {
+  flex: 1;
+  min-width: 0;
+}
+.ns-alert-action {
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+}
+.ns-alert-dismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-soft),
+    color 140ms var(--ease-soft);
+}
+.ns-alert-dismiss:hover {
+  background: rgb(var(--sh) / 10%);
+  color: var(--ink);
+}
+
+.ns-alert-info .ns-alert-icon {
+  color: var(--muted);
+}
+
+.ns-alert-warning {
+  border-color: color-mix(in srgb, var(--warn) 38%, var(--border));
+  background: color-mix(in srgb, var(--warn) 7%, var(--surface));
+}
+.ns-alert-warning .ns-alert-icon {
+  color: var(--warn);
+}
+
+.ns-alert-danger {
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  font-weight: 500;
+}
+.ns-alert-danger .ns-alert-icon {
+  color: var(--danger);
+}
+.ns-alert-danger .ns-alert-action {
+  color: #fff;
+  background: var(--danger-btn);
+  border-color: var(--danger-btn);
+}
+.ns-alert-danger .ns-alert-action:hover:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .ns-alert {
+    flex-wrap: wrap;
+  }
+  .ns-alert-text {
+    flex-basis: calc(100% - 70px);
+  }
+  /* Narrow: icon, message and × on the first row, the action below it. */
+  .ns-alert-dismiss {
+    order: 2;
+  }
+  .ns-alert-action {
+    order: 3;
+    margin-left: 26px;
   }
 }

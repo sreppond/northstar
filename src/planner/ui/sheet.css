@@ -1,0 +1,176 @@
+/*
+ * Sheet (docs/REDESIGN-V5.md §3.6). Position, opacity and blur are driven
+ * inline by motion values in Sheet.tsx; this file is the static look. The
+ * panel is a translucent material over a dimming scrim (apple-design §12):
+ * `--material-bg` / `--material-blur` come from planner.css and go solid and
+ * unblurred under `prefers-reduced-transparency`.
+ */
+
+.ns-sheet-layer {
+  position: fixed;
+  inset: 0;
+  /* z-index is set inline per stack depth. Above the rail and page, below the
+     toast region (90) and hover cards (60) so a toast's Undo stays reachable. */
+}
+/* While leaving, nothing on the layer should catch a click or a drag. */
+.ns-sheet-leaving {
+  pointer-events: none;
+}
+
+.ns-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  touch-action: none;
+}
+
+.ns-sheet {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: var(--material-bg);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  color: var(--ink);
+  outline: none;
+  will-change: transform, opacity;
+  /* The panel is the thing being dragged: no text selection mid-gesture. */
+  overscroll-behavior: contain;
+}
+.ns-sheet-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+.ns-sheet-dragging * {
+  cursor: grabbing;
+}
+
+/* Desktop: docked right. A hairline on the leading edge and a soft shadow,
+   not a heavy border. `touch-action: pan-y` hands vertical scrolling to the
+   browser and leaves horizontal swipes to the dismiss gesture. */
+.ns-sheet-side {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 100vw;
+  border-left: 1px solid var(--border);
+  border-radius: 20px 0 0 20px;
+  box-shadow: -12px 0 40px rgb(var(--sh) / calc(16% * var(--sh-k)));
+  transform-origin: right center;
+  touch-action: pan-y;
+}
+
+/* Phone: a bottom sheet at 92vh. */
+.ns-sheet-bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 92vh;
+  height: 92dvh;
+  border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -12px 40px rgb(var(--sh) / calc(16% * var(--sh-k)));
+  transform-origin: center bottom;
+}
+
+.ns-sheet-head {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 14px 14px 22px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Mouse drags the header, so the header is where touch must not scroll. */
+.ns-sheet-bottom .ns-sheet-head {
+  touch-action: none;
+  padding-top: 24px;
+}
+.ns-sheet-grabber {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  margin-left: -18px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.ns-sheet-headline {
+  flex: 1;
+  min-width: 0;
+}
+.ns-sheet-title {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: var(--track-title);
+  line-height: 1.25;
+  color: var(--ink-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-sheet-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-soft),
+    color 140ms var(--ease-soft),
+    transform 100ms var(--ease-soft);
+}
+.ns-sheet-close:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+.ns-sheet-close:active {
+  transform: scale(0.94);
+}
+
+.ns-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 22px 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+}
+.ns-sheet-foot {
+  flex: none;
+  padding: 12px 22px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--rule);
+}
+
+/* Higher-contrast preference (skill §14): near-solid, defined edge. */
+@media (prefers-contrast: more) {
+  .ns-sheet {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: var(--ink);
+  }
+}
+
+/* Reduced motion (skill §14): the sheet cross-fades in place (Sheet.tsx stops
+   binding the translate and push-back), so what's left to quiet is the
+   chrome's own micro-motion. The `.ns *` rule in planner.css already
+   collapses transitions to 1ms. */
+@media (prefers-reduced-motion: reduce) {
+  .ns-sheet {
+    will-change: opacity;
+  }
+}
