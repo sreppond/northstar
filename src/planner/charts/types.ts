@@ -35,6 +35,10 @@ export interface ChartSeries {
   /** Line width in px; 0 draws the fill alone. Defaults to 2. */
   lineWidth?: number;
   dashed?: boolean;
+  /** `false` keeps the hover dot (and its halo) off this series. For a fill that
+      only shades a band between two lines (Cash Flow's gain/gap wash): the
+      lines carry the dots, and a second dot on the same spot would be noise. */
+  activeDot?: boolean;
   /** A filled dot at every real (non-`NaN`) data point — Progress's "actual"
       series, where each point is a real logged reading rather than an
       annual sample of a smooth projection. */

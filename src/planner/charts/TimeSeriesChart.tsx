@@ -641,7 +641,7 @@ export function TimeSeriesChart({
 
             {activeIdx >= 0 &&
               geo.map(({ r, topYs, line, area }) => {
-                if (r.kind === 'column' || (!line && !area)) return null;
+                if (r.kind === 'column' || (!line && !area) || r.s.activeDot === false) return null;
                 const cy = topYs[activeIdx];
                 if (!Number.isFinite(cy)) return null;
                 const cx = xFor(years[activeIdx]);
