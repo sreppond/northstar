@@ -37,6 +37,8 @@ const RIGHT_LABELED_MARGIN = 130;
 const TOP = 26;
 const BOTTOM_MARGIN = 40;
 const END_LABEL_GAP = 20;
+/** A band's label sits under the x-axis ticks, where the data can't cover it. */
+const BAND_LABEL_DY = 36;
 const MIN_Y_TICK_GAP_PX = 40;
 /** Few enough points that each deserves a dot (§3.2: "≤ 6 points"). */
 const DOT_THRESHOLD = 6;
@@ -492,7 +494,7 @@ export function TimeSeriesChart({
               <g key={`band-${i}`}>
                 <rect x={bx0} y={TOP} width={bx1 - bx0} height={B - TOP} className={`ns-tsc-band ns-tsc-band-${i % 2}`} />
                 {bx1 - bx0 > b.label.length * 6.2 + 12 && (
-                  <text x={bx0 + 8} y={TOP + 14} className="ns-tsc-band-label">
+                  <text x={bx0 + 8} y={B + BAND_LABEL_DY} className="ns-tsc-band-label">
                     {b.label}
                   </text>
                 )}
@@ -566,7 +568,9 @@ export function TimeSeriesChart({
                   const top = g.r.tops[i];
                   if (!Number.isFinite(top)) return null;
                   const x = xFor(yr);
-                  if (x < L - groupW || x > R + groupW) return null;
+                  // Only bars that overlap the plot: the draw-in clip is 8px wider than
+                  // the plot, so a bar starting just past the edge would show a sliver.
+                  if (x + groupW / 2 <= L || x - groupW / 2 >= R) return null;
                   const base = g.r.bases?.[i] ?? 0;
                   const yTop = yFor(top);
                   const yBot = yFor(base);
