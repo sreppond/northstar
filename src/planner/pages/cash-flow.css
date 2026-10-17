@@ -1,0 +1,148 @@
+/*
+ * Cash Flow page (docs/REDESIGN-V5.md §5.2). Sections sit on the page
+ * background (§1.6): a short title, then the chart or the table. Only the
+ * table keeps a surface, because its sticky label column needs something to
+ * slide over.
+ */
+
+.ns-cf-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px 14px;
+}
+
+.ns-cf-hero {
+  min-width: 0;
+}
+
+.ns-cf-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.ns-cf-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: var(--track-title);
+  color: var(--ink-deep);
+}
+.ns-cf-unit {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.ns-cf-tablecard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* --- the table ------------------------------------------------------------- */
+
+/* One indent system for every row kind: a caret slot (or a spacer of the same
+   width), then the name. Depth is set per row, so a kid's line sits under the
+   kid, under Kids, under Spending, whatever DataTable's three kinds say. */
+.ns-cf-table .ns-grid > div:first-child {
+  padding-left: 14px;
+  padding-right: 8px;
+}
+.ns-cf-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.ns-cf-label .ns-line-name {
+  flex: 0 1 auto;
+}
+.ns-cf-spacer {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.ns-cf-label .ns-gear {
+  flex: none;
+  margin-left: 2px;
+}
+/* Gear on any row you hover, group rows included. */
+.ns-cf-table .ns-grid:hover .ns-gear {
+  opacity: 1;
+}
+.ns-cf-hint {
+  cursor: help;
+  text-decoration: underline dotted var(--muted-light);
+  text-underline-offset: 3px;
+}
+.ns-cf-note {
+  max-width: 260px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.ns-cf-note p {
+  margin: 4px 0 0;
+}
+
+/* Unfunded: the one row that must never read as a figure among figures. */
+.ns-cf-table .ns-grid:has([data-cf-row='unfunded']) > div:not(.ns-zero) {
+  color: var(--danger);
+  font-weight: 700;
+}
+.ns-cf-table .ns-grid:has([data-cf-row='unfunded']) {
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+/* A waterfall bar and its row light up together. The label column is a
+   translucent material, so it takes the wash too or it would stay blank. */
+.ns-cf-table[data-hot='gross'] .ns-grid:has([data-cf-row='gross']) > div,
+.ns-cf-table[data-hot='tax'] .ns-grid:has([data-cf-row='tax']) > div,
+.ns-cf-table[data-hot='afterTax'] .ns-grid:has([data-cf-row='afterTax']) > div,
+.ns-cf-table[data-hot='home'] .ns-grid:has([data-cf-row='home']) > div,
+.ns-cf-table[data-hot='kids'] .ns-grid:has([data-cf-row='kids']) > div,
+.ns-cf-table[data-hot='shared'] .ns-grid:has([data-cf-row='shared']) > div,
+.ns-cf-table[data-hot='personal'] .ns-grid:has([data-cf-row='personal']) > div,
+.ns-cf-table[data-hot='oneTime'] .ns-grid:has([data-cf-row='oneTime']) > div,
+.ns-cf-table[data-hot='wtax'] .ns-grid:has([data-cf-row='wtax']) > div,
+.ns-cf-table[data-hot='saved'] .ns-grid:has([data-cf-row='saved']) > div,
+.ns-cf-table[data-hot='unfunded'] .ns-grid:has([data-cf-row='unfunded']) > div {
+  background-color: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.ns-cf-table[data-hot='gross'] .ns-grid:has([data-cf-row='gross']) > div:first-child,
+.ns-cf-table[data-hot='tax'] .ns-grid:has([data-cf-row='tax']) > div:first-child,
+.ns-cf-table[data-hot='afterTax'] .ns-grid:has([data-cf-row='afterTax']) > div:first-child,
+.ns-cf-table[data-hot='home'] .ns-grid:has([data-cf-row='home']) > div:first-child,
+.ns-cf-table[data-hot='kids'] .ns-grid:has([data-cf-row='kids']) > div:first-child,
+.ns-cf-table[data-hot='shared'] .ns-grid:has([data-cf-row='shared']) > div:first-child,
+.ns-cf-table[data-hot='personal'] .ns-grid:has([data-cf-row='personal']) > div:first-child,
+.ns-cf-table[data-hot='oneTime'] .ns-grid:has([data-cf-row='oneTime']) > div:first-child,
+.ns-cf-table[data-hot='wtax'] .ns-grid:has([data-cf-row='wtax']) > div:first-child,
+.ns-cf-table[data-hot='saved'] .ns-grid:has([data-cf-row='saved']) > div:first-child,
+.ns-cf-table[data-hot='unfunded'] .ns-grid:has([data-cf-row='unfunded']) > div:first-child {
+  background-color: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+
+@media (max-width: 640px) {
+  /* The label column carries a caret and an indent, so it gets a little more
+     room than the 132px the other tables use: "Income (after tax)" has to fit. */
+  .ns-cf-table .ns-scroll-table {
+    --ns-label-w: 158px;
+  }
+  .ns-cf-table .ns-grid > div:first-child {
+    padding-left: 6px;
+    padding-right: 4px;
+  }
+  .ns-cf-controls {
+    justify-content: flex-start;
+  }
+}
