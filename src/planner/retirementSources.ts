@@ -1,0 +1,96 @@
+/**
+ * "What pays for each year" (docs/REDESIGN-V5.md §5.5, the v4 SourceStack
+ * idea): every dollar that covers a year, by where it came from, plus the
+ * year's spending need. Pure, so the Retirement hero is tested without a
+ * component tree.
+ *
+ * Sources, bottom to top: pay and other income, Social Security, the SEPP,
+ * required minimum distributions, then the shortfall waterfall's draws, one
+ * series per account. Income lines already include the SEPP and the RMDs (the
+ * engine pays them as income, `run.ts` steps 7.5-7.6); `withdrawals` holds
+ * only the ordinary draws, so nothing is counted twice.
+ *
+ * One-time costs (a home's down payment, a surrender charge) are left out of
+ * both sides. A $600K down payment would otherwise tower over the year it
+ * lands in and flatten the retirement story the chart is for; the draws that
+ * paid for it are taken back out of the withdrawals, proportionally, so the
+ * stack still meets the (recurring) need.
+ */
+import type { LineItem, Plan, PlanResult } from '@northstar/engine';
+import { accountClassColor } from './ui';
+
+export interface SourceSeries {
+  key: string;
+  label: string;
+  color: string;
+  /** Parallel to `result.years`. */
+  values: number[];
+}
+
+export interface RetirementSources {
+  series: SourceSeries[];
+  /** Spending plus tax per year: the line the stack has to reach. */
+  need: number[];
+}
+
+type Bucket = 'pay' | 'socialSecurity' | 'sepp' | 'rmd';
+
+const BUCKETS: { key: Bucket; label: string; color: string }[] = [
+  { key: 'pay', label: 'Pay & other income', color: 'var(--in)' },
+  { key: 'socialSecurity', label: 'Social Security', color: 'var(--data-nw)' },
+  { key: 'sepp', label: 'SEPP', color: 'var(--cmp)' },
+  { key: 'rmd', label: 'Required distributions', color: 'var(--mix-6)' },
+];
+
+export function retirementSources(plan: Pick<Plan, 'events' | 'accounts'>, result: PlanResult): RetirementSources {
+  const kindOf = new Map(plan.events.map((e) => [e.id, e.kind]));
+  const bucketOf = (line: LineItem): Bucket => {
+    if (line.category === 'sepp') return 'sepp';
+    if (line.label.startsWith('Required minimum distribution')) return 'rmd';
+    if (line.sourceEventId && kindOf.get(line.sourceEventId) === 'socialSecurity') return 'socialSecurity';
+    return 'pay';
+  };
+
+  const income = new Map<Bucket, number[]>(BUCKETS.map((b) => [b.key, result.years.map(() => 0)]));
+  const draws = new Map<string, { label: string; accountClass: string; values: number[] }>();
+  const accountById = new Map(plan.accounts.map((a) => [a.id, a]));
+
+  const lumps = result.years.map((y) =>
+    y.expenses.filter((e) => e.oneTime || e.category === 'annuityCharge').reduce((sum, e) => sum + e.amount, 0),
+  );
+
+  result.years.forEach((y, i) => {
+    for (const line of y.income) income.get(bucketOf(line))![i] += line.amount;
+    const drawn = y.withdrawals.reduce((sum, w) => sum + w.amount, 0);
+    const keep = drawn > 0 ? Math.max(0, drawn - lumps[i]) / drawn : 0;
+    for (const w of y.withdrawals) {
+      const id = w.accountId ?? w.label;
+      let d = draws.get(id);
+      if (!d) {
+        const account = accountById.get(id);
+        d = { label: account?.name ?? w.label.replace(/^From /, ''), accountClass: account?.accountClass ?? 'taxableInvestment', values: result.years.map(() => 0) };
+        draws.set(id, d);
+      }
+      d.values[i] += w.amount * keep;
+    }
+  });
+
+  const series: SourceSeries[] = [];
+  for (const b of BUCKETS) {
+    const values = income.get(b.key)!;
+    if (values.some((v) => v > 0.5)) series.push({ ...b, values });
+  }
+  // Two accounts of one class would share a hue; the later ones step lighter
+  // so the stack's layers stay tellable apart.
+  const used = new Map<string, number>();
+  for (const [id, d] of draws) {
+    if (!d.values.some((v) => v > 0.5)) continue;
+    const base = accountClassColor(d.accountClass as Parameters<typeof accountClassColor>[0]);
+    const n = used.get(base) ?? 0;
+    used.set(base, n + 1);
+    const color = n === 0 ? base : `color-mix(in srgb, ${base} ${Math.max(35, 100 - n * 28)}%, var(--surface))`;
+    series.push({ key: `from:${id}`, label: d.label, color, values: d.values });
+  }
+
+  return { series, need: result.years.map((y, i) => y.totalExpenses - lumps[i] + y.totalTaxes) };
+}

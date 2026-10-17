@@ -14,39 +14,43 @@ import {
 import { usePlanner } from '../PlannerContext';
 import { AnnuityForecastView, isAnnuityContract } from '../views/AnnuityForecastView';
 import { SeppBars } from '../views/SeppBars';
-import { ChartLegend, MiniChart } from '../views/MiniChart';
+import { RangePicker, TimeSeriesChart } from '../charts';
+import { DataTable, type TableRow } from '../tabs/DataTable';
 import { ImpactStrip, PreviewActions } from '../ImpactStrip';
 import { impactMetrics, presentResult } from '../impact';
-import { ZERO_DASH, money, planMetaLine } from '../format';
-import { EmptyState, Page, PageHeader, SectionCard, Segmented, Select, Stat, StatStrip } from '../ui';
+import { planHealth } from '../health';
+import { dangerBandFor, useHeroHeight } from '../decisionKit';
+import { ZERO_DASH, money } from '../format';
+import { EmptyState, Page, PageHeader, Segmented, Select } from '../ui';
 import { NumberInput } from '../drawer/fields';
 import './household.css';
+import './decisions.css';
 
 /** One table cell: a real figure, or the app's dash for nothing — not a "$0" that reads as a value. */
 const cell = (v: number) => (Math.abs(v) < 0.5 ? ZERO_DASH : money(v));
 
-const METHODS: { value: SeppMethod; label: string; hint: string }[] = [
-  { value: 'amortization', label: 'Amortization', hint: 'The largest payment — fixed every year.' },
-  { value: 'annuitization', label: 'Annuitization', hint: 'Also fixed; usually a little smaller.' },
-  { value: 'rmd', label: 'RMD', hint: 'The smallest — recomputed each year from the balance.' },
+const METHODS: { value: SeppMethod; label: string }[] = [
+  { value: 'amortization', label: 'Amortization' },
+  { value: 'annuitization', label: 'Annuitization' },
+  { value: 'rmd', label: 'RMD' },
 ];
 
 /**
- * Annuity & SEPP (docs/REDESIGN-V4.md §4.8): what the contract is worth over
- * time, the largest SEPP you could start in any year, and how that SEPP
- * draws the balance down while the account keeps growing — run through the
- * real plan (fees, gain-first tax, everything else the household does), not
- * a calculator beside it.
+ * Annuity & SEPP (docs/REDESIGN-V4.md §4.8, on the v5 kit,
+ * docs/REDESIGN-V5.md §5.5): the largest SEPP you could start in any year, how
+ * that SEPP draws the balance down while the account keeps growing — run
+ * through the real plan (fees, gain-first tax, everything else the household
+ * does), not a calculator beside it — and the contract's own makeup.
  */
 export function AnnuityPage() {
-  const { stored, result, setAccountDraft } = usePlanner();
+  const { stored, setAccountDraft } = usePlanner();
   const candidates = stored.accounts.filter(
     (a) => !a.isSynthetic && a.isIncluded && (isAnnuityContract(a) || a.accountClass === 'taxDeferredInvestment'),
   );
 
   return (
     <Page>
-      <PageHeader title="Annuity & SEPP" meta={planMetaLine(stored, result.endYear)} />
+      <PageHeader title="Annuity & SEPP" />
       {candidates.length > 0 ? (
         <SeppSection candidates={candidates} />
       ) : (
@@ -54,7 +58,7 @@ export function AnnuityPage() {
           <EmptyState
             icon={Umbrella}
             title="No annuity in this plan"
-            body="Add your variable annuity to see what it's worth over time, the largest SEPP you could start in any year, and how that SEPP draws it down."
+            body="Add your variable annuity to see the largest SEPP you could start in any year, and how that SEPP draws it down."
             action={
               <button
                 type="button"
@@ -72,7 +76,8 @@ export function AnnuityPage() {
 }
 
 function SeppSection({ candidates }: { candidates: ReturnType<typeof usePlanner>['stored']['accounts'] }) {
-  const { stored, result, replacePlan, savePlanAs } = usePlanner();
+  const { stored, result, replacePlan, savePlanAs, focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
+  const heroHeight = useHeroHeight();
   const funded = candidates.filter((a) => a.initialBalance > 0);
   const preferred =
     candidates.find((a) => a.seppElection) ??
@@ -119,15 +124,14 @@ function SeppSection({ candidates }: { candidates: ReturnType<typeof usePlanner>
   const option = options.find((o) => o.startYear === startYear);
   const lockedUntil = option?.lockedUntil;
   const commitYears = lockedUntil !== undefined ? lockedUntil - startYear + 1 : undefined;
-  const at = (rs: typeof rows, year: number | undefined) => rs.find((r) => r.year === year);
-  const at60 = birthYear !== undefined ? birthYear + 60 : undefined;
   const todayValue = account.initialBalance;
-  const paid = rows.filter((r) => r.locked).reduce((s, r) => s + r.payment, 0);
-  const firstPayment = rows.find((r) => r.year === startYear)?.payment ?? option?.annualPayment ?? 0;
 
   const current = useMemo(() => impactMetrics(stored, result, startYear), [stored, result, startYear]);
   const draftResult = useMemo(() => presentResult(draftPlan, draftNominal), [draftPlan, draftNominal]);
   const draft = useMemo(() => (isDraft ? impactMetrics(draftPlan, draftResult, startYear) : null), [isDraft, draftPlan, draftResult, startYear]);
+  // The draft's own health: starting a SEPP can move where the money runs out.
+  const draftHealth = useMemo(() => planHealth(draftResult, draftPlan), [draftResult, draftPlan]);
+  const danger = useMemo(() => dangerBandFor(draftHealth, draftResult), [draftHealth, draftResult]);
 
   if (todayValue <= 0) {
     return (
@@ -152,189 +156,127 @@ function SeppSection({ candidates }: { candidates: ReturnType<typeof usePlanner>
   const chartEnd = (lockedUntil ?? start + 30) + 10;
   const chartRows = rows.filter((r) => r.year <= chartEnd);
   const chartWithout = withoutRows.filter((r) => r.year <= chartEnd);
-  let running = 0;
-  const cumulative = chartRows.map((r) => (running += r.payment));
+  const chartYears = chartRows.map((r) => r.year);
+  const ageByYear = new Map(rows.map((r) => [r.year, r.age]));
+
+  // The table is every year, sideways-scrolling (§3.7). A year inside the
+  // SEPP's lock gets a small marker under its header.
+  const lockedYears = new Set(rows.filter((r) => r.locked).map((r) => r.year));
+  const showBasis = rows.some((r) => r.basisLeft !== undefined);
+  const tableRows: TableRow[] = [
+    { key: 'age', kind: 'child', label: 'Age', cells: rows.map((r) => (r.age !== undefined ? String(r.age) : ZERO_DASH)) },
+    { key: 'open', kind: 'child', label: 'Start', cells: rows.map((r) => cell(r.open)) },
+    { key: 'growth', kind: 'child', label: 'Growth', cells: rows.map((r) => cell(r.growth)) },
+    { key: 'fees', kind: 'child', label: 'Fees', cells: rows.map((r) => cell(r.fees)) },
+    { key: 'sepp', kind: 'group', label: 'SEPP', cells: rows.map((r) => cell(r.payment)) },
+    { key: 'taxable', kind: 'child', label: 'Taxable', cells: rows.map((r) => cell(r.taxable)) },
+    { key: 'tax', kind: 'child', label: 'Tax', cells: rows.map((r) => cell(r.tax)) },
+    { key: 'net', kind: 'child', label: 'After tax', cells: rows.map((r) => cell(r.payment - r.tax)) },
+    { key: 'close', kind: 'total', label: 'End', cells: rows.map((r) => cell(r.close)) },
+    ...(showBasis ? [{ key: 'basis', kind: 'child' as const, label: 'Basis left', cells: rows.map((r) => (r.basisLeft !== undefined ? cell(r.basisLeft) : ZERO_DASH)) }] : []),
+  ];
+
+  const controls = (
+    <div className="ns-dec-controls">
+      {candidates.length > 1 && (
+        <Select placeholder="Account" value={account.id} onChange={setAccountId} options={candidates.map((a) => ({ value: a.id, label: a.name }))} />
+      )}
+      <Segmented size="sm" ariaLabel="SEPP method" value={method} onChange={(v) => setMethod(v as SeppMethod)} options={METHODS} />
+    </div>
+  );
 
   return (
     <>
-      <p className="ns-hh-answer">
-        Today it's worth <strong>{money(todayValue)}</strong>. Started in <strong>{startYear}</strong>, the{' '}
-        {method === 'rmd' ? 'RMD-method' : 'largest'} SEPP is <strong>{money(firstPayment)}/yr</strong> ({money(firstPayment / 12)}/mo)
-        {lockedUntil !== undefined && (
-          <>
-            , {method === 'rmd' ? 'recomputed each year' : 'fixed'} until {lockedUntil}
-            {birthYear !== undefined ? ` (age ${lockedUntil - birthYear})` : ''}
-          </>
-        )}
-        . {at60 !== undefined && at(rows, at60) && at(withoutRows, at60) && (
-          <>
-            At 60 the account would be {money(at(rows, at60)!.close)} — vs {money(at(withoutRows, at60)!.close)} without it.
-          </>
-        )}
-      </p>
-
-      <StatStrip>
-        <Stat size="xl" label="Worth today" value={money(todayValue)} sub={account.name} explain="The contract's balance as of the plan's as-of date." />
-        <Stat
-          label={`SEPP from ${startYear}`}
-          value={`${money(firstPayment)}/yr`}
-          sub={`${money(firstPayment / 12)}/mo`}
-          explain="The first year's payment under the chosen method and rate, sized on the balance the account would have at the start of that year."
-        />
-        <Stat
-          label="Locked until"
-          value={lockedUntil !== undefined ? String(lockedUntil) : '—'}
-          sub={commitYears !== undefined ? `${commitYears} years of payments` : undefined}
-          explain="A SEPP must run until the later of five years or age 59½ (treated as 60 here, since the plan stores birth years, not birthdays). Changing it before then voids the exception retroactively."
-        />
-        <Stat
-          label="Paid out by then"
-          value={money(paid)}
-          explain="Every SEPP payment through the end of the lock — future dollars, as the contract would pay them."
-        />
-      </StatStrip>
-
-      <SectionCard
-        title="Largest SEPP by start year"
-        meta="Click a year"
-        divider={false}
-        actions={
-          <div className="ns-sepp-controls">
-            {candidates.length > 1 && (
-              <Select
-                placeholder="Account"
-                value={account.id}
-                onChange={setAccountId}
-                options={candidates.map((a) => ({ value: a.id, label: a.name }))}
-              />
-            )}
-            <Segmented size="sm" ariaLabel="SEPP method" value={method} onChange={(v) => setMethod(v as SeppMethod)} options={METHODS.map(({ value, label }) => ({ value, label }))} />
-          </div>
-        }
-      >
-        <SeppBars options={options} selectedYear={startYear} onSelect={setStartYear} />
-        <div className="ns-sepp-foot">
-          <span className="ns-hh-note">{METHODS.find((m) => m.value === method)?.hint}</span>
-          {method !== 'rmd' && (
-            <label className="ns-sepp-rate">
-              <span>Interest rate</span>
-              <NumberInput value={rate} unit="percent" step={0.1} min={0.1} max={10} onChange={(v) => v && setRate(v)} />
-            </label>
-          )}
-        </div>
+      <section className="ns-dec-section">
+        <SeppBars options={options} selectedYear={startYear} onSelect={setStartYear} height={heroHeight} actions={controls} />
         {method !== 'rmd' && (
-          <p className="ns-hh-note">
-            The IRS caps this rate at the greater of 5% or 120% of the federal mid-term rate for either of the two months before the first payment
-            (published monthly at irs.gov). A lower rate gives a smaller payment — the way to take less than the maximum.
+          <label className="ns-sepp-rate">
+            <span>Interest rate</span>
+            <NumberInput value={rate} unit="percent" step={0.1} min={0.1} max={10} onChange={(v) => v && setRate(v)} />
+          </label>
+        )}
+      </section>
+
+      <section className="ns-dec-section">
+        <div className="ns-dec-head">
+          <h2 className="ns-dec-title">{saved && !isDraft ? 'In your plan' : 'Add it to the plan'}</h2>
+        </div>
+        <ImpactStrip
+          current={current}
+          draft={draft}
+          actions={
+            isDraft ? (
+              <PreviewActions
+                onKeep={() => replacePlan(draftPlan, `SEPP from ${account.name} starts ${startYear}`)}
+                onSaveAs={() => savePlanAs(draftPlan, `${stored.name} — SEPP from ${startYear}`)}
+                onReset={() => {
+                  setMethod(saved?.method ?? 'amortization');
+                  setRate(saved?.ratePercent ?? DEFAULT_SEPP_RATE_PERCENT);
+                  setStartYear(saved?.startYear ?? start + 1);
+                }}
+              />
+            ) : (
+              <button type="button" className="ns-btn" onClick={() => replacePlan(withoutPlan, `Removed the SEPP from ${account.name}`)}>
+                Remove the SEPP
+              </button>
+            )
+          }
+        />
+        {commitYears !== undefined && (
+          <p className="ns-sepp-commit">
+            <strong>
+              {commitYears}-year commitment, through {lockedUntil}.
+            </strong>{' '}
+            Skipping, changing or adding money before then voids the exception: the 10% penalty applies to every payment already taken, plus interest.
           </p>
         )}
-      </SectionCard>
+      </section>
 
-      <SectionCard title="With and without the SEPP" meta="Future dollars — what the contract statements will show" divider={false}>
-        <MiniChart
-          years={chartRows.map((r) => r.year)}
-          height={260}
+      <section className="ns-dec-section">
+        <TimeSeriesChart
+          years={chartYears}
           series={[
-            { label: 'Without SEPP', color: 'var(--muted)', values: chartWithout.map((r) => r.close), dashed: true },
-            { label: 'With SEPP', color: 'var(--data-nw)', values: chartRows.map((r) => r.close), fill: true },
-            { label: 'Paid out so far', color: 'var(--in)', values: cumulative },
-            ...(chartRows.some((r) => r.basisLeft !== undefined)
-              ? [{ label: 'Tax-free basis left', color: 'var(--mix-4)', values: chartRows.map((r) => r.basisLeft ?? NaN), dashed: true }]
-              : []),
+            { id: 'with', label: 'With SEPP', color: 'var(--data-nw)', values: chartRows.map((r) => r.close), kind: 'area' },
+            { id: 'without', label: 'Without SEPP', color: 'var(--muted)', values: chartWithout.map((r) => r.close), dashed: true },
           ]}
-          bandFrom={lockedUntil !== undefined ? lockedUntil + 1 : undefined}
+          range={chartRange}
+          todayYear={start}
+          height={heroHeight - 100}
+          focusYear={focusYear}
+          onFocusYear={setFocusYear}
+          danger={danger}
+          onRequestRange={setChartRange}
+          bandFrom={lockedUntil !== undefined && lockedUntil + 1 <= chartEnd ? lockedUntil + 1 : undefined}
           bandLabel="SEPP over"
+          readout={{
+            label: `${account.name}, with and without the SEPP`,
+            primaryId: 'with',
+            agesFor: (year) => {
+              const age = ageByYear.get(year);
+              return age !== undefined ? `Age ${age}` : undefined;
+            },
+            actions: <RangePicker value={chartRange} onChange={setChartRange} years={chartYears} openingYear={start} />,
+          }}
+          ariaLabel={`${account.name} balance with and without the SEPP`}
         />
-        <ChartLegend
-          series={[
-            { label: 'Without SEPP', color: 'var(--muted)' },
-            { label: 'With SEPP', color: 'var(--data-nw)' },
-            { label: 'Paid out so far', color: 'var(--in)' },
-            ...(rows.some((r) => r.basisLeft !== undefined) ? [{ label: 'Tax-free basis left', color: 'var(--mix-4)' }] : []),
-          ]}
+      </section>
+
+      <section className="ns-dec-section ns-dec-table">
+        <div className="ns-dec-head">
+          <h2 className="ns-dec-title">Year by year</h2>
+        </div>
+        <DataTable
+          caption="Future dollars"
+          years={rows.map((r) => r.year)}
+          rows={tableRows}
+          focusYear={focusYear}
+          onFocusYear={setFocusYear}
+          dangerYears={draftHealth.shortYears}
+          columnSubLabel={(y) => (lockedYears.has(y) ? 'SEPP' : undefined)}
         />
-      </SectionCard>
+      </section>
 
-      <div className="ns-hh-split">
-        <SectionCard title="Year by year" meta={`${startYear}–${lockedUntil ?? ''} shaded: the SEPP's lock`} flush>
-          <div className="ns-table-scroll ns-sepp-table-wrap">
-            <table className="ns-ladder ns-sepp-table">
-              <thead>
-                <tr>
-                  <th>Year</th>
-                  <th>Age</th>
-                  <th>Start</th>
-                  <th>Growth</th>
-                  <th>Fees</th>
-                  <th>SEPP</th>
-                  <th>Taxable</th>
-                  <th>Tax</th>
-                  <th>After tax</th>
-                  <th>End</th>
-                  {rows.some((r) => r.basisLeft !== undefined) && <th>Basis left</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {rows
-                  .filter((r) => lockedUntil === undefined || r.year <= lockedUntil + 5)
-                  .map((r) => (
-                    <tr key={r.year} className={r.locked ? 'ns-sepp-locked' : undefined}>
-                      <td>{r.year}</td>
-                      <td>{r.age ?? '—'}</td>
-                      <td>{cell(r.open)}</td>
-                      <td>{cell(r.growth)}</td>
-                      <td>{cell(r.fees)}</td>
-                      <td>{cell(r.payment)}</td>
-                      <td>{cell(r.taxable)}</td>
-                      <td>{cell(r.tax)}</td>
-                      <td>{cell(r.payment - r.tax)}</td>
-                      <td>{cell(r.close)}</td>
-                      {rows.some((x) => x.basisLeft !== undefined) && <td>{r.basisLeft !== undefined ? cell(r.basisLeft) : '—'}</td>}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
-
-        <SectionCard title={saved && !isDraft ? 'In your plan' : 'Add it to the plan'} meta="Budget and Retirement see it once kept" divider={false}>
-          <ImpactStrip
-            current={current}
-            draft={draft}
-            actions={
-              isDraft ? (
-                <PreviewActions
-                  onKeep={() => replacePlan(draftPlan, `SEPP from ${account.name} starts ${startYear}`)}
-                  onSaveAs={() => savePlanAs(draftPlan, `${stored.name} — SEPP from ${startYear}`)}
-                  onReset={() => {
-                    setMethod(saved?.method ?? 'amortization');
-                    setRate(saved?.ratePercent ?? DEFAULT_SEPP_RATE_PERCENT);
-                    setStartYear(saved?.startYear ?? start + 1);
-                  }}
-                />
-              ) : (
-                <button type="button" className="ns-btn" onClick={() => replacePlan(withoutPlan, `Removed the SEPP from ${account.name}`)}>
-                  Remove the SEPP
-                </button>
-              )
-            }
-          />
-          {commitYears !== undefined && (
-            <p className="ns-sepp-warning">
-              Starting in {startYear} is a {commitYears}-year commitment. Skipping a payment, taking more or less, or adding money before{' '}
-              {lockedUntil} voids the exception — the 10% penalty then applies to every payment already taken, plus interest. Not tax advice:
-              confirm the method and rate with a CPA before electing.
-            </p>
-          )}
-        </SectionCard>
-      </div>
-
-      {isAnnuityContract(account) && (
-        <>
-          <div className="ns-hh-divider">Contract details</div>
-          <AnnuityForecastView plan={stored} result={result} accountId={account.id} />
-        </>
-      )}
+      {isAnnuityContract(account) && <AnnuityForecastView plan={stored} result={result} accountId={account.id} />}
     </>
   );
 }

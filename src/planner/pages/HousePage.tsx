@@ -1,16 +1,19 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { DEFAULT_ZONES, affordabilityCurve, planEndYear, primaryHome, readHome, runPlan } from '@northstar/engine';
+import { DEFAULT_ZONES, affordabilityCurve, planEndYear, primaryHome, readHome, recurringSpending, runPlan } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
-import { money, percent, planMetaLine } from '../format';
-import { Page, PageHeader, SectionCard, StackedBar } from '../ui';
+import { money, percent } from '../format';
+import { Page, PageHeader } from '../ui';
 import { PlanCheckBanner } from '../PlanCheckBanner';
 import { HouseForecastView } from '../views/HouseForecastView';
 import { AffordabilityMap, type MapPoint } from '../views/AffordabilityMap';
-import { ChartLegend, MiniChart } from '../views/MiniChart';
+import { PriceCurve, type CurveDatum } from '../views/PriceCurve';
+import { HomeBudgetDonut } from '../views/HomeBudgetDonut';
+import { RangePicker, TimeSeriesChart, rangeWindow } from '../charts';
 import { ImpactStrip, PreviewActions } from '../ImpactStrip';
 import { impactMetrics, presentResult } from '../impact';
-import { budgetView } from '../budgetView';
-import { isHouseholdModel } from '../household';
+import { planHealth } from '../health';
+import { agesLineFor, dangerBandFor, useHeroHeight } from '../decisionKit';
+import { priceGrid, pricePoints } from '../priceCurve';
 import {
   ZONE_LABEL,
   applyTerms,
@@ -18,7 +21,6 @@ import {
   currentTerms,
   fromDisplay,
   ownCost,
-  priceLadder,
   toDisplay,
   nicePrice,
   zoneOf,
@@ -26,11 +28,13 @@ import {
   type Zone,
 } from '../homeView';
 import './household.css';
+import './decisions.css';
 
 /**
- * Home (docs/REDESIGN-V4.md §4.6): everything needed to decide when to buy,
- * how much to spend, and whether that price leaves the household house-poor
- * — on one page, against the whole plan.
+ * Home (docs/REDESIGN-V4.md §4.6, rebuilt on the v5 chart kit,
+ * docs/REDESIGN-V5.md §5.5): when to buy, how much to spend, and whether that
+ * price leaves the household house-poor, against the whole plan. The map and
+ * the price curve lead; every reading is on the chart's own readout.
  */
 export function HousePage() {
   const { plan, result, stored } = usePlanner();
@@ -38,15 +42,10 @@ export function HousePage() {
 
   return (
     <Page>
-      <PageHeader title="Home" meta={planMetaLine(stored, result.endYear)} />
+      <PageHeader title="Home" />
       <PlanCheckBanner only={['rent-after-purchase']} />
       <HomeDecision />
-      {hasHome && (
-        <>
-          <div className="ns-hh-divider">Owning it</div>
-          <HouseForecastView plan={plan} result={result} />
-        </>
-      )}
+      {hasHome && <HouseForecastView plan={plan} result={result} />}
     </Page>
   );
 }
@@ -59,15 +58,17 @@ function candidateYears(start: number, end: number): number[] {
 }
 
 function HomeDecision() {
-  const { stored, result, replacePlan, savePlanAs } = usePlanner();
+  const { stored, result, replacePlan, savePlanAs, focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
   const saved = useMemo(() => currentTerms(stored), [stored]);
   const hasHome = primaryHome(stored) !== undefined;
   const [t, setT] = useState<HomeTerms>(saved);
   useEffect(() => setT(saved), [saved]);
+  const heroHeight = useHeroHeight();
 
   const start = stored.settings.startYear;
   const years = useMemo(() => candidateYears(start, planEndYear(stored)), [start, stored]);
   const show = (nominal: number, year: number) => toDisplay(stored, nominal, year);
+  const agesFor = useMemo(() => agesLineFor(stored, result), [stored, result]);
 
   // The map follows financing terms (down payment, rate) but not the price or
   // year being tried — those move the dot, not the zones. Deferred so a
@@ -83,6 +84,14 @@ function HomeDecision() {
     stretch: show(p.byZone.stretch, p.year),
   }));
 
+  // The shared range windows the purchase years like any other time axis, but
+  // always keeps the year being tried on screen: a chosen 2041 must not vanish
+  // because the picker says 5Y.
+  const win = rangeWindow(years, start, chartRange);
+  const from = Math.min(win.from, t.year);
+  const to = Math.max(win.to, t.year);
+  const mapPoints = points.filter((p) => p.year >= from && p.year <= to);
+
   const draftPlan = useMemo(() => applyTerms(stored, t), [stored, t]);
   const draftNominal = useMemo(() => runPlan(draftPlan), [draftPlan]);
   const draftResult = useMemo(() => presentResult(draftPlan, draftNominal), [draftPlan, draftNominal]);
@@ -95,176 +104,172 @@ function HomeDecision() {
   const draft = useMemo(() => (isDraft ? impactMetrics(draftPlan, draftResult, firstYear) : null), [isDraft, draftPlan, draftResult, firstYear]);
 
   const atYear = curve.find((p) => p.year === t.year);
-  const ladder = useMemo(
-    () =>
-      priceLadder(stored, t, [
-        { key: 'comfortable', label: 'Comfortable max', price: atYear?.byZone.comfortable ?? 0 },
-        { key: 'stretch', label: 'Stretch max', price: atYear?.byZone.stretch ?? 0 },
-        { key: 'yours', label: hasHome && !isDraft ? 'Your plan' : 'Trying', price: t.price },
-      ]).sort((a, b) => a.reading.price - b.reading.price),
-    [stored, t, atYear, hasHome, isDraft],
-  );
-
   const own = useMemo(() => ownCost(draftPlan, draftNominal), [draftPlan, draftNominal]);
   const cushion = useMemo(() => cashCushion(draftPlan, draftNominal), [draftPlan, draftNominal]);
-
-  const firstComfortable = curve.find((p) => p.byZone.comfortable > 0);
-  const later = firstComfortable ? curve.find((p) => p.year === firstComfortable.year + 5) : undefined;
+  const draftHealth = useMemo(() => planHealth(draftResult, draftPlan), [draftResult, draftPlan]);
+  const danger = useMemo(() => dangerBandFor(draftHealth, draftResult), [draftHealth, draftResult]);
+  const draftAges = useMemo(() => agesLineFor(draftPlan, draftResult), [draftPlan, draftResult]);
 
   const setPrice = (shown: number) => setT((x) => ({ ...x, price: fromDisplay(stored, shown, x.year) }));
   const shownPrice = show(t.price, t.year);
   const priceMax = Math.max(1_000_000, ...points.map((p) => p.stretch * 1.5), shownPrice * 1.25);
 
+  // --- the price curve: this purchase year at a ladder of prices ----------
+  // The ladder's reach follows the zones for the year, not the price in hand,
+  // so clicking along the curve doesn't rebuild it under the pointer.
+  const deferredYear = useDeferredValue(t.year);
+  const stretchAtYear = atYear ? show(atYear.byZone.stretch, atYear.year) : 0;
+  const curveMax = Math.round(Math.max(1_000_000, stretchAtYear * 1.6, hasHome ? show(saved.price, saved.year) * 1.4 : 0) / 100_000) * 100_000;
+  const grid = useMemo(() => priceGrid(100_000, curveMax), [curveMax]);
+  const curveData = useMemo<CurveDatum[]>(
+    () =>
+      pricePoints(stored, { year: deferredYear, price: 0, terms: deferredTerms }, grid.map((p) => fromDisplay(stored, p, deferredYear))).map((p, i) => ({
+        price: grid[i],
+        share: p.reading.housingShare,
+        zone: p.zone,
+        monthly: toDisplay(stored, p.reading.housingMonthly, deferredYear + 1),
+        cashLeft: toDisplay(stored, p.reading.liquidAfterClosing, deferredYear),
+        shortfallYear: p.reading.shortfallYear,
+      })),
+    [stored, deferredYear, deferredTerms, grid],
+  );
+  const currentDatum: CurveDatum | undefined =
+    reading && zone
+      ? {
+          price: shownPrice,
+          share: reading.housingShare,
+          zone,
+          monthly: show(reading.housingMonthly, firstYear),
+          cashLeft: show(reading.liquidAfterClosing, t.year),
+          shortfallYear: reading.shortfallYear,
+        }
+      : undefined;
+
+  // --- the cushion --------------------------------------------------------
+  const cushionYears = cushion.years;
+  const reserve = draftNominal.years.map((y) => show(recurringSpending(y) / 2, y.year));
+
   return (
     <>
-      <p className="ns-hh-answer">
-        {firstComfortable ? (
-          <>
-            The soonest you could comfortably buy is <strong>{firstComfortable.year}</strong>, up to{' '}
-            <strong>{money(nicePrice(show(firstComfortable.byZone.comfortable, firstComfortable.year)))}</strong>
-            {later ? (
-              <>
-                ; by {later.year}, up to {money(nicePrice(show(later.byZone.comfortable, later.year)))}
-              </>
-            ) : null}
-            .{' '}
-          </>
-        ) : (
-          <>Nothing in the next {years.length} years fits comfortably yet. </>
-        )}
-        {reading && zone && (
-          <>
-            {money(nicePrice(shownPrice))} in {t.year} is <strong className={`ns-zone-text ns-zone-text-${zone}`}>{ZONE_LABEL[zone].toLowerCase()}</strong>
-            {Number.isFinite(reading.housingShare) ? ` — housing would take ${percent(reading.housingShare, 0)} of after-tax income` : ''}
-            {reading.shortfallYear ? `, and the plan can't pay its bills in ${reading.shortfallYear}` : ''}.
-          </>
-        )}
-      </p>
-
-      <SectionCard title="When, and how much" meta="Each year: the price the whole plan can carry" divider={false}>
+      <section className="ns-dec-section">
         <AffordabilityMap
-          points={points}
+          points={mapPoints}
           selected={{ year: t.year, price: shownPrice }}
           saved={hasHome ? { year: saved.year, price: show(saved.price, saved.year) } : undefined}
           onPick={(year, price) => setT((x) => ({ ...x, year, price: fromDisplay(stored, price, year) }))}
+          height={heroHeight}
+          focusYear={focusYear}
+          onFocusYear={setFocusYear}
+          agesFor={agesFor}
+          actions={<RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={start} />}
         />
-      </SectionCard>
+      </section>
 
-      <div className="ns-hh-split">
-        <SectionCard title={hasHome ? 'Try a different home' : 'Try a home'} meta="Nothing changes until you keep it" divider={false}>
-          <div className="ns-levers">
-            <Lever label="Price" display={money(nicePrice(shownPrice))} value={shownPrice} min={100_000} max={Math.round(priceMax / 50_000) * 50_000} step={25_000} onChange={setPrice} />
-            <Lever
-              label="Buy in"
-              display={String(t.year)}
-              value={t.year}
-              min={years[0] ?? start}
-              max={years[years.length - 1] ?? start}
-              step={1}
-              onChange={(year) => setT((x) => ({ ...x, year, price: fromDisplay(stored, shownPrice, year) }))}
-            />
-            <Lever
-              label="Down payment"
-              display={`${t.terms.downPaymentPercent}% · ${money(shownPrice * (t.terms.downPaymentPercent / 100))}`}
-              value={t.terms.downPaymentPercent}
-              min={5}
-              max={50}
-              step={1}
-              onChange={(v) => setT((x) => ({ ...x, terms: { ...x.terms, downPaymentPercent: v } }))}
-            />
-            <Lever
-              label="Mortgage rate"
-              display={`${t.terms.mortgageRate.toFixed(2)}%`}
-              value={t.terms.mortgageRate}
-              min={3}
-              max={9}
-              step={0.125}
-              onChange={(v) => setT((x) => ({ ...x, terms: { ...x.terms, mortgageRate: v } }))}
-            />
-          </div>
-          <ImpactStrip
-            current={current}
-            draft={draft}
-            actions={
-              isDraft ? (
-                <PreviewActions
-                  onKeep={() => replacePlan(draftPlan, hasHome ? `Home moved to ${t.year} at ${money(shownPrice)}` : `Added a ${money(shownPrice)} home in ${t.year}`)}
-                  onSaveAs={() => savePlanAs(draftPlan, `${stored.name} — ${money(shownPrice)} home in ${t.year}`)}
-                  onReset={() => setT(saved)}
-                />
-              ) : undefined
-            }
-          />
-          {!hasHome && <p className="ns-hh-note">Compared with renting. Keep adds this purchase to the plan.</p>}
-        </SectionCard>
-
-        {reading && <HousePoorCheck reading={reading} show={(v) => show(v, firstYear)} />}
-      </div>
-
-      {own && (
-        <SectionCard title="What owning costs each month" meta={`${firstYear}, the first full year`} divider={false}>
-          <OwnVsRent own={own} show={(v) => show(v, firstYear)} showRent={(v) => show(v, t.year - 1)} beforeYear={t.year - 1} />
-        </SectionCard>
-      )}
-
-      {isHouseholdModel(stored) && (
-        <SectionCard title="Your budget, before and after" meta={`${t.year - 1} vs ${firstYear}`} divider={false}>
-          <BeforeAfter plan={draftPlan} result={draftResult} before={t.year - 1} after={firstYear} />
-        </SectionCard>
-      )}
-
-      <SectionCard title="Price ladder" meta={`Buying in ${t.year}, each row the whole plan`} flush>
-        <div className="ns-table-scroll">
-          <table className="ns-ladder">
-            <thead>
-              <tr>
-                <th>Price</th>
-                <th>Cash at closing</th>
-                <th>Owning /mo</th>
-                <th>Housing share</th>
-                <th>Savings rate</th>
-                <th>Net worth at 60</th>
-                <th>Money lasts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ladder.map((r) => (
-                <tr key={r.key} className={r.key === 'yours' ? 'ns-ladder-yours' : undefined}>
-                  <td>
-                    <span className={`ns-zone-chip ns-zone-chip-${r.zone}`}>{ZONE_LABEL[r.zone]}</span>
-                    <span className="ns-num">{money(nicePrice(show(r.reading.price, t.year)))}</span>
-                    <span className="ns-ladder-sub">{r.label}</span>
-                  </td>
-                  <td className="ns-num">{money(show(r.reading.cashAtClosing, t.year))}</td>
-                  <td className="ns-num">{money(show(r.reading.housingMonthly, firstYear))}</td>
-                  <td className="ns-num">{percent(r.reading.housingShare, 0)}</td>
-                  <td className="ns-num">{Number.isFinite(r.reading.savingsRate) ? percent(r.reading.savingsRate, 0) : '—'}</td>
-                  <td className="ns-num">{r.impact.netWorthAt60 ? money(r.impact.netWorthAt60.value) : '—'}</td>
-                  <td className="ns-num">{r.impact.runsDryYear ? `Until ${r.impact.runsDryYear}` : 'Through the plan'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="ns-dec-section">
+        <div className="ns-dec-head">
+          <h2 className="ns-dec-title">{hasHome ? 'Try a different home' : 'Try a home'}</h2>
         </div>
-      </SectionCard>
+        <div className="ns-levers ns-dec-levers">
+          <Lever label="Price" display={money(nicePrice(shownPrice))} value={shownPrice} min={100_000} max={Math.round(priceMax / 50_000) * 50_000} step={25_000} onChange={setPrice} />
+          <Lever
+            label="Buy in"
+            display={String(t.year)}
+            value={t.year}
+            min={years[0] ?? start}
+            max={years[years.length - 1] ?? start}
+            step={1}
+            onChange={(year) => setT((x) => ({ ...x, year, price: fromDisplay(stored, shownPrice, year) }))}
+          />
+          <Lever
+            label="Down payment"
+            display={`${t.terms.downPaymentPercent}% · ${money(shownPrice * (t.terms.downPaymentPercent / 100))}`}
+            value={t.terms.downPaymentPercent}
+            min={5}
+            max={50}
+            step={1}
+            onChange={(v) => setT((x) => ({ ...x, terms: { ...x.terms, downPaymentPercent: v } }))}
+          />
+          <Lever
+            label="Mortgage rate"
+            display={`${t.terms.mortgageRate.toFixed(2)}%`}
+            value={t.terms.mortgageRate}
+            min={3}
+            max={9}
+            step={0.125}
+            onChange={(v) => setT((x) => ({ ...x, terms: { ...x.terms, mortgageRate: v } }))}
+          />
+        </div>
+        <ImpactStrip
+          current={current}
+          draft={draft}
+          actions={
+            isDraft ? (
+              <PreviewActions
+                onKeep={() => replacePlan(draftPlan, hasHome ? `Home moved to ${t.year} at ${money(shownPrice)}` : `Added a ${money(shownPrice)} home in ${t.year}`)}
+                onSaveAs={() => savePlanAs(draftPlan, `${stored.name} — ${money(shownPrice)} home in ${t.year}`)}
+                onReset={() => setT(saved)}
+              />
+            ) : undefined
+          }
+        />
+      </section>
 
-      <SectionCard title="Your cash cushion" meta="Cash and taxable investments, buying vs renting" divider={false}>
-        <MiniChart
-          years={cushion.years}
-          height={220}
+      {currentDatum && curveData.length > 1 && (
+        <section className="ns-dec-section">
+          <div className="ns-dec-head">
+            <h2 className="ns-dec-title">What each price does</h2>
+          </div>
+          <PriceCurve
+            data={curveData}
+            current={currentDatum}
+            saved={hasHome ? show(saved.price, saved.year) : undefined}
+            onPick={setPrice}
+            height={Math.max(240, heroHeight - 100)}
+            year={t.year}
+          />
+        </section>
+      )}
+
+      {reading && (
+        <div className="ns-dec-split">
+          {own && (
+            <HomeBudgetDonut
+              plan={draftPlan}
+              result={draftResult}
+              beforeYear={t.year - 1}
+              afterYear={firstYear}
+              own={own}
+              showOwn={(v) => show(v, firstYear)}
+              showRent={(v) => show(v, t.year - 1)}
+            />
+          )}
+          <HousePoorCheck reading={reading} show={(v) => show(v, firstYear)} />
+        </div>
+      )}
+
+      <section className="ns-dec-section">
+        <div className="ns-dec-head">
+          <h2 className="ns-dec-title">Your cash cushion</h2>
+        </div>
+        <TimeSeriesChart
+          years={cushionYears}
           series={[
-            { label: `Buying in ${t.year}`, color: 'var(--data-nw)', values: cushion.withHome.map((v, i) => show(v, cushion.years[i])), fill: true },
-            { label: 'Keep renting', color: 'var(--muted)', values: cushion.renting.map((v, i) => show(v, cushion.years[i])), dashed: true },
+            { id: 'buy', label: `Buying in ${t.year}`, color: 'var(--data-nw)', values: cushion.withHome.map((v, i) => show(v, cushionYears[i])), kind: 'area' },
+            { id: 'rent', label: 'Keep renting', color: 'var(--muted)', values: cushion.renting.map((v, i) => show(v, cushionYears[i])), dashed: true },
+            { id: 'reserve', label: '6-month reserve', color: 'var(--warn)', values: reserve, dashed: true, lineWidth: 1.5 },
           ]}
-          markYear={t.year}
+          range={chartRange}
+          todayYear={start}
+          height={Math.max(220, heroHeight - 110)}
+          focusYear={focusYear}
+          onFocusYear={setFocusYear}
+          danger={danger}
+          onRequestRange={setChartRange}
+          markers={[{ year: t.year, label: 'Buy', tone: 'cost' }]}
+          readout={{ label: 'Cash and taxable investments', primaryId: 'buy', size: 'compact', agesFor: draftAges }}
+          ariaLabel="Cash and taxable investments, buying versus renting, with the six-month reserve"
         />
-        <ChartLegend
-          series={[
-            { label: `Buying in ${t.year}`, color: 'var(--data-nw)' },
-            { label: 'Keep renting', color: 'var(--muted)' },
-          ]}
-        />
-      </SectionCard>
+      </section>
     </>
   );
 }
@@ -328,97 +333,22 @@ function HousePoorCheck({ reading, show }: { reading: NonNullable<ReturnType<typ
     },
   ];
   return (
-    <SectionCard title="House-poor check" meta="Comfortable · stretch thresholds" divider={false}>
-      <div className="ns-score">
+    <div className="ns-dec-section">
+      <div className="ns-dec-head">
+        <h2 className="ns-dec-title">House-poor check</h2>
+      </div>
+      <div className="ns-hp">
         {rows.map((r) => (
-          <div key={r.label} className="ns-score-row">
-            <span className={`ns-score-mark ns-zone-mark-${r.zone}`} aria-label={ZONE_LABEL[r.zone]}>
+          <div key={r.label} className="ns-hp-row">
+            <span className={`ns-hp-mark ns-hp-mark-${r.zone}`} role="img" aria-label={ZONE_LABEL[r.zone]}>
               {r.zone === 'comfortable' ? '✓' : r.zone === 'stretch' ? '~' : '✗'}
             </span>
-            <span className="ns-score-label">{r.label}</span>
-            <span className="ns-score-value ns-num">{r.value}</span>
-            <span className="ns-score-rule ns-num">{r.rule}</span>
+            <span className="ns-hp-label">{r.label}</span>
+            <span className="ns-hp-value">{r.value}</span>
+            <span className="ns-hp-rule">{r.rule}</span>
           </div>
         ))}
       </div>
-    </SectionCard>
-  );
-}
-
-function OwnVsRent({
-  own,
-  show,
-  showRent,
-  beforeYear,
-}: {
-  own: NonNullable<ReturnType<typeof ownCost>>;
-  show(nominal: number): number;
-  /** Rent is the year before the purchase — its own year's dollars. */
-  showRent(nominal: number): number;
-  beforeYear: number;
-}) {
-  const rent = showRent(own.rentBefore);
-  const total = show(own.total);
-  const max = Math.max(total, rent, 1);
-  const colors = ['var(--mix-1)', 'var(--mix-3)', 'var(--mix-6)', 'var(--mix-4)', 'var(--mix-5)'];
-  return (
-    <div className="ns-ownrent">
-      {own.rentBefore > 0 && (
-        <div className="ns-ownrent-row">
-          <span className="ns-ownrent-label">Rent in {beforeYear}</span>
-          <div className="ns-ownrent-track">
-            <span className="ns-ownrent-seg" style={{ width: `${(rent / max) * 100}%`, background: 'var(--muted-light)' }} />
-          </div>
-          <span className="ns-ownrent-total ns-num">{money(rent)}</span>
-        </div>
-      )}
-      <div className="ns-ownrent-row">
-        <span className="ns-ownrent-label">Owning</span>
-        <div className="ns-ownrent-track">
-          {own.parts.map((p, i) => (
-            <span key={p.label} className="ns-ownrent-seg" style={{ width: `${(show(p.monthly) / max) * 100}%`, background: colors[i % colors.length] }} title={`${p.label}: ${money(show(p.monthly))}`} />
-          ))}
-        </div>
-        <span className="ns-ownrent-total ns-num">{money(total)}</span>
-      </div>
-      <div className="ns-ui-stackedbar-legend">
-        {own.parts.map((p, i) => (
-          <div key={p.label} className="ns-ui-stackedbar-legend-item">
-            <span className="ns-ui-stackedbar-dot" style={{ background: colors[i % colors.length] }} aria-hidden />
-            <span className="ns-ui-stackedbar-legend-label">{p.label}</span>
-            <span className="ns-ui-stackedbar-legend-value ns-num">{money(show(p.monthly))}</span>
-          </div>
-        ))}
-        {own.rentBefore > 0 && (
-          <div className="ns-ui-stackedbar-legend-item">
-            <span className="ns-ui-stackedbar-legend-label">Change from rent</span>
-            <span className="ns-ui-stackedbar-legend-value ns-num">
-              {total >= rent ? '+' : '−'}
-              {money(Math.abs(total - rent))}/mo
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BeforeAfter({ plan, result, before, after }: { plan: Parameters<typeof budgetView>[0]; result: ReturnType<typeof presentResult>; before: number; after: number }) {
-  const rows = [before, after]
-    .map((year) => ({ year, snap: result.years.find((y) => y.year === year) }))
-    .filter((r): r is { year: number; snap: NonNullable<typeof r.snap> } => r.snap !== undefined)
-    .map((r) => ({ year: r.year, view: budgetView(plan, r.snap) }));
-  return (
-    <div className="ns-beforeafter">
-      {rows.map(({ year, view }) => (
-        <div key={year}>
-          <div className="ns-beforeafter-head">
-            <span>{year === before ? `Before · ${year}` : `After · ${year}`}</span>
-            <span className="ns-num">{view.savingsRate !== undefined ? `${percent(view.savingsRate, 0)} saved` : ''}</span>
-          </div>
-          <StackedBar segments={view.buckets.map((b) => ({ key: b.key, label: b.label, value: b.monthly, color: b.color }))} format={(v) => `${money(v)}/mo`} />
-        </div>
-      ))}
     </div>
   );
 }

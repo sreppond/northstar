@@ -1,14 +1,13 @@
 import { usePlanner } from '../PlannerContext';
 import { RetirementForecastView } from '../views/RetirementForecastView';
-import { planMetaLine } from '../format';
 import { Page, PageHeader } from '../ui';
 import { PlanCheckBanner } from '../PlanCheckBanner';
 
 export function RetirementPage() {
-  const { plan, result, stored, onSetRetirementYear } = usePlanner();
+  const { plan, result, onSetRetirementYear } = usePlanner();
   return (
     <Page>
-      <PageHeader title="Retirement" meta={planMetaLine(stored, result.endYear)} />
+      <PageHeader title="Retirement" />
       <PlanCheckBanner only={['horizon', 'unearned-wages', 'high-growth']} />
       <RetirementForecastView plan={plan} result={result} onSetRetirementYear={onSetRetirementYear} />
     </Page>
