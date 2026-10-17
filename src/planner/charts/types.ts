@@ -46,6 +46,19 @@ export interface ChartSeries {
       into existence at its full purchase-year value, it doesn't appreciate
       up from zero over the prior year. */
   stepAt?: number;
+  /** In a `stacked` chart, draw this series on its own scale instead of adding
+      it to the stack: Budget's after-tax income line over the spending
+      columns (docs/REDESIGN-V5.md §5.3). Ignored when the chart isn't stacked. */
+  overlay?: boolean;
+}
+
+/** A labelled background stretch of the x-axis, such as a child's
+    daycare / school / college years (docs/REDESIGN-V5.md §5.3). `from` and
+    `to` are x-axis values, drawn exactly as given. */
+export interface ChartBand {
+  from: number;
+  to: number;
+  label: string;
 }
 
 /** The shortfall region (docs/REDESIGN-V5.md §4.2.4): hatched and tinted

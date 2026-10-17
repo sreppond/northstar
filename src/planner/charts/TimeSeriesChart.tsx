@@ -10,7 +10,7 @@ import {
   tightCeilingMoney,
   yTicks,
 } from './seriesMath';
-import type { ChartMarker, ChartSeries, DangerBand, ReadoutSpec } from './types';
+import type { ChartBand, ChartMarker, ChartSeries, DangerBand, ReadoutSpec } from './types';
 import { useScrub } from './useScrub';
 import { usePrefersReducedMotion, useReveal, useSpringValues } from './useSpring';
 import './charts.css';
@@ -66,6 +66,8 @@ export interface TimeSeriesChartProps {
   /** Called with `'all'` by the "Runs dry YEAR →" chip when the band is off-window. */
   onRequestRange?(range: RangeKey): void;
   markers?: ChartMarker[];
+  /** Labelled background stretches of the x-axis (a child's life stages). */
+  bands?: ChartBand[];
   /** A draft preview: a dashed ink line, never a new hue. */
   ghost?: ChartSeries;
   yFormat?(value: number): string;
@@ -102,19 +104,24 @@ interface Resolved {
 }
 
 function resolveSeries(series: ChartSeries[], stacked: boolean): Resolved[] {
-  const stack = stacked ? stackSeries(series.map((s) => s.values)) : null;
+  // An `overlay` series sits outside the stack (Budget's after-tax line over
+  // its spending columns), so only the rest are stacked.
+  const stackIdx = stacked ? series.flatMap((s, i) => (s.overlay ? [] : [i])) : [];
+  const stack = stacked ? stackSeries(stackIdx.map((i) => series[i].values)) : null;
   return series.map((s, i) => {
+    const slot = stack ? stackIdx.indexOf(i) : -1;
+    const inStack = slot >= 0;
     let kind = s.kind ?? (s.fill ? 'area' : 'line');
-    if (stacked && kind === 'line') kind = 'area';
+    if (inStack && kind === 'line') kind = 'area';
     return {
       id: s.id ?? s.label,
       s,
       kind,
-      tops: stack ? stack.tops[i] : s.values,
-      bases: stack ? stack.bases[i] : s.fillTo,
+      tops: stack && inStack ? stack.tops[slot] : s.values,
+      bases: stack && inStack ? stack.bases[slot] : s.fillTo,
       // A stacked chart's bands ARE the data: solid, not a wash.
-      flatOpacity: s.fillOpacity ?? (stacked && kind === 'area' ? 0.85 : undefined),
-      lineWidth: s.lineWidth ?? (stacked ? 1.5 : 2),
+      flatOpacity: s.fillOpacity ?? (inStack && kind === 'area' ? 0.85 : undefined),
+      lineWidth: s.lineWidth ?? (inStack ? 1.5 : 2),
     };
   });
 }
@@ -143,6 +150,7 @@ export function TimeSeriesChart({
   danger,
   onRequestRange,
   markers,
+  bands,
   ghost,
   yFormat = axisMoney,
   formatX = String,
@@ -324,7 +332,9 @@ export function TimeSeriesChart({
         resolved.find((r) => r.kind === 'area') ??
         resolved[0]);
     const rawAt = (r: Resolved) => r.s.values[readoutIdx];
-    const total = stacked ? resolved.reduce((a, r) => a + (Number.isFinite(rawAt(r)) ? rawAt(r) : 0), 0) : NaN;
+    const total = stacked
+      ? resolved.reduce((a, r) => a + (!r.s.overlay && Number.isFinite(rawAt(r)) ? rawAt(r) : 0), 0)
+      : NaN;
     const primaryValue = primaryRes ? rawAt(primaryRes) : total;
 
     const secondary: ReadoutItem[] = [];
@@ -473,6 +483,22 @@ export function TimeSeriesChart({
               className="ns-mini-band"
             />
           )}
+
+          {bands?.map((b, i) => {
+            const bx0 = Math.max(L, xFor(b.from));
+            const bx1 = Math.min(R, xFor(b.to));
+            if (bx1 - bx0 < 2) return null;
+            return (
+              <g key={`band-${i}`}>
+                <rect x={bx0} y={TOP} width={bx1 - bx0} height={B - TOP} className={`ns-tsc-band ns-tsc-band-${i % 2}`} />
+                {bx1 - bx0 > b.label.length * 6.2 + 12 && (
+                  <text x={bx0 + 8} y={TOP + 14} className="ns-tsc-band-label">
+                    {b.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
           {ticks.map((t) => {
             const y = yFor(t.value);
