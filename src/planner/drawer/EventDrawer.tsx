@@ -1,14 +1,23 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Account, EventKind, Participant, PlanEvent, WorkPhase } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
 import { labelFor } from '../presentation';
 import { IconBadge } from '../IconBadge';
+import { Sheet } from '../ui/Sheet';
+import { TimeSeriesChart } from '../charts';
+import { usePlanner } from '../PlannerContext';
+import { planHealth } from '../health';
+import { presentResult } from '../impact';
+import { money } from '../format';
 import { describeSchema } from './schemaForm';
 import { ConfigField, Field } from './fields';
 import { CompStepsEditor, RsuVestingEditor, WorkPhasesEditor } from './JobSchedules';
+import './sheetForm.css';
 
 /**
- * The right-side event editor.
+ * The event editor, on the shared `Sheet` shell (docs/REDESIGN-V5.md §3.6,
+ * §5.4): a right-hand panel on desktop, a bottom sheet on phones. The form
+ * body is unchanged.
  *
  * Every form here is generated from the event module's zod schema — there is
  * no per-kind form code. Adding a config field to an event module makes an
@@ -23,6 +32,10 @@ const INCOME_KINDS: EventKind[] = ['income', 'windfall', 'socialSecurity'];
 const COST_KINDS: EventKind[] = ['buyAHome', 'haveAKid'];
 
 type GroupId = 'work' | 'expense';
+
+/** About one Sheet exit spring (`Sheet.tsx` SPRING is 0.38s): long enough to
+    see it leave before the parent drops the draft. */
+const LEAVE_MS = 260;
 
 // Kinds that share a real mechanic underneath (see kit.ts's IncomeSuppression,
 // and the two expense modules) but read as separate ideas when the picker
@@ -81,13 +94,23 @@ export function EventDrawer({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [group, setGroup] = useState<GroupId | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  // The shell mounts this only while an event is being edited, so on its own
+  // it would vanish the instant the editor closes. Every way out goes through
+  // `leave`: close the Sheet (it springs out), then tell the parent once it is
+  // gone. The action is held in a ref so the late call sees the latest props.
+  const [leaving, setLeaving] = useState(false);
+  const pending = useRef<{ run(): void } | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const leave = useCallback((run: () => void) => {
+    if (pending.current) return;
+    pending.current = { run };
+    setLeaving(true);
+    timer.current = window.setTimeout(() => pending.current?.run(), LEAVE_MS);
+  }, []);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const latest = useRef({ onSave, onCancel, onDelete });
+  latest.current = { onSave, onCancel, onDelete };
+  const close = useCallback(() => leave(() => latest.current.onCancel()), [leave]);
 
   useEffect(() => setConfirmingDelete(false), [draft?.id]);
 
@@ -128,20 +151,37 @@ export function EventDrawer({
     return parsed.error.issues.map((i) => `${i.path.join('.') || 'config'}: ${i.message}`);
   }, [draft]);
 
-  return (
-    <>
-      <div className="ns-scrim" onClick={onCancel} />
-      <aside className="ns-drawer" role="dialog" aria-modal="true" aria-label={draft ? 'Edit event' : 'New event'}>
-        <header className="ns-drawer-head">
-          <div className="ns-drawer-title">
-            {draft ? (isNew ? labelFor(draft.kind) : draft.name) : 'New event'}
-          </div>
-          <button type="button" className="ns-btn-ghost" onClick={onCancel} aria-label="Close">
-            ✕
+  const footer = draft ? (
+    <div className="ns-sheet-actions">
+      {!isNew &&
+        (confirmingDelete ? (
+          <button type="button" className="ns-btn ns-btn-danger" onClick={() => leave(() => latest.current.onDelete())}>
+            Delete — are you sure?
           </button>
-        </header>
+        ) : (
+          <button type="button" className="ns-btn ns-btn-danger-ghost" onClick={() => setConfirmingDelete(true)}>
+            Delete
+          </button>
+        ))}
+      <div className="ns-sheet-actions-right">
+        <button type="button" className="ns-btn" onClick={close}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="ns-btn ns-btn-primary"
+          disabled={validation !== null}
+          onClick={() => leave(() => latest.current.onSave())}
+        >
+          {isNew ? 'Add event' : 'Save'}
+        </button>
+      </div>
+    </div>
+  ) : undefined;
 
-        <div className="ns-drawer-body">
+  return (
+    <Sheet open={!leaving} onClose={close} title={draft ? (isNew ? labelFor(draft.kind) : draft.name) : 'New event'} footer={footer}>
+      <div className="ns-sheet-form">
           {!draft && !group && (
             <>
               <p className="ns-drawer-hint">What would you like to add to the plan?</p>
@@ -191,6 +231,8 @@ export function EventDrawer({
                   }
                 />
               </Field>
+
+              <EventEffect draft={draft} />
 
               {generated.length === 0 && draft.kind !== 'retirement' && (
                 <p className="ns-drawer-hint">This event has no settings beyond its year.</p>
@@ -258,41 +300,8 @@ export function EventDrawer({
               )}
             </>
           )}
-        </div>
-
-        {draft && (
-          <footer className="ns-drawer-foot">
-            {!isNew &&
-              (confirmingDelete ? (
-                <button type="button" className="ns-btn ns-btn-danger" onClick={onDelete}>
-                  Delete — are you sure?
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="ns-btn ns-btn-danger-ghost"
-                  onClick={() => setConfirmingDelete(true)}
-                >
-                  Delete
-                </button>
-              ))}
-            <div className="ns-drawer-foot-right">
-              <button type="button" className="ns-btn" onClick={onCancel}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="ns-btn ns-btn-primary"
-                disabled={validation !== null}
-                onClick={onSave}
-              >
-                {isNew ? 'Add event' : 'Save'}
-              </button>
-            </div>
-          </footer>
-        )}
-      </aside>
-    </>
+      </div>
+    </Sheet>
   );
 }
 
@@ -447,6 +456,74 @@ function KindGroup({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * What this event does to the money the plan can actually spend
+ * (docs/REDESIGN-V5.md §5.4): the plan as it stands, with the event, against
+ * the plan re-run with just this event switched off, drawn as the dashed
+ * ghost. The same counterfactual `rankImpact` runs, but on spendable money
+ * rather than net worth, so it shows up where it hurts. Nothing here is
+ * stored; it is a read of the draft.
+ */
+function EventEffect({ draft }: { draft: PlanEvent }) {
+  const { plan, result, health } = usePlanner();
+  const [hover, setHover] = useState<number | null>(null);
+  // Typing in the form changes the draft on every keystroke; the second plan
+  // run can lag a beat behind rather than hold the input up.
+  const settled = useDeferredValue(plan);
+
+  const effect = useMemo(() => {
+    if (!draft.isIncluded || draft.kind === 'endOfPlan') return null;
+    // `endOfPlan` moves the horizon itself, so it has no like-for-like twin.
+    const without: typeof settled = {
+      ...settled,
+      events: settled.events.map((e) => (e.id === draft.id ? { ...e, isIncluded: false } : e)),
+    };
+    const withoutResult = presentResult(without);
+    const spendable = planHealth(withoutResult, without).spendable;
+    const byYear = new Map(withoutResult.years.map((y, i) => [y.year, spendable[i]]));
+    const years = result.years.map((y) => y.year);
+    const withoutValues = years.map((y) => byYear.get(y) ?? NaN);
+    // Nothing to show if the event doesn't move spendable money at all.
+    const moves = years.some((y, i) => Math.abs((health.spendable[i] ?? 0) - (withoutValues[i] ?? 0)) > 1);
+    return moves ? { years, withoutValues } : null;
+  }, [settled, draft.id, draft.kind, draft.isIncluded, result, health.spendable]);
+
+  if (!effect) return null;
+  const idx = hover === null ? -1 : effect.years.indexOf(hover);
+
+  return (
+    <div className="ns-field">
+      <div className="ns-effect-head">
+        <span className="ns-effect-title">Spendable money</span>
+        <span className="ns-effect-read ns-num">
+          {idx >= 0 ? (
+            <>
+              {hover} · <strong>{money(health.spendable[idx])}</strong> · without {money(effect.withoutValues[idx])}
+            </>
+          ) : (
+            <span className="ns-effect-key">without this event</span>
+          )}
+        </span>
+      </div>
+      <TimeSeriesChart
+        years={effect.years}
+        series={[{ id: 'with', label: 'With this event', color: 'var(--data-nw)', values: health.spendable, kind: 'area' }]}
+        ghost={{ id: 'without', label: 'Without', color: 'var(--ink)', values: effect.withoutValues }}
+        readout={false}
+        height={170}
+        onHoverYear={setHover}
+        drawKey={draft.id}
+        danger={
+          health.status === 'short' && health.firstShortYear !== undefined
+            ? { from: health.firstShortYear }
+            : undefined
+        }
+        ariaLabel={`${draft.name || 'This event'}'s effect on spendable money`}
+      />
     </div>
   );
 }
