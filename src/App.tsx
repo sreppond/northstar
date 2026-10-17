@@ -21,7 +21,7 @@ import { EventDrawer } from './planner/drawer/EventDrawer';
 import { OverviewPage } from './planner/pages/OverviewPage';
 import { BudgetPage } from './planner/pages/BudgetPage';
 import { CashFlowPage } from './planner/pages/CashFlowPage';
-import { EventsPage } from './planner/pages/EventsPage';
+import { TimelinePage } from './planner/pages/TimelinePage';
 import { RetirementPage } from './planner/pages/RetirementPage';
 import { HousePage } from './planner/pages/HousePage';
 import { AnnuityPage } from './planner/pages/AnnuityPage';
@@ -119,7 +119,7 @@ function PlannerShell() {
           <Route path="/net-worth" element={<OverviewPage />} />
           <Route path="/cashflow" element={<CashFlowPage />} />
           <Route path="/budget" element={<BudgetPage />} />
-          <Route path="/timeline" element={<EventsPage />} />
+          <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/house" element={<HousePage />} />
           <Route path="/retirement" element={<RetirementPage />} />
           <Route path="/annuity" element={<AnnuityPage />} />
