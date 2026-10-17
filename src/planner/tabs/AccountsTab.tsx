@@ -8,17 +8,22 @@ import { useScrollToYear } from './useScrollToYear';
 import { GearIcon } from '../icons';
 import { ACCOUNT_ICON } from '../domainIcons';
 import { classBalances, missingAccountClasses } from '../ledger';
-import { useBreakpoint } from '../useBreakpoint';
+import { PopMenu } from '../pages/PopMenu';
+import { Plus } from 'lucide-react';
 
 /**
- * The balance sheet, one row per ACCOUNT TYPE rather than per linked account.
+ * Balances over time (docs/REDESIGN-V5.md §5.1.5): one row per ACCOUNT TYPE
+ * rather than per linked account, across EVERY year in a sideways-scrolling
+ * table with a leading "Today" column.
  *
- * Each type row carries a gear: hover it for the assumptions behind that line,
- * click to edit them. Synthetic accounts created by events roll into their
- * class row but are not editable from here.
+ * A row opens the account sheet; the gear still shows the assumptions behind
+ * the line on hover. A class a life event created (the house and its
+ * mortgage) opens the same sheet read-only. Adding an account type lives in a
+ * quiet `+` in the header's sticky label cell, where a scrolled table can't
+ * carry it away.
  */
 export function AccountsTab({
-  window: years,
+  years,
   accounts,
   highlightYear,
   focusYear,
@@ -27,7 +32,8 @@ export function AccountsTab({
   onEditType,
   opening,
 }: {
-  window: YearSnapshot[];
+  /** Every projected year (the table scrolls sideways, there is no pager). */
+  years: YearSnapshot[];
   accounts: Account[];
   /** The scrubbed year (docs/REDESIGN.md §4.1) — null/undefined highlights
       nothing. Alias of `focusYear` (docs/REDESIGN-V5.md §3.7). */
@@ -44,14 +50,9 @@ export function AccountsTab({
       mid-migration (or a test) can still render the table without it. */
   opening?: OpeningSnapshot;
 }) {
-  // No room for a 4th column at the phone breakpoint (`yearColumnsFor`
-  // already trims to 2 years there) — adding "Today" back on top of those
-  // would reintroduce the exact 3-column clipping/truncation this table
-  // used to have on a 390px screen (docs/W3-REVIEW.md "Phone balance
-  // sheet"). Today's figure is one tap away in the stat strip above instead.
-  // Called unconditionally — React hooks can't be called inside a `&&`.
-  const breakpoint = useBreakpoint();
-  const showOpening = Boolean(opening) && breakpoint !== 'phone';
+  // The table scrolls now, so "Today" no longer has to be dropped at phone
+  // width to make room (it was, back when a pager trimmed to two years).
+  const showOpening = Boolean(opening);
 
   const focus = focusYear !== undefined ? focusYear : highlightYear;
   const { pickYear, scrollerProps } = useScrollToYear(focus, onFocusYear);
@@ -70,28 +71,18 @@ export function AccountsTab({
           .reduce((sum, a) => sum + a.balance, 0)
       : 0;
 
-  /**
-   * Types not yet on the balance sheet, offered as a trailing add row — a
-   * plain flush flex row spanning the table's full width rather than a
-   * `.ns-grid` row confined to the 268px label column, which is what used
-   * to wrap several pills into a vertical stack instead of one tidy row
-   * (docs/REDESIGN-V3.md "Accounts").
-   */
-  const renderAddRow = (classes: AccountClass[], liability: boolean) => {
-    const missing = missingAccountClasses(classes, liability, accounts, years);
-    if (missing.length === 0) return null;
-
-    return (
-      <div className="ns-add-row-flush">
-        <span className="ns-add-label">Add</span>
-        {missing.map((accountClass) => (
-          <button key={accountClass} type="button" className="ns-add-pill" onClick={() => onEditType(accountClass)}>
-            + {ACCOUNT_TYPES[accountClass].label}
-          </button>
-        ))}
-      </div>
-    );
-  };
+  /** Types with no balance anywhere and none set up by hand, as `+` menu entries. */
+  const addGroups = [
+    { label: 'Assets', classes: ASSET_CLASSES, liability: false },
+    { label: 'Liabilities', classes: LIABILITY_CLASSES, liability: true },
+  ].map(({ label, classes, liability }) => ({
+    label,
+    items: missingAccountClasses(classes, liability, accounts, years).map((accountClass) => ({
+      key: accountClass,
+      label: ACCOUNT_TYPES[accountClass].label,
+      onSelect: () => onEditType(accountClass),
+    })),
+  }));
 
   const renderGroup = (classes: AccountClass[], liability: boolean) =>
     classes
@@ -131,7 +122,7 @@ export function AccountsTab({
         // (docs/REDESIGN-V3.md "Accounts") — but only when there's an
         // owned account to edit; a synthetic-only row's gear is locked for
         // the same reason.
-        const rowProps = owned
+        const rowProps = owned || synthetic.length > 0
           ? {
               role: 'button' as const,
               tabIndex: 0,
@@ -148,7 +139,7 @@ export function AccountsTab({
         return (
           <div
             key={accountClass}
-            className={`ns-grid ns-row-child${owned ? ' ns-row-clickable' : ''}`}
+            className={`ns-grid ns-row-child ns-row-clickable`}
             style={style}
             {...rowProps}
           >
@@ -206,9 +197,15 @@ export function AccountsTab({
   return (
     <div {...scrollerProps}>
       <div className="ns-grid ns-row-head" style={style}>
-        {/* The SectionCard above already titles this "Balance sheet" —
-            this column header just needs to say what its own rows are. */}
-        <div>Account</div>
+        <div className="ns-nw-acct-head">
+          <span>Account</span>
+          <PopMenu
+            label="Add an account"
+            className="ns-nw-add"
+            groups={addGroups}
+            trigger={() => <Plus size={14} strokeWidth={2.25} aria-hidden />}
+          />
+        </div>
         {showOpening && <div className="ns-col-divider">Today</div>}
         {yearLabels.map((y) => (
           <YearHeadCell
@@ -237,7 +234,6 @@ export function AccountsTab({
         ))}
       </div>
       {renderGroup(ASSET_CLASSES, false)}
-      {renderAddRow(ASSET_CLASSES, false)}
 
       <div className="ns-grid ns-row-group" style={style}>
         <div>Liabilities</div>
@@ -247,7 +243,6 @@ export function AccountsTab({
         ))}
       </div>
       {renderGroup(LIABILITY_CLASSES, true)}
-      {renderAddRow(LIABILITY_CLASSES, true)}
     </div>
   );
 }

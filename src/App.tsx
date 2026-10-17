@@ -13,12 +13,12 @@ import { ShortcutSheet } from './planner/ShortcutSheet';
 import { PlanHealthAlert } from './planner/PlanHealthAlert';
 import { ToastRegion, toast } from './planner/ui/Toast';
 import { Onboarding } from './planner/Onboarding';
-import { AccountDrawer } from './planner/drawer/AccountDrawer';
+import { AccountSheet } from './planner/drawer/AccountDrawer';
 import { AssumptionsDrawer } from './planner/drawer/AssumptionsDrawer';
 import { ImportDrawer } from './planner/drawer/ImportDrawer';
 import { ConnectDrawer } from './planner/drawer/ConnectDrawer';
 import { EventDrawer } from './planner/drawer/EventDrawer';
-import { OverviewPage } from './planner/pages/OverviewPage';
+import { NetWorthPage } from './planner/pages/NetWorthPage';
 import { BudgetPage } from './planner/pages/BudgetPage';
 import { CashFlowPage } from './planner/pages/CashFlowPage';
 import { EventsPage } from './planner/pages/EventsPage';
@@ -86,7 +86,6 @@ function PlannerShell() {
     allAccounts,
     upsertEvent,
     deleteEvent,
-    upsertAccount,
     replacePlan,
     monarch,
     importing,
@@ -96,8 +95,6 @@ function PlannerShell() {
     upsertProgressPoint,
     deleteProgressPoint,
     undo,
-    accountDraft,
-    setAccountDraft,
     assumptionsDraft,
     setAssumptionsDraft,
   } = usePlanner();
@@ -114,9 +111,9 @@ function PlannerShell() {
             (docs/REDESIGN-V5.md §4.2.3). The rail pill is its undismissable twin. */}
         <PlanHealthAlert />
         <Routes>
-          {/* docs/REDESIGN-V5.md §2. Net Worth and Timeline render the old
-              Overview / Events pages until units C1 / C4 replace them. */}
-          <Route path="/net-worth" element={<OverviewPage />} />
+          {/* docs/REDESIGN-V5.md §2. Timeline renders the old Events page until
+              unit C4 replaces it. */}
+          <Route path="/net-worth" element={<NetWorthPage />} />
           <Route path="/cashflow" element={<CashFlowPage />} />
           <Route path="/budget" element={<BudgetPage />} />
           <Route path="/timeline" element={<EventsPage />} />
@@ -176,7 +173,7 @@ function PlannerShell() {
           // (docs/ROADMAP-10.md Track B/C4) — `ImportDrawer` prefers `fetched`
           // when both are present, so this only ever prefills when there is
           // no server-fetched capture already on screen. The Overview
-          // "Review" banner (`OverviewPage.tsx`) opens this same drawer via
+          // "Review" banner (`NetWorthPage.tsx`) opens this same drawer via
           // `setImporting(true)`; it does nothing else, since the snapshot
           // itself flows through here.
           localSnapshot={localMonarch.snapshot}
@@ -242,22 +239,9 @@ function PlannerShell() {
         />
       )}
 
-      {accountDraft && (
-        <AccountDrawer
-          draft={accountDraft}
-          synthetic={allAccounts.filter(
-            (a) => a.isSynthetic && a.accountClass === accountDraft.accountClass,
-          )}
-          planStartYear={stored.settings.startYear}
-          planEndYear={result.endYear}
-          onChange={setAccountDraft}
-          onSave={() => {
-            upsertAccount(stored.id, accountDraft);
-            setAccountDraft(null);
-          }}
-          onCancel={() => setAccountDraft(null)}
-        />
-      )}
+      {/* Always mounted: it reads `accountDraft` itself so the sheet can play
+          its exit (docs/REDESIGN-V5.md §5.1.4). */}
+      <AccountSheet />
 
       {editor.open && (
         <EventDrawer
