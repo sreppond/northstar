@@ -1,22 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Account, Plan, PlanResult } from '@northstar/engine';
-import { contractYearFor, surrenderCharge } from '@northstar/engine';
-import { Field } from '../drawer/fields';
-import { money, percent } from '../format';
-import { MiniChart } from './MiniChart';
-import { SectionCard, Stat, StatStrip } from '../ui';
+import { DonutChart } from '../charts';
+import { money } from '../format';
+import '../pages/decisions.css';
 
 /**
- * The Annuity lens (docs/REDESIGN-V3.md "Annuity"): basis-vs-gain (how much
- * of a nonqualified contract's balance would come out tax-free right now),
- * contract fee drag over time, and the surrender-charge schedule. Folds no
- * SEPP content in — that stays exactly where it already lives, inside
- * Retirement (`SeppForecastView.tsx`'s `SeppTool`).
+ * The contract itself (docs/REDESIGN-V5.md §5.5): how much of the balance
+ * would come out tax-free right now, as a donut with the balance in the
+ * middle. Fee drag and the surrender schedule describe the ACCOUNT rather than
+ * the SEPP decision, so they live in the account sheet
+ * (`AnnuityAccountSection`, unit C1), not on this page.
  *
  * `AnnuityPage` only renders this once at least one candidate contract
- * exists — an empty plan gets an `EmptyState` there instead, with an action
- * that opens the account drawer for a new `variableAnnuity` account — so
- * this component assumes `candidates` is non-empty.
+ * exists.
  *
  * Scoped to every `variableAnnuity` account (its own account class — Accounts
  * tab, "Variable annuity"), plus — for a saved plan from before that class
@@ -37,179 +33,46 @@ export function isAnnuityContract(account: Account): boolean {
   );
 }
 
-/** `accountId`: show just that contract (the Annuity & SEPP page drives the choice); unset, the view offers its own picker. */
+/** `accountId`: show just that contract (the Annuity & SEPP page drives the choice); unset, the first one. */
 export function AnnuityForecastView({ plan, result, accountId }: { plan: Plan; result: PlanResult; accountId?: string }) {
   const all = plan.accounts.filter((a) => !a.isSynthetic && isAnnuityContract(a));
-  const candidates = accountId ? all.filter((a) => a.id === accountId) : all;
-  if (candidates.length === 0) return null;
-  return <AnnuityContent key={candidates[0].id} plan={plan} result={result} candidates={candidates} />;
+  const account = (accountId ? all.find((a) => a.id === accountId) : undefined) ?? all[0];
+  if (!account) return null;
+  return <AnnuityContent key={account.id} account={account} result={result} />;
 }
 
-function AnnuityContent({
-  plan,
-  result,
-  candidates,
-}: {
-  plan: Plan;
-  result: PlanResult;
-  candidates: Account[];
-}) {
-  const [accountId, setAccountId] = useState(candidates[0].id);
-  const account = candidates.find((a) => a.id === accountId) ?? candidates[0];
-
-  const asOfYear = plan.settings.startYear;
-  const rows = result.years.map((y) => ({
-    year: y.year,
-    row: y.accounts.find((a) => a.accountId === account.id),
-  }));
-  const current = rows.find((r) => r.year === asOfYear)?.row ?? rows[0]?.row;
-
-  // "As of today" (docs/MATH.md "Today vs. years[0]") — `result.opening` is
-  // the plan's real `asOfDate` balance; `current` (year[0]'s projected Dec
-  // 31 close) is kept above only for the fee-history chart below, which
-  // plots a full year at a time and has no "today" column of its own.
+function AnnuityContent({ account, result }: { account: Account; result: PlanResult }) {
+  // "As of today" (docs/MATH.md "Today vs. years[0]"): `result.opening` is the
+  // plan's real `asOfDate` balance, not the first year's projected close.
   const opening = result.opening?.accounts.find((a) => a.accountId === account.id);
   const balance = opening?.balance ?? account.initialBalance;
-  const basisRemaining = Math.min(balance, opening?.nonTaxableBaseRemaining ?? account.nonTaxableBase ?? 0);
-  const gain = Math.max(0, balance - basisRemaining);
-  const basisPct = balance > 0 ? (basisRemaining / balance) * 100 : 0;
-  const gainPct = 100 - basisPct;
+  const basis = Math.min(balance, opening?.nonTaxableBaseRemaining ?? account.nonTaxableBase ?? 0);
+  const gain = Math.max(0, balance - basis);
 
-  const contractYear = contractYearFor(account.startYear, plan.settings.startYear, asOfYear);
-  const schedule = [...(account.annuitySurrenderSchedule ?? [])].sort((a, b) => a.year - b.year);
-  const currentCharge = surrenderCharge(balance, contractYear, account.annuitySurrenderSchedule);
-
-  const hasFees =
-    (account.annuityFlatFeeAnnual ?? 0) > 0 ||
-    (account.annuityAssetFeePercent ?? 0) > 0 ||
-    (account.annuityAdvisoryFeePercent ?? 0) > 0;
-
-  const feeSeries = useMemo(
-    () => rows.map((r) => r.row?.annuityFeesDeducted ?? 0),
-    [rows],
+  const segments = useMemo(
+    () => [
+      { key: 'basis', label: 'Basis (tax-free)', value: basis, color: 'var(--in)' },
+      { key: 'gain', label: 'Gain (taxable)', value: gain, color: 'var(--mix-3)' },
+    ],
+    [basis, gain],
   );
-  const totalFeesToDate = feeSeries
-    .filter((_, i) => rows[i].year <= asOfYear)
-    .reduce((sum, v) => sum + v, 0);
+  if (balance <= 0) return null;
 
   return (
-    <>
-      <StatStrip>
-        <Stat
-          size="xl"
-          label="Balance"
-          value={money(balance)}
-          sub={`As of ${asOfYear}`}
-          explain={`This contract's projected account balance for ${asOfYear}.`}
+    <section className="ns-dec-section">
+      <div className="ns-dec-head">
+        <h2 className="ns-dec-title">{account.name}</h2>
+      </div>
+      <div className="ns-dec-donut">
+        <DonutChart
+          segments={segments}
+          center={{ value: money(balance), label: 'Worth today' }}
+          size={216}
+          thickness={28}
+          legend="side"
+          ariaLabel={`${account.name}: basis versus gain`}
         />
-        <Stat
-          label="Basis (tax-free)"
-          value={money(basisRemaining)}
-          explain="What you've put in and haven't yet withdrawn — the part of the balance that comes out with no further tax owed."
-        />
-        <Stat
-          label="Gain (taxable)"
-          value={money(gain)}
-          explain="Balance minus remaining basis — investment growth inside the contract, taxed as ordinary income when withdrawn."
-        />
-        <Stat
-          label={`Fees paid through ${asOfYear}`}
-          value={money(totalFeesToDate)}
-          explain="Mortality & expense, advisory and flat fees deducted from this contract in every projected year up to and including this one."
-        />
-        <Stat
-          label="Surrender charge now"
-          value={currentCharge > 0 ? money(currentCharge) : '—'}
-          sub={`Contract year ${contractYear}`}
-          explain="What leaving the contract today would cost, per its own surrender schedule — 0 once the schedule has run out."
-        />
-      </StatStrip>
-
-      {candidates.length > 1 && (
-        <Field label="Account">
-          <select className="ns-input" value={account.id} onChange={(e) => setAccountId(e.target.value)}>
-            {candidates.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-
-      <SectionCard
-        title="Basis versus gain"
-        meta={account.isQualifiedAnnuity ? 'Pro-rata on withdrawal' : 'LIFO, gain-first on withdrawal'}
-      >
-        <div className="ns-split-bar">
-          {basisPct > 0 && (
-            <div className="ns-split-bar-basis" style={{ flex: `${basisPct} 0 0%` }}>
-              {basisPct >= 12 ? `${percent(basisPct)} basis` : ''}
-            </div>
-          )}
-          {gainPct > 0 && (
-            <div className="ns-split-bar-gain" style={{ flex: `${gainPct} 0 0%` }}>
-              {gainPct >= 12 ? `${percent(gainPct)} gain` : ''}
-            </div>
-          )}
-        </div>
-        <div className="ns-split-bar-legend">
-          <span>
-            Basis (tax-free): <b>{money(basisRemaining)}</b>
-          </span>
-          <span>
-            Gain (taxable): <b>{money(gain)}</b>
-          </span>
-        </div>
-      </SectionCard>
-
-      {(hasFees || schedule.length > 0) && (
-        <div className="ns-annuity-split">
-          {hasFees && (
-            <SectionCard title="Contract fee drag" meta="Already netted out of the balance above">
-              <MiniChart
-                years={rows.map((r) => r.year)}
-                series={[{ label: 'Fees deducted', color: 'var(--out)', values: feeSeries, fill: true }]}
-                height={160}
-                endLabels
-              />
-              <div className="ns-stat-row" style={{ marginTop: 14 }}>
-                {(account.annuityAssetFeePercent ?? 0) > 0 && (
-                  <Stat label="Mortality & expense" value={percent(account.annuityAssetFeePercent ?? 0)} />
-                )}
-                {(account.annuityAdvisoryFeePercent ?? 0) > 0 && (
-                  <Stat label="Advisory fee" value={percent(account.annuityAdvisoryFeePercent ?? 0)} />
-                )}
-                {(account.annuityFlatFeeAnnual ?? 0) > 0 && (
-                  <Stat label="Flat annual fee" value={money(account.annuityFlatFeeAnnual ?? 0)} />
-                )}
-              </div>
-            </SectionCard>
-          )}
-
-          {schedule.length > 0 && (
-            <SectionCard title="Surrender charge" meta={`Contract year ${contractYear}`}>
-              <p className="ns-view-sub">
-                The percent of a withdrawal the carrier keeps if it is taken during that contract year
-                {currentCharge > 0
-                  ? ` — withdrawing the full balance today would cost ${money(currentCharge)}.`
-                  : ' — past the surrender period, or the schedule has no entry for it.'}
-              </p>
-              <div className="ns-surrender-list">
-                {schedule.map((entry) => (
-                  <div
-                    key={entry.year}
-                    className={`ns-surrender-row${entry.year === contractYear ? ' ns-surrender-row-current' : ''}`}
-                  >
-                    <span>Year {entry.year}</span>
-                    <span className="ns-num">{percent(entry.percent)}</span>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-        </div>
-      )}
-    </>
+      </div>
+    </section>
   );
 }

@@ -1,0 +1,418 @@
+/*
+ * The Decisions pages — Home, Retirement, Annuity & SEPP
+ * (docs/REDESIGN-V5.md §5.5). Sections sit on the page background rather
+ * than in bordered cards (§1 principle 6); the chart is the hero and the
+ * readout above it is the tooltip. Tokens only, so light and dark both fall
+ * out of the variables already flipping.
+ *
+ * Self-contained on purpose: household.css is shared with Budget and
+ * Timeline, so nothing here edits it. The lever and Impact-strip classes the
+ * decision flow still uses (.ns-levers, .ns-impact) are read from there.
+ */
+
+/* --- sections -------------------------------------------------------------- */
+
+.ns-dec-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.ns-dec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ns-dec-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink-deep);
+}
+.ns-dec-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .ns-dec-split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+}
+.ns-dec-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* The chart's draw-in for the hand-built SVGs (the kit's own charts have
+   theirs): a left-to-right wipe, ease-out, ~650ms (§3.2). Reduced motion
+   gets the planner.css blanket squeeze, i.e. no wipe. */
+@keyframes ns-dec-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 -16px 0 0);
+  }
+}
+.ns-dec-reveal {
+  animation: ns-dec-wipe 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.ns-dec-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ns-dec-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ns-dec-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+/* --- zones (data: in-tint comfortable, a warm band for a stretch, out-tint
+   house-poor — always paired with a word or a glyph) ----------------------- */
+
+.ns-amap-comfortable,
+.ns-amap-comfortable-swatch {
+  fill: var(--in-tint);
+  background: var(--in-tint);
+}
+.ns-amap-stretch,
+.ns-amap-stretch-swatch {
+  fill: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+}
+.ns-amap-poor,
+.ns-amap-poor-swatch {
+  fill: var(--out-tint);
+  background: var(--out-tint);
+}
+.ns-amap-svg {
+  cursor: crosshair;
+}
+.ns-amap-edge {
+  stroke-width: 1.75;
+}
+.ns-amap-edge-glow {
+  stroke-width: 6;
+  opacity: 0.3;
+}
+.ns-amap-edge-comfortable {
+  stroke: var(--in-deep);
+}
+.ns-amap-edge-stretch {
+  stroke: var(--out-deep);
+}
+.ns-amap-edge.ns-amap-edge-stretch {
+  stroke-dasharray: 4 3;
+}
+.ns-amap-dot {
+  fill: var(--ink);
+  stroke: var(--bg);
+  stroke-width: 2.5;
+}
+.ns-amap-ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+.ns-amap-stem {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.5;
+}
+.ns-amap-label {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+}
+
+/* --- price curve ------------------------------------------------------------ */
+
+.ns-pc-svg {
+  cursor: crosshair;
+}
+.ns-pc-band-comfortable {
+  fill: var(--in-tint);
+}
+.ns-pc-band-stretch {
+  fill: color-mix(in srgb, var(--warn) 14%, var(--surface));
+}
+.ns-pc-band-poor {
+  fill: var(--out-tint);
+}
+.ns-pc-band-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.ns-pc-band-label-comfortable {
+  fill: var(--in-deep);
+}
+.ns-pc-band-label-stretch {
+  fill: var(--warn);
+}
+.ns-pc-band-label-poor {
+  fill: var(--out-deep);
+}
+.ns-pc-edge {
+  stroke: var(--surface);
+  stroke-opacity: 0.8;
+  stroke-width: 1;
+}
+.ns-pc-line {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  fill: none;
+}
+.ns-pc-glow {
+  stroke: var(--ink);
+  stroke-width: 6;
+  opacity: 0.2;
+  fill: none;
+}
+.ns-pc-dot-comfortable {
+  fill: var(--in-deep);
+}
+.ns-pc-dot-stretch {
+  fill: var(--warn);
+}
+.ns-pc-dot-housePoor {
+  fill: var(--out-deep);
+}
+.ns-pc-dot {
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+.ns-pc-mark {
+  fill: var(--bg);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.ns-pc-ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+.ns-pc-axis-title {
+  font-size: 11.5px;
+  fill: var(--muted);
+}
+
+/* --- house-poor check ------------------------------------------------------ */
+
+.ns-hp {
+  display: flex;
+  flex-direction: column;
+}
+.ns-hp-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-areas: 'mark label value' 'mark rule rule';
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 11px 0;
+  border-top: 1px solid var(--rule-light);
+}
+.ns-hp-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.ns-hp-mark {
+  grid-area: mark;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ns-hp-mark-comfortable {
+  background: var(--in-tint);
+  color: var(--in-deep);
+}
+.ns-hp-mark-stretch {
+  background: color-mix(in srgb, var(--warn) 16%, var(--surface));
+  color: var(--warn);
+}
+.ns-hp-mark-housePoor {
+  background: var(--out-tint);
+  color: var(--out-deep);
+}
+.ns-hp-label {
+  grid-area: label;
+  font-size: 14px;
+}
+.ns-hp-value {
+  grid-area: value;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ns-hp-rule {
+  grid-area: rule;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- before / after donut --------------------------------------------------- */
+
+.ns-ba-toggle {
+  display: flex;
+  justify-content: flex-start;
+}
+.ns-ba-owncost {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+.ns-ba-owncost-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ns-ba-owncost-row strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* --- retirement ---------------------------------------------------------------- */
+
+.ns-ret-control {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ns-ret-safe {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-soft),
+    transform 100ms var(--ease-soft);
+}
+.ns-ret-safe:hover {
+  background: var(--chip);
+}
+.ns-ret-safe:active {
+  transform: scale(0.97);
+}
+.ns-ret-safe strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- annuity & SEPP ------------------------------------------------------------- */
+
+.ns-sepp-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-sepp-rate .ns-input-wrap,
+.ns-sepp-rate input {
+  width: 96px;
+}
+.ns-sepp-commit {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--border));
+  background: color-mix(in srgb, var(--warn) 6%, var(--surface));
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ns-sepp-commit strong {
+  font-weight: 600;
+}
+.ns-dec-table {
+  min-width: 0;
+}
+.ns-contract-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.ns-dec-empty {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+/* Four sliders read as a 2x2 on a desktop; they stack on a phone. */
+.ns-levers.ns-dec-levers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 32px;
+  margin-bottom: 0;
+}
+@media (max-width: 640px) {
+  .ns-levers.ns-dec-levers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* The cost-of-buying verdict is a reading, not a card. */
+.ns-dec-section .ns-house-cost {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.ns-dec-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+/* A side-legend donut in a full-width section would spread its legend across
+   the page; keep it a donut and a legend, not a table. */
+.ns-dec-donut {
+  max-width: 520px;
+}

@@ -1,28 +1,33 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import type { FreedomAgeCandidate, Goal, Participant, Plan, PlanEvent, PlanResult, RetirementConfig } from '@northstar/engine';
-import { goalFundingProgress, lifeExpectancyYearFor, retirementAgeSweep, runPlan } from '@northstar/engine';
-import { money, joinNames, percent } from '../format';
-import { MiniChart } from './MiniChart';
-import { SeppTool } from './SeppForecastView';
-import { Badge, ProgressBar, SectionCard, Stat, StatStrip } from '../ui';
+import { useEffect, useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import type { FreedomAgeCandidate, Plan, PlanEvent, PlanResult, RetirementConfig } from '@northstar/engine';
+import { lifeExpectancyYearFor, retirementAgeSweep, runPlan } from '@northstar/engine';
+import { usePlanner } from '../PlannerContext';
+import { RangePicker, TimeSeriesChart } from '../charts';
 import { clampYear, extendPlanHorizon, planForRetirementPreview } from '../retirement';
 import { stubYearLabel } from '../ledger';
+import { planHealth } from '../health';
+import { agesLineFor, dangerBandFor, useHeroHeight } from '../decisionKit';
+import { retirementSources } from '../retirementSources';
+import '../pages/decisions.css';
 
 /**
- * The Retirement lens (docs/REDESIGN-V3.md "Retirement"): "when can I stop,
- * and will the money last?" Never blank — even before a `retirement` event
- * exists, a sensible default year (the earliest safe age this plan supports,
- * else the included participant's age 65) drives a full preview read, with
- * a compact slider to adjust it. Dragging past release/keyup commits the
- * year as a real event via `onSetRetirementYear`, same as before; what
- * changed is that there is no longer a gate the user must drag through
- * before anything renders.
+ * The Retirement lens (docs/REDESIGN-V3.md "Retirement", rebuilt on the v5
+ * kit, docs/REDESIGN-V5.md §5.5): "when can I stop, and will the money last?"
+ * Never blank — even before a `retirement` event exists, a sensible default
+ * year (the earliest safe age this plan supports, else the included
+ * participant's age 65) drives a full preview read, with a slider to adjust
+ * it. Dragging past release/keyup commits the year as a real event via
+ * `onSetRetirementYear`.
  *
- * B2 ("make Retirement always answer"): a retirement year past the plan's
- * own configured horizon used to leave the stat strip and both charts with
- * nothing to show — the freedom sweep below already looks all the way to
- * life expectancy, but `result` itself never simulated that far. This view
- * now runs `runPlan` a second time, ON A COPY of the plan with its horizon
+ * The page leads with "What pays for each year": a stacked area by income
+ * source with the spending need as a dashed line, scrubbable, its readout
+ * listing each source. The stat strip, the goal progress bar and the
+ * durability paragraph are gone; the danger band and the readout's Short pill
+ * say where the money stops.
+ *
+ * B2 ("make Retirement always answer"): a retirement year past the plan's own
+ * configured horizon used to leave the charts with nothing to show. This view
+ * runs `runPlan` a second time, ON A COPY of the plan with its horizon
  * extended just far enough to cover the set retirement year plus 25 years —
  * never touching the engine, and never the plan/result anything else on the
  * page uses — and marks the extended region rather than let it pass as
@@ -148,29 +153,6 @@ export function RetirementForecastView({
     [simPlan, result, isExtended, targetEndYear, retirementEvent],
   );
 
-  const sliderControl = (
-    <SectionCard title="When do you stop working?" meta={retirementEvent ? undefined : 'Previewing — drag to set'}>
-      <div className="ns-freedom-slider-row ns-freedom-slider-row-inline">
-        <input
-          type="range"
-          className="ns-freedom-slider"
-          aria-label="Retirement year"
-          min={minYear}
-          max={Math.max(minYear + 1, maxYear)}
-          step={1}
-          value={pendingYear}
-          onChange={(e) => setPendingYear(Number(e.target.value))}
-          onPointerUp={commit}
-          onKeyUp={commit}
-        />
-        <div className="ns-freedom-slider-value">
-          {age !== undefined ? `Age ${age}` : String(pendingYear)}
-          <span className="ns-freedom-slider-year">{pendingYear}</span>
-        </div>
-      </div>
-    </SectionCard>
-  );
-
   return (
     <RetirementReady
       plan={plan}
@@ -178,22 +160,45 @@ export function RetirementForecastView({
       originalEndYear={result.endYear}
       isExtended={isExtended}
       retirementEvent={liveEvent}
-      retiree={retiree}
-      freedom={freedom}
-      sliderControl={sliderControl}
-      seppResult={result}
+      control={
+        <section className="ns-dec-section ns-ret-control">
+          <div className="ns-dec-head">
+            <h2 className="ns-dec-title">When do you stop working?</h2>
+            {freedom && (
+              <button
+                type="button"
+                className="ns-ret-safe"
+                onClick={() => {
+                  setPendingYear(freedom.year);
+                  onSetRetirementYear(freedom.year);
+                }}
+              >
+                Earliest safe <strong>age {freedom.age}</strong> · {freedom.year}
+              </button>
+            )}
+          </div>
+          <div className="ns-freedom-slider-row ns-freedom-slider-row-inline">
+            <input
+              type="range"
+              className="ns-freedom-slider"
+              aria-label="Retirement year"
+              min={minYear}
+              max={Math.max(minYear + 1, maxYear)}
+              step={1}
+              value={pendingYear}
+              onChange={(e) => setPendingYear(Number(e.target.value))}
+              onPointerUp={commit}
+              onKeyUp={commit}
+            />
+            <div className="ns-freedom-slider-value">
+              {age !== undefined ? `Age ${age}` : String(pendingYear)}
+              <span className="ns-freedom-slider-year">{pendingYear}</span>
+            </div>
+          </div>
+        </section>
+      }
     />
   );
-}
-
-interface RetirementSummary {
-  year: number;
-  age: number | undefined;
-  before: number;
-  after: number;
-  balanceAtRetirement: number;
-  withdrawalsAtRetirement: number;
-  shortfallYear: number | undefined;
 }
 
 function RetirementReady({
@@ -202,221 +207,87 @@ function RetirementReady({
   originalEndYear,
   isExtended,
   retirementEvent,
-  retiree,
-  freedom,
-  sliderControl,
-  seppResult,
+  control,
 }: {
   plan: Plan;
-  /** The (possibly B2-extended) result this view reads for its stats/charts. */
+  /** The (possibly B2-extended) result this view reads for its charts. */
   result: PlanResult;
   /** The plan's own, unextended horizon — where the "beyond plan horizon" band starts. */
   originalEndYear: number;
   isExtended: boolean;
   retirementEvent: PlanEvent;
-  retiree: Participant | undefined;
-  freedom: FreedomAgeCandidate | undefined;
-  sliderControl: ReactNode;
-  /** The real, unextended result — SEPP reads this, not the extended view. */
-  seppResult: PlanResult;
+  /** The retire-year slider, rendered above the hero. */
+  control: React.ReactNode;
 }) {
-  const [seppOpen, setSeppOpen] = useState(false);
+  const { focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
+  const heroHeight = useHeroHeight();
 
   const years = result.years.map((y) => y.year);
-  const income = result.years.map((y) => y.totalIncome);
-  const expenses = result.years.map((y) => y.totalExpenses + y.totalTaxes);
   const portfolio = result.years.map((y) =>
     y.accounts.filter((a) => !a.isLiability && PORTFOLIO_CLASSES.has(a.accountClass)).reduce((s, a) => s + a.close, 0),
   );
   const stub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
   const stubYear = stub ? { year: plan.settings.startYear, label: stub.short } : undefined;
 
-  const retirementIndex = years.indexOf(retirementEvent.startYear);
-
-  const summary: RetirementSummary | undefined = useMemo(() => {
-    if (retirementIndex < 0) return undefined;
-    const before = income[Math.max(0, retirementIndex - 1)];
-    const after = income[retirementIndex];
-    const balanceAtRetirement = portfolio[retirementIndex];
-    const withdrawalsAtRetirement = result.years[retirementIndex].accounts.reduce(
-      (sum, a) => sum + a.withdrawals,
-      0,
-    );
-    const shortfallAfter = result.years.slice(retirementIndex).find((y) => y.unfundedShortfall !== undefined);
-    return {
-      year: retirementEvent.startYear,
-      age: retiree ? retirementEvent.startYear - retiree.birthYear : undefined,
-      before,
-      after,
-      balanceAtRetirement,
-      withdrawalsAtRetirement,
-      shortfallYear: shortfallAfter?.year,
-    };
-  }, [retirementIndex, income, portfolio, result.years, retirementEvent.startYear, retiree]);
-
-  const goal = (plan.goals ?? []).find((g) => g.kind === 'retirement');
-  const alarm = summary?.shortfallYear !== undefined;
+  const sources = useMemo(() => retirementSources(plan, result), [plan, result]);
+  // This view's own health, not the context's: the retirement year being
+  // previewed (or the extended horizon) can change where the money runs out.
+  const health = useMemo(() => planHealth(result, plan), [result, plan]);
+  const danger = useMemo(() => dangerBandFor(health, result), [health, result]);
+  const agesFor = useMemo(() => agesLineFor(plan, result), [plan, result]);
+  const beyond = isExtended ? { bandFrom: originalEndYear, bandLabel: 'Beyond horizon' } : {};
 
   return (
     <>
-      <StatStrip>
-        <Stat
-          size="xl"
-          label="Earliest safe retirement age"
-          value={freedom ? `Age ${freedom.age}` : 'No safe age'}
-          sub={
-            freedom
-              ? `Retiring in ${freedom.year} is the earliest year this plan lasts to age ${retiree?.lifeExpectancy}.`
-              : retiree
-                ? `No year before age ${retiree.lifeExpectancy} avoids running dry in this plan.`
-                : undefined
-          }
-          explain="The earliest retirement year, swept year by year, whose projection still lasts to the retiree's life expectancy without running dry — not a rule of thumb, an actual re-run of the plan at each candidate year."
-        />
-        <Stat
-          label="Income replacement"
-          value={summary && summary.before > 0 ? percent((summary.after / summary.before) * 100, 0) : '—'}
-          sub={summary ? `${money(summary.before)} → ${money(summary.after)}` : 'Out of horizon'}
-          explain="Spendable income the retirement year after retiring, divided by spendable income the year before — how much of your working income the portfolio (plus Social Security) actually replaces."
-        />
-        <Stat
-          label="Money lasts until"
-          value={alarm ? String(summary!.shortfallYear) : `${result.endYear}+`}
-          sub={
-            alarm
-              ? 'Runs dry at the set retirement year'
-              : isExtended
-                ? `No shortfall through ${result.endYear} (extended for this view)`
-                : 'No shortfall through the plan horizon'
-          }
-          explain="The first year, at the retirement year you've set, that a withdrawal can't be fully funded — projected out to 25 years past retirement if the plan's own horizon ends sooner."
-        />
-        <Stat
-          label="Withdrawals, first year"
-          value={summary ? money(summary.withdrawalsAtRetirement) : '—'}
-          sub={summary ? undefined : 'Out of horizon'}
-          explain={
-            retirementEvent
-              ? `Total portfolio withdrawals projected for ${retirementEvent.startYear}, the retirement year you've set.`
-              : undefined
-          }
-        />
-      </StatStrip>
+      {control}
 
-      {sliderControl}
-
-      {summary ? (
-        <div className={`ns-durability ${alarm ? 'ns-durability-alarm' : 'ns-durability-calm'}`}>
-          {alarm
-            ? `At the retirement year you've set, the plan runs dry in ${summary.shortfallYear} — a withdrawal couldn't be fully funded.`
-            : `At the retirement year you've set, the plan lasts through ${result.endYear} without running dry.`}
-        </div>
-      ) : (
-        // Only reachable now when there's no included participant at all to
-        // retire (B2 extends the horizon far enough past any settable
-        // retirement year that the ordinary "past the horizon" case above no
-        // longer happens).
-        <div className="ns-goal-empty">
-          {retirementEvent.name} is set for {retirementEvent.startYear} — add an included participant to see
-          income, spending and durability detail around that date.
-        </div>
-      )}
-
-      <SectionCard title="Income vs. spending" meta="Taxes included" divider={false}>
-        <MiniChart
+      <section className="ns-dec-section">
+        <TimeSeriesChart
           years={years}
-          series={[
-            { label: 'Income', color: 'var(--in)', values: income },
-            { label: 'Spending + tax', color: 'var(--out)', values: expenses },
-          ]}
-          height={220}
-          endLabels
-          bandFrom={isExtended ? originalEndYear : undefined}
-          bandLabel={isExtended ? 'Beyond horizon' : undefined}
+          series={sources.series.map((s) => ({ id: s.key, label: s.label, color: s.color, values: s.values, kind: 'area' as const }))}
+          stacked
+          ghost={{ label: 'Spending need', color: 'var(--ink)', values: sources.need }}
+          range={chartRange}
+          todayYear={plan.settings.startYear}
+          height={heroHeight}
+          focusYear={focusYear}
+          onFocusYear={setFocusYear}
+          danger={danger}
+          onRequestRange={setChartRange}
+          markers={[{ year: retirementEvent.startYear, label: 'Retire', tone: 'neutral' }]}
           stubYear={stubYear}
+          {...beyond}
+          readout={{
+            label: 'What pays for each year',
+            agesFor,
+            actions: <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={plan.settings.startYear} />,
+          }}
+          ariaLabel="What pays for each year, by source, against what the year costs"
         />
-      </SectionCard>
+        <p className="ns-dec-note">One-time costs, like a down payment, are left out.</p>
+      </section>
 
-      <SectionCard title="Investable portfolio balance" divider={false}>
-        <MiniChart
+      <section className="ns-dec-section">
+        <div className="ns-dec-head">
+          <h2 className="ns-dec-title">Investable balance</h2>
+        </div>
+        <TimeSeriesChart
           years={years}
-          series={[{ label: 'Portfolio', color: 'var(--data-nw)', values: portfolio, fill: true }]}
-          height={200}
-          bandFrom={isExtended ? originalEndYear : undefined}
-          bandLabel={isExtended ? 'Beyond horizon' : undefined}
+          series={[{ id: 'portfolio', label: 'Investable', color: 'var(--data-nw)', values: portfolio, kind: 'area' }]}
+          range={chartRange}
+          todayYear={plan.settings.startYear}
+          height={heroHeight - 120}
+          focusYear={focusYear}
+          onFocusYear={setFocusYear}
+          danger={danger}
+          onRequestRange={setChartRange}
+          markers={[{ year: retirementEvent.startYear, label: 'Retire', tone: 'neutral' }]}
           stubYear={stubYear}
+          {...beyond}
+          readout={{ label: 'Cash and investments', size: 'compact', agesFor }}
+          ariaLabel="Investable balance over time"
         />
-      </SectionCard>
-
-      {goal && (
-        <SectionCard title="Retirement goal progress">
-          <RetirementGoalStage plan={plan} result={result} goal={goal} />
-        </SectionCard>
-      )}
-
-      <div className="ns-disclosure">
-        <button
-          type="button"
-          className="ns-disclosure-trigger"
-          aria-expanded={seppOpen}
-          onClick={() => setSeppOpen((v) => !v)}
-        >
-          <span>Access retirement funds early (SEPP / 72(t))</span>
-          <span className="ns-disclosure-chevron" aria-hidden="true">{seppOpen ? '−' : '+'}</span>
-        </button>
-        {seppOpen && (
-          <div className="ns-disclosure-body">
-            <SeppTool plan={plan} result={seppResult} />
-          </div>
-        )}
-      </div>
+      </section>
     </>
-  );
-}
-
-/** Retirement goal progress (docs/REDESIGN.md §2.2, §4.2) -- reuses
-    `goalFundingProgress`, no new engine logic. Same goal-row idiom as the
-    House lens's down-payment stage (a `ProgressBar` plus an on-track badge,
-    not a donut) -- M16: three different goal-progress encodings (a ring
-    here, a bar there, two different colour rules) collapsed into one. */
-function RetirementGoalStage({ plan, result, goal }: { plan: Plan; result: PlanResult; goal: Goal }) {
-  const progress = useMemo(
-    () => goalFundingProgress(plan, result).find((p) => p.goalId === goal.id),
-    [plan, result, goal],
-  );
-
-  // No mandate (unlike the House lens's down-payment stage) to call out a
-  // goal with nothing to track toward yet -- the never-blank flow above
-  // already asks a lot of a first-time visitor, so an incomplete retirement
-  // goal simply stays quiet here rather than adding a second empty state.
-  if (goal.targetAmount === undefined || goal.byYear === undefined) return null;
-
-  const fraction = progress?.byYearFraction ?? 0;
-  const balance = progress?.byYearBalance ?? 0;
-  const funded = progress?.funded ?? false;
-  const accountNames = joinNames(
-    goal.fundedFromAccountIds
-      .map((id) => plan.accounts.find((a) => a.id === id)?.name)
-      .filter((n): n is string => Boolean(n)),
-  );
-
-  return (
-    <div className="ns-goal-readiness">
-      <div className="ns-goal-readiness-head">
-        <span className="ns-goal-readiness-title">
-          {goal.name} — {money(goal.targetAmount)} by {goal.byYear}
-        </span>
-        <Badge tone={funded ? 'in' : 'out'}>{funded ? 'On track' : 'Behind'}</Badge>
-      </div>
-      {/* `accent` and `--data-nw` share the same value at both themes' :root
-          (§5.1's "net-worth blue when funded, out-orange when short") -- see
-          the House lens's identical `DownPaymentReadiness` for the same
-          convention. */}
-      <ProgressBar value={balance} max={goal.targetAmount} tone={funded ? 'accent' : 'out'} label={`${goal.name} progress`} />
-      <div className="ns-goal-readiness-note">
-        {money(balance)} earmarked ({percent(fraction * 100, 0)}
-        {accountNames ? ` from ${accountNames}` : ''})
-      </div>
-    </div>
   );
 }
