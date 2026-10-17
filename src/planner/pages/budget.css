@@ -1,0 +1,519 @@
+/* Budget (docs/REDESIGN-V5.md §5.3). Sections sit on the page background, with
+   space and a short title between them (§1 principle 6) instead of cards.
+   Hues are data only: owner colours, in for saved, danger for short. */
+
+.ns-bgt {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.ns-bgt-section-title {
+  margin: 0 0 14px;
+  font-size: var(--fs-card);
+  font-weight: 650;
+  letter-spacing: var(--track-title);
+  line-height: 1.2;
+  color: var(--ink-deep);
+}
+.ns-bgt-subtitle {
+  margin: 20px 0 6px;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: var(--track-title);
+}
+.ns-bgt-muted {
+  margin: 8px 0 0;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.ns-bgt-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* --- your month: the donut and the envelope figures ------------------------ */
+.ns-bgt-month {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 24px 56px;
+  align-items: center;
+}
+.ns-bgt-donut {
+  display: flex;
+  justify-content: center;
+}
+
+.ns-bgt-envs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ns-bgt-env {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 14px;
+  transition:
+    background 160ms var(--ease-soft),
+    opacity 160ms var(--ease-soft);
+}
+.ns-bgt-env-on {
+  background: var(--chip);
+}
+.ns-bgt-env-dim {
+  opacity: 0.55;
+}
+.ns-bgt-env-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: var(--fs-title);
+  font-weight: 500;
+  color: var(--muted);
+}
+.ns-bgt-env-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 4px;
+  flex: none;
+  transition: transform 160ms var(--ease-soft);
+}
+.ns-bgt-env-on .ns-bgt-env-dot {
+  transform: scale(1.35);
+}
+.ns-bgt-env-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-bgt-env-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+}
+
+/* The big figure: a button until you click it, then an input in the same box. */
+.ns-bgt-fig,
+.ns-bgt-fig-input {
+  font: inherit;
+  font-size: 32px;
+  font-weight: 650;
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-deep);
+  text-align: right;
+}
+.ns-bgt-fig {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  margin: -2px -8px;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: text;
+  transition:
+    background 120ms var(--ease-soft),
+    transform var(--t-press) var(--ease-soft);
+}
+.ns-bgt-fig:hover {
+  background: var(--track);
+}
+.ns-bgt-fig:active {
+  transform: scale(0.97);
+}
+.ns-bgt-fig:focus-visible,
+.ns-bgt-fig-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ns-bgt-fig-open {
+  cursor: pointer;
+}
+.ns-bgt-fig-open .ns-bgt-chev {
+  color: var(--muted);
+  transition: transform 160ms var(--ease-soft);
+}
+.ns-bgt-fig-open:hover .ns-bgt-chev {
+  transform: translateX(2px);
+}
+.ns-bgt-fig-input {
+  width: 9ch;
+  padding: 1px 8px;
+  margin: -2px -8px;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.ns-bgt-fig-static {
+  cursor: default;
+}
+.ns-bgt-fig-static:hover,
+.ns-bgt-fig-static:active {
+  background: transparent;
+  transform: none;
+}
+.ns-bgt-fig-short {
+  color: var(--danger);
+}
+.ns-bgt-short {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-wash);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: 999px;
+}
+.ns-bgt-edited {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  flex: none;
+}
+.ns-bgt-env-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--warn);
+}
+
+/* The edit popover, under the figure being edited. */
+.ns-bgt-pop {
+  /* Floats under the row: opening it must not push the other envelopes down. */
+  position: absolute;
+  z-index: 6;
+  top: calc(100% - 2px);
+  right: 12px;
+  width: min(300px, calc(100% - 24px));
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-tooltip);
+  animation: ns-bgt-pop-in 160ms var(--ease-damped);
+}
+@keyframes ns-bgt-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.ns-bgt-pop p {
+  margin: 0;
+}
+.ns-bgt-pop-lever {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink);
+}
+.ns-bgt-pop-lever-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ns-bgt-pop-lever input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* --- the preview strip ------------------------------------------------------ */
+.ns-bgt-impact {
+  margin-top: 8px;
+  animation: ns-bgt-pop-in 220ms var(--ease-damped);
+}
+.ns-bgt-impact .ns-impact-cells {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* --- budget by year --------------------------------------------------------- */
+.ns-bgt-cols {
+  min-width: 0;
+}
+
+/* --- the envelope sections -------------------------------------------------- */
+.ns-bgt-secs {
+  display: flex;
+  flex-direction: column;
+}
+.ns-bgt-sec {
+  border-top: 1px solid var(--rule);
+}
+.ns-bgt-sec:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+.ns-bgt-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ns-bgt-sec-toggle {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 4px;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.ns-bgt-sec-toggle:hover .ns-bgt-sec-title {
+  color: var(--ink-deep);
+}
+.ns-bgt-sec-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+.ns-bgt-sec-caret {
+  flex: none;
+  color: var(--muted);
+  transition: transform 200ms var(--ease-damped);
+}
+.ns-bgt-sec-open .ns-bgt-sec-caret {
+  transform: rotate(90deg);
+}
+.ns-bgt-sec-title {
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+.ns-bgt-sec-total {
+  margin-left: auto;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ns-bgt-sec-body {
+  padding-bottom: 8px;
+  animation: ns-bgt-pop-in 200ms var(--ease-damped);
+}
+.ns-bgt-sec-empty {
+  margin: 0;
+  padding: 4px 4px 12px 28px;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.ns-bgt-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px 2px 28px;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--muted);
+}
+.ns-bgt-sub .ns-bt-total {
+  margin-left: auto;
+}
+.ns-bgt-link {
+  flex: none;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* --- the budget lines (rows) ------------------------------------------------ */
+.ns-bt-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+.ns-bt-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.ns-bt-total {
+  margin-left: auto;
+  font-weight: 600;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.ns-bt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 4px 6px;
+}
+.ns-bt-row {
+  font: inherit;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 96px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 8px 8px 28px;
+  text-align: left;
+  color: var(--child-ink);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 120ms var(--ease-soft);
+}
+.ns-bt-row:hover {
+  background: var(--tint-row);
+}
+.ns-bt-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.ns-bt-row-static {
+  cursor: default;
+}
+.ns-bt-row-static:hover {
+  background: transparent;
+}
+.ns-bt-name {
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-bt-timing {
+  margin-left: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ns-bt-tag {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.ns-bt-tag-flex {
+  border-style: dashed;
+}
+.ns-bt-amt {
+  text-align: right;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.ns-bt-add-row {
+  padding: 2px 4px 6px 24px;
+}
+.ns-bt-add-row .ns-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ns-bgt-extra {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- the line sheet --------------------------------------------------------- */
+.ns-bgt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 8px;
+}
+.ns-bgt-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ns-bgt-foot-right {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+
+/* --- the kids sheet --------------------------------------------------------- */
+.ns-bgt-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+}
+.ns-bgt-kids-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ns-bgt-kids-lines ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ns-bgt-kids-lines .ns-bt-row {
+  padding-left: 8px;
+}
+
+@media (max-width: 900px) {
+  .ns-bgt-month {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+@media (max-width: 640px) {
+  .ns-bgt {
+    gap: 32px;
+  }
+  .ns-bgt-fig,
+  .ns-bgt-fig-input {
+    font-size: 26px;
+  }
+  .ns-bgt-env {
+    padding: 8px 10px;
+    margin: 0 -10px;
+  }
+  .ns-bgt-impact .ns-impact-cells {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .ns-bt-row {
+    grid-template-columns: minmax(0, 1fr) 84px;
+    padding-left: 8px;
+  }
+  .ns-bt-tag {
+    display: none;
+  }
+  .ns-bt-timing {
+    display: block;
+    margin-left: 0;
+  }
+  .ns-bt-name {
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ns-bgt-pop,
+  .ns-bgt-impact,
+  .ns-bgt-sec-body {
+    animation: none;
+  }
+}

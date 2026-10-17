@@ -44,6 +44,10 @@ export interface DonutChartProps {
   /** Degrees of gap between slices. */
   padAngle?: number;
   legend?: 'side' | 'below' | false;
+  /** Controlled hover, so a neighbouring list can highlight a slice and be
+      highlighted by it (Budget's envelope rows). Uncontrolled when omitted. */
+  hoveredKey?: string | null;
+  onHoverKey?(key: string | null): void;
   /** Value formatter for the legend and the centre; default `money`. */
   format?(value: number): string;
   ariaLabel?: string;
@@ -60,12 +64,19 @@ export function DonutChart({
   thickness = 28,
   padAngle = 2,
   legend = 'side',
+  hoveredKey,
+  onHoverKey,
   format = money,
   ariaLabel = 'Breakdown',
 }: DonutChartProps) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const reduced = usePrefersReducedMotion();
-  const [hovered, setHovered] = useState<string | null>(null);
+  const [ownHover, setOwnHover] = useState<string | null>(null);
+  const hovered = hoveredKey !== undefined ? hoveredKey : ownHover;
+  const setHovered = (key: string | null) => {
+    setOwnHover(key);
+    onHoverKey?.(key);
+  };
 
   const total = useMemo(
     () => segments.reduce((a, s) => a + (Number.isFinite(s.value) && s.value > 0 ? s.value : 0), 0),

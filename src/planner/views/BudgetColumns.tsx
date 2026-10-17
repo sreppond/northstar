@@ -1,155 +1,119 @@
-import { useEffect, useRef, useState } from 'react';
-import { axisMoney } from '../format';
-import { niceAxisTicks } from '../chartMath';
+import { useState, type ReactNode } from 'react';
+import { ChartReadout, RangePicker, TimeSeriesChart, type ChartSeries, type DangerBand, type ReadoutItem, type RangeKey } from '../charts';
+import { money } from '../format';
 
 export interface ColumnLayer {
   key: string;
   label: string;
   color: string;
+  /** Spending per year, already in the unit the page shows (/mo or /yr). */
+  values: number[];
 }
-
-export interface ColumnYear {
-  year: number;
-  /** After-tax income, per month — drawn as the line the columns sit under. */
-  afterTax: number;
-  /** Monthly spending per layer key. */
-  values: Record<string, number>;
-}
-
-const HEIGHT = 240;
-const LEFT = 52;
-const RIGHT = 8;
-const TOP = 12;
-const BOTTOM = 28;
 
 /**
- * Budget by year (docs/REDESIGN-V4.md §4.2): one column per year, stacked by
- * whose spending it is, under a line for after-tax income — the gap between
- * the column's top and the line is what's left to save. Click a column to
- * read that year below. Keyboard: ←/→ when focused.
+ * Budget by year (docs/REDESIGN-V5.md §5.3, §6): one column per year on the
+ * kit's stacked column kind, stacked by whose spending it is, under a line
+ * for after-tax income — the gap between a column's top and the line is what
+ * is left to save. Scrub to read a year, click to pin it for the whole page.
+ *
+ * The readout is this component's own rather than the chart's, because the
+ * year it falls back to when nothing is hovered is the PAGE's year (the
+ * pinned one, or its default), not the window's last year — the donut above
+ * and the columns below must never disagree about which year they show.
  */
 export function BudgetColumns({
   years,
   layers,
-  selectedYear,
-  onSelect,
+  afterTax,
+  draft,
+  range,
+  onRange,
+  todayYear,
+  focusYear,
+  onFocusYear,
+  shownYear,
+  agesFor,
+  danger,
+  height,
+  label,
+  actions,
 }: {
-  years: ColumnYear[];
+  years: number[];
   layers: ColumnLayer[];
-  selectedYear: number;
-  onSelect(year: number): void;
+  afterTax: number[];
+  /** Total spending per year if the current draft is kept; drawn as the ghost line. */
+  draft?: number[];
+  range: RangeKey;
+  onRange(range: RangeKey): void;
+  todayYear: number;
+  /** The app-wide pinned year. */
+  focusYear: number | null;
+  onFocusYear(year: number | null): void;
+  /** The year the page is showing: the pin, else its default. */
+  shownYear: number;
+  agesFor?(year: number): string | undefined;
+  danger?: DangerBand;
+  height: number;
+  label: string;
+  actions?: ReactNode;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(720);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w) setWidth(w);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const [hover, setHover] = useState<number | null>(null);
+  const year = hover ?? shownYear;
+  const i = years.indexOf(year);
 
-  if (years.length === 0) return null;
+  const series: ChartSeries[] = [
+    ...layers.map((l): ChartSeries => ({ id: l.key, label: l.label, color: l.color, values: l.values, kind: 'column' })),
+    { id: 'after-tax', label: 'After-tax income', color: 'var(--in)', values: afterTax, kind: 'line', overlay: true },
+  ];
+  const ghost: ChartSeries | undefined = draft ? { id: 'draft', label: 'With your change', color: 'var(--ink)', values: draft, dashed: true } : undefined;
 
-  const totals = years.map((y) => layers.reduce((sum, l) => sum + Math.max(0, y.values[l.key] ?? 0), 0));
-  const max = Math.max(1, ...totals, ...years.map((y) => y.afterTax));
-  const ticks = niceAxisTicks(max, 4);
-  const ceiling = Math.max(max, ticks[ticks.length - 1]?.value ?? max);
+  const total = i >= 0 ? layers.reduce((sum, l) => sum + (l.values[i] ?? 0), 0) : 0;
+  const secondary: ReadoutItem[] =
+    i < 0
+      ? []
+      : [
+          ...layers.filter((l) => (l.values[i] ?? 0) > 0.5).map((l) => ({ id: l.key, label: l.label, color: l.color, value: money(l.values[i]) })),
+          { id: 'after-tax', label: 'After tax', color: 'var(--in)', value: money(afterTax[i] ?? 0) },
+          ...(draft ? [{ id: 'draft', label: 'With your change', color: 'var(--ink)', value: money(draft[i] ?? 0), dashed: true }] : []),
+        ];
 
-  const plotW = width - LEFT - RIGHT;
-  const slot = plotW / years.length;
-  const barW = Math.max(2, Math.min(22, slot * 0.72));
-  const x = (i: number) => LEFT + slot * i + slot / 2;
-  const y = (v: number) => TOP + (1 - v / ceiling) * (HEIGHT - TOP - BOTTOM);
-  const labelEvery = Math.max(1, Math.ceil(years.length / Math.max(2, Math.floor(plotW / 56))));
-  const selectedIndex = years.findIndex((yr) => yr.year === selectedYear);
-
-  const line = years.map((yr, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(Math.max(0, yr.afterTax)).toFixed(1)}`).join(' ');
+  const dTo = danger ? (danger.to ?? Infinity) : 0;
+  const isShort = !!danger && year >= danger.from && year <= dTo;
+  const shortAmount = isShort ? danger!.shortFor?.(year) : undefined;
 
   return (
-    <div ref={ref} className="ns-cols">
-      <svg
-        viewBox={`0 0 ${width} ${HEIGHT}`}
-        style={{ width: '100%', height: HEIGHT }}
-        role="slider"
-        tabIndex={0}
-        aria-label="Budget year"
-        aria-valuemin={years[0].year}
-        aria-valuemax={years[years.length - 1].year}
-        aria-valuenow={selectedYear}
-        onKeyDown={(e) => {
-          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-          e.preventDefault();
-          const next = years[selectedIndex + (e.key === 'ArrowLeft' ? -1 : 1)];
-          if (next) onSelect(next.year);
-        }}
-      >
-        {ticks.map((t) => (
-          <g key={t.value}>
-            <line x1={LEFT} x2={width - RIGHT} y1={y(t.value)} y2={y(t.value)} className="ns-mini-grid" />
-            <text x={LEFT - 8} y={y(t.value)} dy="0.32em" textAnchor="end" className="ns-mini-axis">
-              {axisMoney(t.value)}
-            </text>
-          </g>
-        ))}
-
-        {selectedIndex >= 0 && (
-          <rect x={x(selectedIndex) - slot / 2} y={TOP} width={slot} height={HEIGHT - TOP - BOTTOM} className="ns-cols-selected" />
-        )}
-
-        {years.map((yr, i) => {
-          let base = 0;
-          return (
-            <g key={yr.year} className="ns-cols-col" onClick={() => onSelect(yr.year)}>
-              <rect x={x(i) - slot / 2} y={TOP} width={slot} height={HEIGHT - TOP - BOTTOM} fill="transparent" />
-              {layers.map((l) => {
-                const v = Math.max(0, yr.values[l.key] ?? 0);
-                if (v <= 0) return null;
-                const top = y(base + v);
-                const h = y(base) - top;
-                base += v;
-                return <rect key={l.key} x={x(i) - barW / 2} y={top} width={barW} height={Math.max(0, h - 1)} fill={l.color} rx={1.5} />;
-              })}
-              <title>{yr.year}</title>
-            </g>
-          );
-        })}
-
-        <path d={line} className="ns-cols-income" fill="none" />
-
-        {years.map((yr, i) => {
-          // The selected year always gets its label; the rhythm's labels
-          // give way to it rather than overlap.
-          const show = i === selectedIndex || (i % labelEvery === 0 && Math.abs(i - selectedIndex) * slot > 34);
-          if (!show) return null;
-          return (
-            <text
-              key={yr.year}
-              x={x(i)}
-              y={HEIGHT - 8}
-              textAnchor="middle"
-              className={`ns-mini-axis${i === selectedIndex ? ' ns-cols-axis-selected' : ''}`}
-            >
-              {yr.year}
-            </text>
-          );
-        })}
-      </svg>
-      <div className="ns-mini-legend">
-        {layers.map((l) => (
-          <span key={l.key} className="ns-mini-legend-item">
-            <span className="ns-mini-legend-swatch" style={{ background: l.color }} />
-            {l.label}
-          </span>
-        ))}
-        <span className="ns-mini-legend-item">
-          <span className="ns-cols-legend-line" />
-          After-tax income
-        </span>
-      </div>
+    <div className="ns-bgt-cols">
+      <ChartReadout
+        label={label}
+        value={i >= 0 ? money(total) : '–'}
+        yearLabel={String(year)}
+        ages={agesFor?.(year)}
+        secondary={secondary}
+        short={isShort}
+        shortAmount={shortAmount && shortAmount > 0 ? money(shortAmount) : undefined}
+        actions={
+          <>
+            {actions}
+            <RangePicker value={range} onChange={onRange} years={years} openingYear={todayYear} />
+          </>
+        }
+      />
+      <TimeSeriesChart
+        years={years}
+        series={series}
+        stacked
+        ghost={ghost}
+        range={range}
+        todayYear={todayYear}
+        height={height}
+        focusYear={focusYear}
+        onFocusYear={onFocusYear}
+        onHoverYear={setHover}
+        onRequestRange={onRange}
+        danger={danger}
+        readout={false}
+        ariaLabel="Monthly spending by year, stacked by owner, under after-tax income"
+      />
     </div>
   );
 }

@@ -69,6 +69,8 @@ const CHILD_COLORS = ['var(--mix-6)', 'var(--mix-5)', 'var(--mix-2)'];
 export const SHARED_FIXED_COLOR = 'var(--mix-1)';
 export const SHARED_FLEX_COLOR = 'color-mix(in srgb, var(--mix-1) 50%, var(--surface))';
 export const SAVED_COLOR = 'var(--in)';
+/** One hue for the Kids envelope; each child keeps their own in `ownerColor`. */
+export const KIDS_COLOR = CHILD_COLORS[0];
 
 /** Lines an event produces that a household can't trim month to month. */
 const ESSENTIAL_CATEGORIES = new Set(['housing', 'children', 'education', 'debt', 'childcare', 'health', 'insurance', 'utilities']);
@@ -240,4 +242,173 @@ export function lineTiming(line: BudgetLine, plan: Pick<Plan, 'events' | 'partic
   }
   const parts = [from ? describe(from, 'from') : undefined, until ? describe(until, 'until') : undefined].filter(Boolean);
   return parts.length ? parts.join(', ') : undefined;
+}
+
+/* --- envelopes (docs/REDESIGN-V5.md §5.3) -------------------------------------
+   The household thinks in four envelopes: the shared pool, an allowance each,
+   the kids, and what's left. They are a READING of the budget lines, with two
+   ways to write one back that never touch the engine: the shared envelope
+   moves the "Other shared spending" remainder, an adult's moves their
+   allowance line. */
+
+export interface BudgetEnvelopes {
+  /** Every shared line, per month. */
+  shared: number;
+  /** Each included adult's own spending (their allowance, plus anything else that's theirs alone). */
+  perAdult: { id: string; name: string; monthly: number }[];
+  /** Every cost a child owns. Computed from stage lines, never edited here. */
+  kids: number;
+  afterTax: number;
+  /** After tax minus the envelopes. Derived; negative when savings are drawn down. */
+  saved: number;
+}
+
+export function budgetEnvelopes(plan: Plan, snapshot: YearSnapshot, view: BudgetView = budgetView(plan, snapshot)): BudgetEnvelopes {
+  const total = (role: BudgetSection['role']) => view.sections.filter((s) => s.role === role).reduce((sum, s) => sum + s.monthly, 0);
+  return {
+    shared: total('shared'),
+    perAdult: plan.participants
+      .filter((p) => p.isIncluded && p.role !== 'child')
+      .map((p) => ({ id: p.id, name: p.name, monthly: view.sections.find((s) => s.owner === p.id)?.monthly ?? 0 })),
+    kids: total('child'),
+    afterTax: view.afterTax,
+    saved: view.saved,
+  };
+}
+
+/** The line a shared-envelope edit writes into. `household.ts` creates it as `other-shared`. */
+export const REMAINDER_LINE_ID = 'other-shared';
+export const REMAINDER_LINE_NAME = 'Other shared spending';
+
+export function findRemainderLine(plan: Pick<Plan, 'budget'>): BudgetLine | undefined {
+  return (plan.budget ?? []).find(
+    (l) =>
+      l.owner === 'shared' &&
+      l.kind === 'expense' &&
+      l.cadence === 'monthly' &&
+      (l.id === REMAINDER_LINE_ID || l.name.trim().toLowerCase() === REMAINDER_LINE_NAME.toLowerCase()),
+  );
+}
+
+/** A person's allowance line (the first, if there are several). */
+export function findAllowanceLine(plan: Pick<Plan, 'budget'>, participantId: string): BudgetLine | undefined {
+  const lines = (plan.budget ?? []).filter((l) => l.owner === participantId && l.kind === 'allowance' && l.cadence === 'monthly');
+  return lines.find((l) => l.isIncluded) ?? lines[0];
+}
+
+/**
+ * What one dollar of `line.amount` reads as in `snapshot`'s year: 1 in
+ * today's dollars for an inflation-growing line, the line's growth in future
+ * dollars. Read off the line's own row when it has one this year (so a
+ * custom growth rate or a retirement spending cut is honoured), else from the
+ * plan's inflation. An envelope is typed in the dollars the page shows;
+ * dividing by this turns it back into the line's today's-dollar amount.
+ */
+function presentedFactor(plan: Plan, snapshot: YearSnapshot, line?: BudgetLine): number {
+  if (line && line.isIncluded && line.amount > 0) {
+    const row = snapshot.expenses.find((e) => e.budgetLineId === line.id && !e.oneTime);
+    if (row) return row.amount / (monthsIn(plan, snapshot.year) || 12) / line.amount;
+  }
+  return plan.settings.dollarMode === 'futureDollars'
+    ? Math.pow(1 + plan.settings.inflationRate / 100, snapshot.year - plan.settings.startYear)
+    : 1;
+}
+
+/** The line's monthly figure in `snapshot`'s year, in the dollars shown; 0 when it isn't running. */
+function presentedMonthly(plan: Plan, snapshot: YearSnapshot, line?: BudgetLine): number {
+  if (!line) return 0;
+  const row = snapshot.expenses.find((e) => e.budgetLineId === line.id && !e.oneTime);
+  return row ? row.amount / (monthsIn(plan, snapshot.year) || 12) : 0;
+}
+
+const cents = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * Set the shared envelope to `monthly` (docs/REDESIGN-V5.md §5.3, Q3's
+ * default): the DIFFERENCE goes into the "Other shared spending" remainder
+ * line, so rent, groceries and every other line stay exactly as they are.
+ * The line is created when missing. An edit that would push it below zero
+ * stops at zero and reports `clamped`.
+ *
+ * `monthly` is in the dollars `snapshot` shows. Without a snapshot it is
+ * today's dollars and the current envelope is the sum of the shared monthly
+ * lines (every one treated as running).
+ */
+export function setSharedEnvelope(plan: Plan, monthly: number, snapshot?: YearSnapshot): { plan: Plan; clamped: boolean } {
+  const remainder = findRemainderLine(plan);
+  const current = snapshot
+    ? budgetEnvelopes(plan, snapshot).shared
+    : (plan.budget ?? [])
+        .filter((l) => l.isIncluded && l.owner === 'shared' && l.kind === 'expense' && l.cadence === 'monthly')
+        .reduce((sum, l) => sum + l.amount, 0);
+  const remainderNow = snapshot ? presentedMonthly(plan, snapshot, remainder) : remainder?.isIncluded ? remainder.amount : 0;
+
+  const wanted = remainderNow + (monthly - current);
+  const clamped = wanted < 0;
+  const next = Math.max(0, wanted);
+  const amount = cents(snapshot ? next / presentedFactor(plan, snapshot, remainder) : next);
+
+  const budget = plan.budget ?? [];
+  if (remainder) {
+    return { plan: { ...plan, budget: budget.map((l) => (l.id === remainder.id ? { ...l, amount, isIncluded: true } : l)) }, clamped };
+  }
+  if (amount <= 0) return { plan, clamped };
+  const created: BudgetLine = {
+    id: REMAINDER_LINE_ID,
+    name: REMAINDER_LINE_NAME,
+    owner: 'shared',
+    category: 'other',
+    essential: false,
+    kind: 'expense',
+    cadence: 'monthly',
+    amount,
+    isIncluded: true,
+  };
+  return { plan: { ...plan, budget: [...budget, created] }, clamped };
+}
+
+/**
+ * Set one adult's envelope to `monthly` by writing their allowance line,
+ * created when they have none. Only that line changes. When the adult also
+ * owns other lines, the allowance takes the rest so the envelope as a whole
+ * lands on `monthly`; below zero stops at zero and reports `clamped`.
+ */
+export function setAdultEnvelope(plan: Plan, participantId: string, monthly: number, snapshot?: YearSnapshot): { plan: Plan; clamped: boolean } {
+  const person = plan.participants.find((p) => p.id === participantId);
+  if (!person) return { plan, clamped: false };
+  const allowance = findAllowanceLine(plan, participantId);
+
+  const others = snapshot
+    ? (budgetEnvelopes(plan, snapshot).perAdult.find((a) => a.id === participantId)?.monthly ?? 0) - presentedMonthly(plan, snapshot, allowance)
+    : 0;
+  const wanted = monthly - others;
+  const clamped = wanted < 0;
+  const next = Math.max(0, wanted);
+  const amount = cents(snapshot ? next / presentedFactor(plan, snapshot, allowance) : next);
+
+  const budget = plan.budget ?? [];
+  if (allowance) {
+    return { plan: { ...plan, budget: budget.map((l) => (l.id === allowance.id ? { ...l, amount, isIncluded: true } : l)) }, clamped };
+  }
+  if (amount <= 0) return { plan, clamped };
+  const created: BudgetLine = {
+    id: `allowance-${participantId}`,
+    name: `${person.name}'s allowance`,
+    owner: participantId,
+    category: 'personal',
+    essential: false,
+    kind: 'allowance',
+    cadence: 'monthly',
+    amount,
+    isIncluded: true,
+  };
+  return { plan: { ...plan, budget: [...budget, created] }, clamped };
+}
+
+/** "Spencer 40 · Sarah 40": the adults' ages in `year`, for a chart readout. */
+export function adultAges(plan: Pick<Plan, 'participants'>, year: number): string {
+  return plan.participants
+    .filter((p) => p.isIncluded && p.role !== 'child' && p.birthYear <= year)
+    .map((p) => `${p.name} ${year - p.birthYear}`)
+    .join(' · ');
 }
