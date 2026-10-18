@@ -292,8 +292,9 @@
   background: var(--c);
   transition: width var(--spring-duration, 0.38s) var(--ease-damped, ease-out);
 }
+/* V5-REVIEW-2 N4: a liability is not money-out; orange stays for out and danger. */
 .ns-nw-snap-fill-out {
-  background: var(--out);
+  background: var(--muted-light);
   opacity: 0.8;
 }
 .ns-nw-snap-total {
