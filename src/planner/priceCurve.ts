@@ -9,7 +9,7 @@
  * old ladder table used. Prices are NOMINAL, purchase-year dollars; the page
  * converts to what the user reads.
  */
-import { readCandidate, type HomeReading, type Plan } from '@northstar/engine';
+import { pathMarkers, readHome, runPlan, withHomePurchase, type HomeReading, type Plan } from '@northstar/engine';
 import { zoneOf, type HomeTerms, type Zone } from './homeView';
 
 export interface PricePoint {
@@ -17,6 +17,13 @@ export interface PricePoint {
   price: number;
   reading: HomeReading;
   zone: Zone;
+  /**
+   * First year the FULL-horizon plan can't pay its bills at this price (V5-REVIEW-1
+   * F7). `reading.shortfallYear` only looks 10 years past the purchase, so a plan
+   * that runs dry in year 45 read "Pays every bill" while the rail said "Dry 2071".
+   * This is the same `pathMarkers` rule the rail pill uses.
+   */
+  firstShortYear?: number;
 }
 
 /** Most points on the curve: each is a full plan run, so this is the cost knob. */
@@ -38,7 +45,13 @@ export function priceGrid(min: number, max: number): number[] {
 
 export function pricePoints(plan: Plan, t: HomeTerms, prices: number[]): PricePoint[] {
   return prices.flatMap((price) => {
-    const reading = readCandidate(plan, t.year, price, t.terms);
-    return reading ? [{ price, reading, zone: zoneOf(reading) }] : [];
+    // One full-horizon run per price (not `readCandidate`'s ten-year window):
+    // the reading only looks at the purchase year and the one after, which a
+    // longer run leaves unchanged, and the same run gives the real first
+    // short year.
+    const candidate = withHomePurchase(plan, t.year, price, t.terms);
+    const result = runPlan(candidate);
+    const reading = readHome(candidate, result);
+    return reading ? [{ price, reading, zone: zoneOf(reading), firstShortYear: pathMarkers(result).shortfallYears[0] }] : [];
   });
 }

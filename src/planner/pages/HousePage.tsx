@@ -37,15 +37,11 @@ import './decisions.css';
  * the price curve lead; every reading is on the chart's own readout.
  */
 export function HousePage() {
-  const { plan, result, stored } = usePlanner();
-  const hasHome = primaryHome(stored) !== undefined;
-
   return (
     <Page>
       <PageHeader title="Home" />
       <PlanCheckBanner only={['rent-after-purchase']} />
       <HomeDecision />
-      {hasHome && <HouseForecastView plan={plan} result={result} />}
     </Page>
   );
 }
@@ -57,8 +53,18 @@ function candidateYears(start: number, end: number): number[] {
   return out;
 }
 
+/**
+ * The year every Home chart reads at rest (V5-REVIEW-1 F17): the pin if there
+ * is one, else the purchase year being tried. The map already reads that year
+ * (its x-axis IS the purchase year); the time charts below used to rest on the
+ * plan's last year, so one page showed 2031 and 2091 side by side.
+ */
+function pageYear(focusYear: number | null, tryYear: number, years: number[]): number | null {
+  return focusYear ?? (years.includes(tryYear) ? tryYear : null);
+}
+
 function HomeDecision() {
-  const { stored, result, replacePlan, savePlanAs, focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
+  const { plan, stored, result, replacePlan, savePlanAs, focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
   const saved = useMemo(() => currentTerms(stored), [stored]);
   const hasHome = primaryHome(stored) !== undefined;
   const [t, setT] = useState<HomeTerms>(saved);
@@ -129,7 +135,7 @@ function HomeDecision() {
         zone: p.zone,
         monthly: toDisplay(stored, p.reading.housingMonthly, deferredYear + 1),
         cashLeft: toDisplay(stored, p.reading.liquidAfterClosing, deferredYear),
-        shortfallYear: p.reading.shortfallYear,
+        shortfallYear: p.firstShortYear,
       })),
     [stored, deferredYear, deferredTerms, grid],
   );
@@ -141,7 +147,8 @@ function HomeDecision() {
           zone,
           monthly: show(reading.housingMonthly, firstYear),
           cashLeft: show(reading.liquidAfterClosing, t.year),
-          shortfallYear: reading.shortfallYear,
+          // The whole-plan answer, the same number the rail pill shows for this price (F7).
+          shortfallYear: draftHealth.firstShortYear,
         }
       : undefined;
 
@@ -226,6 +233,7 @@ function HomeDecision() {
             onPick={setPrice}
             height={Math.max(240, heroHeight - 100)}
             year={t.year}
+            endYear={planEndYear(stored)}
           />
         </section>
       )}
@@ -243,7 +251,7 @@ function HomeDecision() {
               showRent={(v) => show(v, t.year - 1)}
             />
           )}
-          <HousePoorCheck reading={reading} show={(v) => show(v, firstYear)} />
+          <HousePoorCheck reading={reading} show={(v) => show(v, firstYear)} firstShortYear={draftHealth.firstShortYear} endYear={planEndYear(stored)} />
         </div>
       )}
 
@@ -261,7 +269,7 @@ function HomeDecision() {
           range={chartRange}
           todayYear={start}
           height={Math.max(220, heroHeight - 110)}
-          focusYear={focusYear}
+          focusYear={pageYear(focusYear, t.year, cushionYears)}
           onFocusYear={setFocusYear}
           danger={danger}
           onRequestRange={setChartRange}
@@ -270,6 +278,8 @@ function HomeDecision() {
           ariaLabel="Cash and taxable investments, buying versus renting, with the six-month reserve"
         />
       </section>
+
+      {hasHome && <HouseForecastView plan={plan} result={result} defaultYear={t.year} />}
     </>
   );
 }
@@ -303,7 +313,18 @@ function Lever({
 }
 
 /** The house-poor check: every rule, its threshold, and where this purchase lands. */
-function HousePoorCheck({ reading, show }: { reading: NonNullable<ReturnType<typeof readHome>>; show(nominal: number): number }) {
+function HousePoorCheck({
+  reading,
+  show,
+  firstShortYear,
+  endYear,
+}: {
+  reading: NonNullable<ReturnType<typeof readHome>>;
+  show(nominal: number): number;
+  /** Whole-plan first short year (V5-REVIEW-1 F7), not the ten-year carry window. */
+  firstShortYear?: number;
+  endYear: number;
+}) {
   const [comfortable, stretch] = DEFAULT_ZONES;
   const status = (okComfortable: boolean, okStretch: boolean): Zone => (okComfortable ? 'comfortable' : okStretch ? 'stretch' : 'housePoor');
   const rows: { label: string; value: string; rule: string; zone: Zone }[] = [
@@ -326,10 +347,10 @@ function HousePoorCheck({ reading, show }: { reading: NonNullable<ReturnType<typ
       zone: status(reading.reserveMonths >= comfortable.minReserveMonths, reading.reserveMonths >= stretch.minReserveMonths),
     },
     {
-      label: 'Pays every bill for 10 years',
-      value: reading.shortfallYear ? `Short in ${reading.shortfallYear}` : 'Yes',
+      label: `Pays every bill through ${endYear}`,
+      value: firstShortYear ? `Short from ${firstShortYear}` : 'Yes',
       rule: 'Required',
-      zone: reading.shortfallYear ? 'housePoor' : 'comfortable',
+      zone: firstShortYear ? 'housePoor' : 'comfortable',
     },
   ];
   return (

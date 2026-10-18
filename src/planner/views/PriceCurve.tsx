@@ -15,7 +15,7 @@ export interface CurveDatum {
   monthly: number;
   /** Cash and taxable investments left after closing. */
   cashLeft: number;
-  /** First year in the carry window the plan can't pay its bills. */
+  /** First year across the whole plan horizon that it can't pay its bills (V5-REVIEW-1 F7). */
   shortfallYear?: number;
 }
 
@@ -52,6 +52,7 @@ export function PriceCurve({
   onPick,
   height,
   year,
+  endYear,
 }: {
   data: CurveDatum[];
   /** The price being tried, read off the real draft plan (so it is exact, not a grid neighbour). */
@@ -61,6 +62,8 @@ export function PriceCurve({
   onPick(price: number): void;
   height: number;
   year: number;
+  /** The plan's last year, for "pays every bill through …". */
+  endYear: number;
 }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const stageRef = useRef<HTMLDivElement>(null);
@@ -123,7 +126,8 @@ export function PriceCurve({
       id: 'plan',
       label: 'Plan',
       color: shown.shortfallYear ? 'var(--danger)' : 'var(--in)',
-      value: shown.shortfallYear ? `✗ Short in ${shown.shortfallYear}` : '✓ Pays every bill',
+      // The full horizon, so it agrees with the rail pill (V5-REVIEW-1 F7).
+      value: shown.shortfallYear ? `✗ Short from ${shown.shortfallYear}` : `✓ Pays every bill through ${endYear}`,
     },
   ];
   const sharePct = Number.isFinite(shown.share) ? `${Math.round(shown.share)}% of take-home` : 'No take-home yet';
