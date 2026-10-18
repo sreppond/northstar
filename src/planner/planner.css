@@ -3839,30 +3839,6 @@ html.ns-tauri .ns-drag-strip {
 .ns-datatable tbody tr:hover {
   background: var(--tint-row);
 }
-/* Reports' stub-year row (docs/ROADMAP-10.md C7): a small mono sub-label
-   under that row's Year cell so its figures don't pass as a full year's. */
-.ns-table-year-sub {
-  font-variant-numeric: tabular-nums;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.ns-plot-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  margin-top: 20px;
-}
-.ns-plot-card {
-  padding: 16px;
-  background: var(--surface-sub);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-}
-.ns-plot-card .ns-section-title {
-  margin-bottom: 8px;
-}
 
 .ns-compare-actions {
   display: flex;
