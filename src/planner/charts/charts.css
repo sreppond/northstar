@@ -53,7 +53,17 @@
   font-weight: 600;
   color: var(--ink);
 }
+/* V5-REVIEW-1 F5: `min-width: 0` lets the actions slot (the RangePicker, What
+   if, "…") shrink on a phone, so the picker scrolls inside itself rather than
+   pushing the buttons beside it off-screen. A page that puts a RangePicker in
+   its own header flex row needs the same on that row (Cash Flow's controls). */
+.ns-readout,
+.ns-readout-main {
+  min-width: 0;
+}
 .ns-readout-actions {
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
