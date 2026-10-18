@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { ZERO_DASH } from '../format';
 import { useScrollToYear } from './useScrollToYear';
 
@@ -155,11 +155,13 @@ export function YearHeadCell({
         </span>
       )}
       {year}
-      {sub && <div className="ns-col-head-sub">{sub}</div>}
     </>
   );
+  // V5-REVIEW-1 F19: the stub year's "from Oct 18" used to stack under the year
+  // and turn the header into three lines. The header is the year, nothing
+  // else; the note is one hover away.
   return (
-    <div data-year={year} className={classes || undefined}>
+    <div data-year={year} className={classes || undefined} title={sub ? `${year} ${sub}` : undefined}>
       {onFocusYear ? (
         <button
           type="button"
@@ -182,7 +184,7 @@ export function YearHeadCell({
  * in a native sideways scroller (docs/REDESIGN-V5.md §3.7). A caller that still
  * passes a paged window simply gets a table that scrolls if it overflows.
  */
-export function DataTable({
+export const DataTable = memo(function DataTable({
   caption,
   years,
   rows,
@@ -211,8 +213,8 @@ export function DataTable({
   /** Years the plan runs short (docs/REDESIGN-V5.md §4.2 item 7): a danger
       wash down the column and a ✗ in its header. */
   dangerYears?: number[];
-  /** A small mono sub-label under a year's column header — the stub-year
-      flag (docs/ROADMAP-10.md C7 "the stub year is invisible"), built from
+  /** The stub-year flag (docs/ROADMAP-10.md C7 "the stub year is invisible"),
+      shown as the header's tooltip rather than a second line (V5-REVIEW-1 F19), built from
       `stubYearLabel` (`ledger.ts`) by the caller so every table renders the
       same wording. Returns `undefined` for every ordinary year. */
   columnSubLabel?(year: number): string | undefined;
@@ -294,4 +296,4 @@ export function DataTable({
       })}
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Ellipsis } from 'lucide-react';
 import { newAccountOfType } from '@northstar/engine';
@@ -10,6 +10,7 @@ import {
   TimeSeriesChart,
   rangeWindow,
   type ChartSeries,
+  type DangerBand,
   type DonutSegment,
   type RangeKey,
 } from '../charts';
@@ -22,6 +23,7 @@ import { PlanCheckBanner } from '../PlanCheckBanner';
 import { AccountsTab } from '../tabs/AccountsTab';
 import { asOfDateLabel, money } from '../format';
 import { classBalances } from '../ledger';
+import { healthDangerBand } from '../health';
 import { Page, accountClassColor } from '../ui';
 import { DismissibleAlert } from '../ui/Alert';
 import { Sheet } from '../ui/Sheet';
@@ -29,7 +31,6 @@ import {
   UNFUNDED_KEY,
   agesLabel,
   classBalanceAt,
-  dangerBand,
   eventMarkers,
   groupMonthlySeries,
   presentClasses,
@@ -38,6 +39,7 @@ import {
   type SpendingModel,
 } from './netWorthData';
 import { PopMenu } from './PopMenu';
+import { rememberRow } from '../drawer/rowMorph';
 import './net-worth.css';
 
 /**
@@ -95,7 +97,15 @@ export function NetWorthPage() {
   const classes = useMemo(() => presentClasses(allAccounts, result.years), [allAccounts, result.years]);
   const spending = useMemo(() => spendingModel(plan, result), [plan, result]);
   const markers = useMemo(() => eventMarkers(plan, years), [plan, years]);
-  const danger = useMemo(() => dangerBand(health, result), [health, result]);
+  // V5-REVIEW-1 F10: this page's unit is the month (the donut beside the hero
+  // says "Short $5.6K a month"), so the hero's Short pill is per month too, from
+  // the same `months` the donut divides by, and the readout says "/mo".
+  const danger = useMemo<DangerBand | undefined>(() => {
+    const band = healthDangerBand(health, result);
+    if (!band) return undefined;
+    const perMonth = new Map(result.years.map((y, i) => [y.year, (y.unfundedShortfall ?? 0) / (spending.months[i] || 12)]));
+    return { ...band, shortFor: (year) => perMonth.get(year) };
+  }, [health, result, spending.months]);
   const ghostYears = levers.ghostResult?.years;
 
   // --- hero series --------------------------------------------------------
@@ -152,11 +162,19 @@ export function NetWorthPage() {
   const snapshot = result.years[activeIdx];
 
   // --- opening the account sheet ------------------------------------------
-  function openClass(accountClass: AccountClass) {
-    const owned = stored.accounts.find((a) => a.accountClass === accountClass && !a.isSynthetic);
-    const eventMade = allAccounts.find((a) => a.accountClass === accountClass && a.isSynthetic);
-    setAccountDraft(structuredClone(owned ?? eventMade ?? newAccountOfType(accountClass)));
-  }
+  // Stable, as is `pinYear` below, so the balances table (React.memo) is not
+  // re-rendered by every pointer move over the chart (V5-REVIEW-1 F28).
+  const openClass = useCallback(
+    (accountClass: AccountClass) => {
+      const owned = stored.accounts.find((a) => a.accountClass === accountClass && !a.isSynthetic);
+      const eventMade = allAccounts.find((a) => a.accountClass === accountClass && a.isSynthetic);
+      setAccountDraft(structuredClone(owned ?? eventMade ?? newAccountOfType(accountClass)));
+    },
+    [stored.accounts, allAccounts, setAccountDraft],
+  );
+  const setFocusRef = useRef(setFocusYear);
+  setFocusRef.current = setFocusYear;
+  const pinYear = useCallback((year: number | null) => setFocusRef.current(year), []);
 
   // --- header menus -------------------------------------------------------
   const seriesGroups = [
@@ -260,10 +278,11 @@ export function NetWorthPage() {
               />
             ),
             primaryId: seriesId === 'networth' ? 'nw' : seriesId,
+            shortUnit: '/mo',
             agesFor,
             actions: (
               <div className="ns-nw-actions">
-                <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} />
+                <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} compact />
                 <button
                   type="button"
                   className={`ns-btn${levers.isDirty ? ' ns-nw-whatif-on' : ''}`}
@@ -317,7 +336,7 @@ export function NetWorthPage() {
           accounts={allAccounts}
           opening={result.opening}
           focusYear={focusYear}
-          onFocusYear={setFocusYear}
+          onFocusYear={pinYear}
           dangerYears={health.shortYears}
           onEditType={openClass}
         />
@@ -382,9 +401,19 @@ function YearSnapshot({
           const share = (r.liability ? liabilities : assets) > 0 ? Math.abs(r.value) / (r.liability ? liabilities : assets) : 0;
           return (
             <li key={r.accountClass}>
-              <button type="button" className="ns-nw-snap-row" onClick={() => onOpen(r.accountClass)}>
-                <Icon size={15} strokeWidth={2} aria-hidden className="ns-nw-snap-icon" />
-                <span className="ns-nw-snap-name">{r.label}</span>
+              <button
+                type="button"
+                className="ns-nw-snap-row"
+                onClick={(e) => {
+                  // V5-REVIEW-1 F25: the sheet's header flies in from this icon and label.
+                  rememberRow(e.currentTarget, r.accountClass);
+                  onOpen(r.accountClass);
+                }}
+              >
+                <span data-morph="icon" className="ns-nw-snap-icon">
+                  <Icon size={15} strokeWidth={2} aria-hidden />
+                </span>
+                <span data-morph="label" className="ns-nw-snap-name">{r.label}</span>
                 <AnimatedFigure
                   className={`ns-nw-snap-value ns-num${Math.abs(r.value) < 50 ? ' ns-nw-zero' : ''}`}
                   value={signedBalance(r.value, r.liability)}
@@ -491,7 +520,7 @@ function CategorySheet({
   initialRange: RangeKey;
   focusYear: number | null;
   onFocusYear(year: number | null): void;
-  danger: ReturnType<typeof dangerBand>;
+  danger: DangerBand | undefined;
   agesFor(year: number): string | undefined;
 }) {
   // Keep the last category while the exit plays, as the account sheet does.
@@ -544,7 +573,7 @@ function CategoryBody({
   initialRange: RangeKey;
   focusYear: number | null;
   onFocusYear(year: number | null): void;
-  danger: ReturnType<typeof dangerBand>;
+  danger: DangerBand | undefined;
   agesFor(year: number): string | undefined;
 }) {
   const [range, setRange] = useState<RangeKey>(initialRange);
@@ -579,6 +608,7 @@ function CategoryBody({
         readout={{
           label: `${meta.label} per month`,
           size: 'compact',
+          shortUnit: '/mo',
           format: (v) => `${money(v)}/mo`,
           agesFor,
         }}

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { Account, AccountClass, OpeningSnapshot, YearSnapshot } from '@northstar/engine';
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engine';
 import { tableMoney } from '../format';
@@ -9,6 +10,7 @@ import { GearIcon } from '../icons';
 import { ACCOUNT_ICON } from '../domainIcons';
 import { classBalances, missingAccountClasses } from '../ledger';
 import { PopMenu } from '../pages/PopMenu';
+import { rememberRow } from '../drawer/rowMorph';
 import { Plus } from 'lucide-react';
 
 /**
@@ -21,8 +23,13 @@ import { Plus } from 'lucide-react';
  * mortgage) opens the same sheet read-only. Adding an account type lives in a
  * quiet `+` in the header's sticky label cell, where a scrolled table can't
  * carry it away.
+ *
+ * Memoised (V5-REVIEW-1 F28): the page re-renders on every pointer move over
+ * its chart, and this is by far its biggest subtree. Nothing hover-driven is
+ * passed in, so with stable props (`onFocusYear`, `onEditType` are the page's
+ * useCallbacks) a scrub never touches it.
  */
-export function AccountsTab({
+export const AccountsTab = memo(function AccountsTab({
   years,
   accounts,
   highlightYear,
@@ -126,10 +133,14 @@ export function AccountsTab({
           ? {
               role: 'button' as const,
               tabIndex: 0,
-              onClick: () => onEditType(accountClass),
-              onKeyDown: (e: React.KeyboardEvent) => {
+              onClick: (e: React.MouseEvent<HTMLElement>) => {
+                rememberRow(e.currentTarget, accountClass);
+                onEditType(accountClass);
+              },
+              onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
+                  rememberRow(e.currentTarget, accountClass);
                   onEditType(accountClass);
                 }
               },
@@ -146,9 +157,9 @@ export function AccountsTab({
             <div className="ns-type-cell">
               {(() => {
                 const Icon = ACCOUNT_ICON[accountClass];
-                return <Icon size={14} strokeWidth={2} className="ns-type-icon" aria-hidden />;
+                return <Icon size={14} strokeWidth={2} className="ns-type-icon" data-morph="icon" aria-hidden />;
               })()}
-              <span className="ns-type-name" title={spec.label}>
+              <span className="ns-type-name" data-morph="label" title={spec.label}>
                 {spec.label}
               </span>
               {owned ? (
@@ -245,4 +256,4 @@ export function AccountsTab({
       {renderGroup(LIABILITY_CLASSES, true)}
     </div>
   );
-}
+});

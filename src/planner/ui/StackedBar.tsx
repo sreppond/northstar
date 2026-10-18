@@ -67,9 +67,14 @@ const ACCOUNT_CLASS_MIX: Record<AccountClass, string> = {
   cash: 'var(--mix-1)',
   taxableInvestment: 'var(--mix-2)',
   taxDeferredInvestment: 'var(--mix-3)',
-  taxFreeInvestment: 'var(--mix-4)',
-  realEstate: 'var(--mix-5)',
-  variableAnnuity: 'var(--mix-6)',
+  // V5-REVIEW-1 F21: real estate was `--mix-5`, a brick red that read as the
+  // danger hue on the snapshot bars. Only the six mix hues exist (planner.css is
+  // another unit's), and --mix-5 is the one that collides, so the five others
+  // are re-dealt: real estate takes the violet, the Roth the teal, and the
+  // annuity a blue-violet blend that still tells apart from both.
+  taxFreeInvestment: 'var(--mix-6)',
+  realEstate: 'var(--mix-4)',
+  variableAnnuity: 'color-mix(in srgb, var(--mix-1) 55%, var(--mix-4))',
   otherAsset: 'var(--mix-1)',
   creditCard: 'var(--mix-5)',
   loan: 'var(--mix-3)',

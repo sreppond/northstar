@@ -70,6 +70,12 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  /* V5-REVIEW-1 F5: on a 66-year plan the range picker has seven options and
+     this row ended at 445px on a 390px screen, clipping "What if" and "…".
+     min-width/max-width let it shrink to its container and wrap; the picker is
+     `compact`, so it scrolls inside itself instead of pushing its siblings. */
+  min-width: 0;
+  max-width: 100%;
 }
 /* A What-if is in flight: ink dot on the button, so closing the sheet doesn't
    hide that the dashed line on the chart is a draft. */
@@ -226,6 +232,7 @@
 }
 .ns-nw-snap-icon {
   grid-area: icon;
+  display: inline-flex;
   color: var(--muted);
 }
 .ns-nw-snap-name {
@@ -354,7 +361,76 @@
 }
 .ns-nw-sheet-icon {
   flex: none;
+  display: inline-flex;
   color: var(--muted);
+}
+/* V5-REVIEW-1 F22: the account type's explainer is an (i) in the header. */
+.ns-nw-about {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 120ms ease-out, background-color 120ms ease-out;
+}
+.ns-nw-about:hover,
+.ns-nw-about[aria-expanded='true'] {
+  color: var(--ink);
+  background: var(--chip);
+}
+.ns-nw-about:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ns-nw-about-note {
+  margin-top: -14px;
+}
+
+/* V5-REVIEW-1 F25: the row's icon and label fly to the header (AccountSheetHead).
+   The real header is hidden until the copies land, then shown on the same frame. */
+.ns-nw-sheet-head[data-morphing='true'] .ns-nw-sheet-icon,
+.ns-nw-sheet-head[data-morphing='true'] .ns-nw-sheet-title {
+  visibility: hidden;
+}
+.ns-morph-layer {
+  position: fixed;
+  inset: 0;
+  /* Above the sheet (50 + 2 per stacked layer), below toasts. */
+  z-index: 80;
+  pointer-events: none;
+}
+.ns-morph-icon,
+.ns-morph-label {
+  position: fixed;
+  display: block;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.ns-morph-icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+.ns-morph-label {
+  display: grid;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: var(--track-title);
+  color: var(--ink-deep);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns-morph-label > * {
+  grid-area: 1 / 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ns-nw-sheet-title {
   margin: 0;
