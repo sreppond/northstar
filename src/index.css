@@ -38,6 +38,18 @@ body {
   overflow-x: clip;
 }
 
+/* V5-REVIEW-1 F4 (second half): `.ns` carries `padding-bottom: 72px`, which
+   sits outside the grid area the sticky rail is confined to, so the rail
+   unpinned and slid up 72px over the last stretch of every long page. The same
+   breathing room as margin on the page column keeps it inside the grid.
+   (planner.css is another unit's; this belongs there next time it is open.) */
+html body .ns {
+  padding-bottom: 0;
+}
+html body .ns > .ns-main {
+  margin-bottom: 72px;
+}
+
 button {
   font-family: inherit;
 }

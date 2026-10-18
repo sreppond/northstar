@@ -277,7 +277,7 @@ function PlannerShell() {
           setSelected(null);
           editor.close();
         }}
-        />
+      />
     </div>
   );
 }

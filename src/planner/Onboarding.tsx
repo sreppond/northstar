@@ -140,7 +140,7 @@ export function Onboarding({ onBegin, onFinish }: { onBegin(): void; onFinish():
         }}
         onCancel={editor.close}
         onDelete={editor.close}
-        />
+      />
 
       {accountDraft && (
         <AccountDrawer
