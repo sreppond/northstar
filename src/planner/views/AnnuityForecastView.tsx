@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Account, Plan, PlanResult } from '@northstar/engine';
 import { DonutChart } from '../charts';
+import { usePlanner } from '../PlannerContext';
 import { money } from '../format';
 import '../pages/decisions.css';
 
@@ -42,11 +43,19 @@ export function AnnuityForecastView({ plan, result, accountId }: { plan: Plan; r
 }
 
 function AnnuityContent({ account, result }: { account: Account; result: PlanResult }) {
+  const { focusYear } = usePlanner();
   // "As of today" (docs/MATH.md "Today vs. years[0]"): `result.opening` is the
   // plan's real `asOfDate` balance, not the first year's projected close.
   const opening = result.opening?.accounts.find((a) => a.accountId === account.id);
-  const balance = opening?.balance ?? account.initialBalance;
-  const basis = Math.min(balance, opening?.nonTaxableBaseRemaining ?? account.nonTaxableBase ?? 0);
+  const todayBalance = opening?.balance ?? account.initialBalance;
+
+  // V5-REVIEW-1 F27: the donut follows the pinned year like every other chart:
+  // that year's closing balance, split into the basis still left and the gain.
+  // With nothing pinned (or a year this account has no row for) it reads today.
+  const pinned = focusYear === null ? undefined : result.years.find((y) => y.year === focusYear)?.accounts.find((a) => a.accountId === account.id);
+  const balance = pinned ? Math.max(0, pinned.close) : todayBalance;
+  const basisLeft = pinned ? pinned.nonTaxableBaseRemaining : (opening?.nonTaxableBaseRemaining ?? account.nonTaxableBase);
+  const basis = Math.min(balance, basisLeft ?? 0);
   const gain = Math.max(0, balance - basis);
 
   const segments = useMemo(
@@ -56,7 +65,7 @@ function AnnuityContent({ account, result }: { account: Account; result: PlanRes
     ],
     [basis, gain],
   );
-  if (balance <= 0) return null;
+  if (todayBalance <= 0) return null;
 
   return (
     <section className="ns-dec-section">
@@ -66,7 +75,7 @@ function AnnuityContent({ account, result }: { account: Account; result: PlanRes
       <div className="ns-dec-donut">
         <DonutChart
           segments={segments}
-          center={{ value: money(balance), label: 'Worth today' }}
+          center={{ value: money(balance), label: pinned ? `In ${focusYear}` : 'Worth today' }}
           size={216}
           thickness={28}
           legend="side"

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { runPlan } from '@northstar/engine';
+import { runPlan, withHomePurchase } from '@northstar/engine';
 import { SAMPLE_PLANS } from './samplePlan';
-import { retirementSources } from './retirementSources';
+import { investableSplit, retirementSources } from './retirementSources';
 import { agesLineFor, dangerBandFor } from './decisionKit';
 import { planHealth } from './health';
 import { priceGrid, pricePoints } from './priceCurve';
 import { currentTerms } from './homeView';
-import { runsDryPlan, healthyPlan } from './planFixtures';
+import { runsDryPlan, healthyPlan, basePlan, account, event } from './planFixtures';
 
 describe('retirementSources', () => {
   it('covers every dollar of income and recurring withdrawal exactly once, and leaves one-time costs out', () => {
@@ -59,6 +59,25 @@ describe('dangerBandFor / agesLineFor', () => {
   });
 });
 
+describe('investableSplit', () => {
+  it('locks the never-withdraw 401(k) and sums back to the whole (V5-REVIEW-1 F8)', () => {
+    const plan = runsDryPlan();
+    const result = runPlan(plan);
+    const health = planHealth(result, plan);
+    const { canSpend, locked } = investableSplit(result, health.spendable);
+    result.years.forEach((y, i) => {
+      const total = y.accounts
+        .filter((a) => a.accountClass === 'cash' || a.accountClass === 'taxDeferredInvestment')
+        .reduce((s, a) => s + Math.max(0, a.close), 0);
+      expect(canSpend[i] + locked[i]).toBeCloseTo(total, 4);
+      expect(locked[i]).toBeGreaterThanOrEqual(0);
+    });
+    // The 401(k) is set to never withdraw, so it is locked from the first year on.
+    expect(locked[0]).toBeGreaterThan(400_000);
+    expect(canSpend[0]).toBeLessThan(locked[0]);
+  });
+});
+
 describe('priceCurve', () => {
   it('builds an even ladder on a round step, bounded in size', () => {
     const grid = priceGrid(100_000, 2_400_000);
@@ -77,5 +96,22 @@ describe('priceCurve', () => {
     const shares = points.map((p) => p.reading.housingShare);
     expect(shares[0]).toBeLessThan(shares[1]);
     expect(shares[1]).toBeLessThan(shares[2]);
+  });
+
+  it('names the full-horizon short year, not just the ten-year carry window (V5-REVIEW-1 F7)', () => {
+    // Pays every bill for decades, then the cash is gone: the failure is well
+    // past `readCandidate`'s ten-year window from the purchase.
+    const plan = basePlan({
+      settings: { ...basePlan().settings, baselineIncome: 0, baselineExpenses: 60_000, projectionYears: 60, inflationRate: 0 },
+      accounts: [account({ id: 'cash', accountClass: 'cash', initialBalance: 1_800_000, growthRate: 0 })],
+      events: [event({ id: 'end', kind: 'endOfPlan', startYear: 2086, isRequired: true })],
+      rules: [{ accountId: 'cash', ruleType: 'withdrawal', order: 1 }],
+    });
+    const [point] = pricePoints(plan, { year: 2027, price: 0, terms: {} }, [200_000]);
+    expect(point.reading.shortfallYear).toBeUndefined();
+    expect(point.firstShortYear).toBeGreaterThan(2027 + 10);
+    // And it is the rail's number: the same plan, health over its own full run.
+    const full = runPlan(withHomePurchase(plan, 2027, 200_000, {}));
+    expect(point.firstShortYear).toBe(planHealth(full).firstShortYear);
   });
 });

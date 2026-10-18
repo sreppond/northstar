@@ -94,3 +94,29 @@ export function retirementSources(plan: Pick<Plan, 'events' | 'accounts'>, resul
 
   return { series, need: result.years.map((y, i) => y.totalExpenses - lumps[i] + y.totalTaxes) };
 }
+
+/** Classes whose balance the plan could spend if its settings let it (health.ts's list). */
+const INVESTABLE_CLASSES = new Set(['cash', 'taxableInvestment', 'taxDeferredInvestment', 'taxFreeInvestment', 'variableAnnuity']);
+
+/**
+ * Cash and investments split into "can spend now" and "locked" (V5-REVIEW-1 F8).
+ * `spendable` is `PlanHealth.spendable`: the year-end balance that passes every
+ * withdrawal rule (a priority rule names the account, its timing allows it, no
+ * SEPP window, no early-withdrawal penalty). Locked is the rest of the
+ * spendable-capable accounts: money that exists but that this plan will not
+ * draw on, which is how a plan runs dry with a 401(k) full. Both parallel
+ * `result.years`, and they sum to the total.
+ */
+export function investableSplit(result: PlanResult, spendable: number[]): { canSpend: number[]; locked: number[] } {
+  const canSpend: number[] = [];
+  const locked: number[] = [];
+  result.years.forEach((y, i) => {
+    const total = y.accounts
+      .filter((a) => !a.isLiability && INVESTABLE_CLASSES.has(a.accountClass))
+      .reduce((sum, a) => sum + Math.max(0, a.close), 0);
+    const free = Math.min(total, spendable[i] ?? 0);
+    canSpend.push(free);
+    locked.push(total - free);
+  });
+  return { canSpend, locked };
+}

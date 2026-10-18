@@ -44,8 +44,6 @@ export function AccountForm({
 
   return (
     <div className="ns-account-form">
-      <p className="ns-drawer-hint">{spec.blurb}</p>
-
       {visibleFields(spec, draft).map((field) => (
         <AccountField
           key={String(field.key)}

@@ -125,7 +125,7 @@ export function AccountInsight({
           ghost={ghost}
           range={range}
           todayYear={result.startYear}
-          height={240}
+          height={300}
           focusYear={focusYear}
           onFocusYear={onFocusYear}
           onHoverYear={setHover}

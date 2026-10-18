@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, type ReactNode } from 'react';
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Account } from '@northstar/engine';
 import { ACCOUNT_TYPES, LIABILITY_CLASSES, newAccountOfType } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
@@ -10,6 +10,7 @@ import { Sheet } from '../ui/Sheet';
 import { AnnuityAccountSection } from '../views/AnnuityAccountSection';
 import { AccountForm } from './AccountForm';
 import { AccountInsight } from './AccountInsight';
+import { AccountSheetHead } from './AccountSheetHead';
 
 /**
  * Per-account-type settings, in a `Sheet` (docs/REDESIGN-V5.md §3.6, §5.1.4).
@@ -58,6 +59,9 @@ export function AccountDrawer({
   const spec = ACCOUNT_TYPES[draft.accountClass];
   const Icon = ACCOUNT_ICON[draft.accountClass];
   const titleId = useId();
+  // V5-REVIEW-1 F22: what this account type is lives behind the header's (i),
+  // not in a paragraph above every form.
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   return (
     <Sheet
@@ -66,12 +70,15 @@ export function AccountDrawer({
       title={draft.name || spec.label}
       labelledBy={titleId}
       header={
-        <div className="ns-nw-sheet-head">
-          <Icon size={18} strokeWidth={2} aria-hidden className="ns-nw-sheet-icon" />
-          <h2 id={titleId} className="ns-nw-sheet-title">
-            {draft.name || spec.label}
-          </h2>
-        </div>
+        <AccountSheetHead
+          Icon={Icon}
+          title={draft.name || spec.label}
+          titleId={titleId}
+          accountClass={draft.accountClass}
+          about={spec.blurb}
+          aboutOpen={aboutOpen}
+          onToggleAbout={() => setAboutOpen((v) => !v)}
+        />
       }
       footer={
         footer ??
@@ -88,6 +95,7 @@ export function AccountDrawer({
       }
     >
       <div className="ns-nw-sheet-body">
+        {aboutOpen && <p className="ns-drawer-hint ns-nw-about-note">{spec.blurb}</p>}
         {before}
         {readOnly ? (
           <div className="ns-readonly-note">

@@ -6,7 +6,6 @@ import { Badge } from '../ui';
 import { RangePicker, TimeSeriesChart } from '../charts';
 import { usePlanner } from '../PlannerContext';
 import { agesLineFor, dangerBandFor } from '../decisionKit';
-import { stubYearLabel } from '../ledger';
 import '../pages/decisions.css';
 
 /**
@@ -20,14 +19,23 @@ import '../pages/decisions.css';
  * `HousePage` only renders this once at least one included `buyAHome` event
  * exists.
  */
-export function HouseForecastView({ plan, result }: { plan: Plan; result: PlanResult }) {
+export function HouseForecastView({
+  plan,
+  result,
+  defaultYear,
+}: {
+  plan: Plan;
+  result: PlanResult;
+  /** The year the page is trying; where the chart rests with nothing pinned (V5-REVIEW-1 F17). */
+  defaultYear?: number;
+}) {
   const homeEvents = plan.events.filter((e) => e.kind === 'buyAHome' && e.isIncluded);
   if (homeEvents.length === 0) return null;
 
   return (
     <>
       {homeEvents.map((event) => (
-        <HouseCard key={event.id} event={event} plan={plan} result={result} isOnlyHome={homeEvents.length === 1} />
+        <HouseCard key={event.id} event={event} plan={plan} result={result} isOnlyHome={homeEvents.length === 1} defaultYear={defaultYear} />
       ))}
     </>
   );
@@ -38,11 +46,13 @@ function HouseCard({
   plan,
   result,
   isOnlyHome,
+  defaultYear,
 }: {
   event: PlanEvent;
   plan: Plan;
   result: PlanResult;
   isOnlyHome: boolean;
+  defaultYear?: number;
 }) {
   const { health, focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
   const homeId = `${event.id}:home`;
@@ -57,8 +67,6 @@ function HouseCard({
 
   const ownedIndex = value.findIndex((v) => v > 0);
   const hasStarted = ownedIndex !== -1;
-  const stub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
-  const stubYear = stub ? { year: plan.settings.startYear, label: stub.short } : undefined;
   const agesFor = useMemo(() => agesLineFor(plan, result), [plan, result]);
   const danger = useMemo(() => dangerBandFor(health, result), [health, result]);
 
@@ -80,11 +88,10 @@ function HouseCard({
           range={chartRange}
           todayYear={plan.settings.startYear}
           height={320}
-          focusYear={focusYear}
+          focusYear={focusYear ?? (defaultYear !== undefined && years.includes(defaultYear) ? defaultYear : null)}
           onFocusYear={setFocusYear}
           danger={danger}
           onRequestRange={setChartRange}
-          stubYear={stubYear}
           readout={{ label: 'Equity', primaryId: 'equity', size: 'compact', agesFor }}
           ariaLabel={`${event.name}: value, mortgage and equity over time`}
         />
@@ -163,9 +170,9 @@ interface CostReading {
  * convention `diff.ts`'s `diffOutcomes` uses for a saved-scenario compare.
  *
  * Written directly rather than through `diffOutcomes` itself: that function
- * returns a list of pre-formatted bullet fragments ("+$420K at 2046") meant
- * for `CompareDiff`'s two-column list, not a single narrative sentence, so
- * reusing it here would mean re-parsing its output strings. `pathMarkers`
+ * returns a list of pre-formatted bullet fragments ("+$420K at 2046"), not a
+ * single narrative sentence, so reusing it here would mean re-parsing its
+ * output strings. `pathMarkers`
  * and the same threshold it uses are the reusable parts.
  */
 function describeCostOfBuying(plan: Plan, withHouse: PlanResult, withoutHouse: PlanResult): CostReading {

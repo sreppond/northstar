@@ -4,10 +4,9 @@ import { lifeExpectancyYearFor, retirementAgeSweep, runPlan } from '@northstar/e
 import { usePlanner } from '../PlannerContext';
 import { RangePicker, TimeSeriesChart } from '../charts';
 import { clampYear, extendPlanHorizon, planForRetirementPreview } from '../retirement';
-import { stubYearLabel } from '../ledger';
 import { planHealth } from '../health';
 import { agesLineFor, dangerBandFor, useHeroHeight } from '../decisionKit';
-import { retirementSources } from '../retirementSources';
+import { investableSplit, retirementSources } from '../retirementSources';
 import '../pages/decisions.css';
 
 /**
@@ -33,13 +32,6 @@ import '../pages/decisions.css';
  * page uses — and marks the extended region rather than let it pass as
  * ordinary projected data.
  */
-const PORTFOLIO_CLASSES = new Set([
-  'cash',
-  'taxableInvestment',
-  'taxDeferredInvestment',
-  'taxFreeInvestment',
-]);
-
 /** How far past a retirement year this view is willing to extend the plan's
     horizon to answer durability questions — long enough to show the money
     running out, or comfortably not, without simulating indefinitely. */
@@ -223,17 +215,13 @@ function RetirementReady({
   const heroHeight = useHeroHeight();
 
   const years = result.years.map((y) => y.year);
-  const portfolio = result.years.map((y) =>
-    y.accounts.filter((a) => !a.isLiability && PORTFOLIO_CLASSES.has(a.accountClass)).reduce((s, a) => s + a.close, 0),
-  );
-  const stub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
-  const stubYear = stub ? { year: plan.settings.startYear, label: stub.short } : undefined;
 
   const sources = useMemo(() => retirementSources(plan, result), [plan, result]);
   // This view's own health, not the context's: the retirement year being
   // previewed (or the extended horizon) can change where the money runs out.
   const health = useMemo(() => planHealth(result, plan), [result, plan]);
   const danger = useMemo(() => dangerBandFor(health, result), [health, result]);
+  const split = useMemo(() => investableSplit(result, health.spendable), [result, health.spendable]);
   const agesFor = useMemo(() => agesLineFor(plan, result), [plan, result]);
   const beyond = isExtended ? { bandFrom: originalEndYear, bandLabel: 'Beyond horizon' } : {};
 
@@ -255,7 +243,6 @@ function RetirementReady({
           danger={danger}
           onRequestRange={setChartRange}
           markers={[{ year: retirementEvent.startYear, label: 'Retire', tone: 'neutral' }]}
-          stubYear={stubYear}
           {...beyond}
           readout={{
             label: 'What pays for each year',
@@ -264,16 +251,23 @@ function RetirementReady({
           }}
           ariaLabel="What pays for each year, by source, against what the year costs"
         />
-        <p className="ns-dec-note">One-time costs, like a down payment, are left out.</p>
       </section>
 
       <section className="ns-dec-section">
         <div className="ns-dec-head">
-          <h2 className="ns-dec-title">Investable balance</h2>
+          <h2 className="ns-dec-title">Cash and investments</h2>
         </div>
+        {/* Not net worth's line again (V5-REVIEW-1 F8): the same money split by
+            whether the plan can actually draw on it. "Locked" is a withdrawal
+            rule that says never, an account still under the early-withdrawal
+            age, or a committed SEPP. */}
         <TimeSeriesChart
           years={years}
-          series={[{ id: 'portfolio', label: 'Investable', color: 'var(--data-nw)', values: portfolio, kind: 'area' }]}
+          series={[
+            { id: 'canSpend', label: 'Can spend now', color: 'var(--data-nw)', values: split.canSpend, kind: 'area' },
+            { id: 'locked', label: 'Locked', color: 'var(--muted-light)', values: split.locked, kind: 'area' },
+          ]}
+          stacked
           range={chartRange}
           todayYear={plan.settings.startYear}
           height={heroHeight - 120}
@@ -282,10 +276,9 @@ function RetirementReady({
           danger={danger}
           onRequestRange={setChartRange}
           markers={[{ year: retirementEvent.startYear, label: 'Retire', tone: 'neutral' }]}
-          stubYear={stubYear}
           {...beyond}
-          readout={{ label: 'Cash and investments', size: 'compact', agesFor }}
-          ariaLabel="Investable balance over time"
+          readout={{ label: 'Total', size: 'compact', agesFor }}
+          ariaLabel="Cash and investments over time, split into what the plan can spend now and what is locked"
         />
       </section>
     </>
