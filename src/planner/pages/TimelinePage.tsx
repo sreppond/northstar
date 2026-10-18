@@ -15,6 +15,8 @@ import {
 import { Baby, Home, Plus, UserPlus } from 'lucide-react';
 import type { PlanEvent } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
+import { healthDangerBand } from '../health';
+import { dangerRuns } from '../charts/seriesMath';
 import { Page, PageHeader } from '../ui';
 import { PlanCheckBanner } from '../PlanCheckBanner';
 import { HouseholdSetup } from '../HouseholdSetup';
@@ -93,11 +95,14 @@ export function TimelinePage() {
   );
 
   // The years the plan can't pay its way (§4.2.4): a hatched band through the
-  // columns and a "Runs dry" tag on the first of them.
-  const dry =
-    health.status === 'short' && health.firstShortYear !== undefined
-      ? { from: health.firstShortYear, to: Math.max(...health.shortYears) }
-      : undefined;
+  // columns for each run of short years, and a "Runs dry" tag on the first year
+  // of each run. V5-REVIEW-1 F2: from `healthDangerBand`, so a plan that runs
+  // dry, recovers and runs dry again hatches only its short years.
+  const dry = useMemo(() => {
+    const band = healthDangerBand(health, result);
+    return band ? dangerRuns(band, endYear) : [];
+  }, [health, result, endYear]);
+  const dryYears = useMemo(() => dry.map((r) => r.from), [dry]);
 
   const open = (event: PlanEvent) => editor.edit(stored.events.find((e) => e.id === event.id) ?? event);
   const move = (id: string, year: number) => {
@@ -131,7 +136,7 @@ export function TimelinePage() {
         <VerticalTimeline
           lanes={lanes}
           todayYear={startYear}
-          dryFrom={dry?.from}
+          dryYears={dryYears}
           focusYear={focusYear}
           onPin={pin}
           agesFor={agesFor}
@@ -233,7 +238,7 @@ function LifeLanes({
   lanes: Lane[];
   startYear: number;
   endYear: number;
-  dry?: { from: number; to: number };
+  dry: { from: number; to: number }[];
   focusYear: number | null;
   onPin(year: number): void;
   agesFor(year: number): string;
@@ -419,7 +424,7 @@ function LifeLanes({
                   aria-pressed={y === focusYear}
                 >
                   {y === startYear && <span className="tl-today-tag">Today</span>}
-                  {y === dry?.from && <span className="tl-dry-tag">Runs dry</span>}
+                  {dry.some((r) => r.from === y) && <span className="tl-dry-tag">Runs dry</span>}
                   <span className="tl-year-num">{y}</span>
                 </button>
               ))}
@@ -440,7 +445,9 @@ function LifeLanes({
                 className="tl-grid"
                 style={{ backgroundPositionX: ((5 - (startYear % 5)) % 5) * YEAR_PX, width: years.length * YEAR_PX }}
               />
-              {dry && <div className="tl-dry" style={{ left: columnLeft(dry.from, startYear), width: (dry.to - dry.from + 1) * YEAR_PX }} />}
+              {dry.map((r) => (
+                <div key={r.from} className="tl-dry" style={{ left: columnLeft(r.from, startYear), width: (r.to - r.from + 1) * YEAR_PX }} />
+              ))}
               <div className="tl-today-wash" style={{ left: 0, width: YEAR_PX }} />
               {scrubYear !== null && scrubYear !== focusYear && <div className="tl-line" style={{ left: centre(scrubYear) }} />}
               {focusYear !== null && <div className="tl-line" data-pinned style={{ left: centre(focusYear) }} />}
@@ -689,7 +696,7 @@ function StageBars({ lane, startYear, onOpen }: { lane: Lane; startYear: number;
 function VerticalTimeline({
   lanes,
   todayYear,
-  dryFrom,
+  dryYears,
   focusYear,
   onPin,
   agesFor,
@@ -698,7 +705,7 @@ function VerticalTimeline({
 }: {
   lanes: Lane[];
   todayYear: number;
-  dryFrom?: number;
+  dryYears: number[];
   focusYear: number | null;
   onPin(year: number): void;
   agesFor(year: number): string;
@@ -707,8 +714,8 @@ function VerticalTimeline({
 }) {
   const { plan } = usePlanner();
   const rows = useMemo(
-    () => verticalYears(lanes, todayYear, dryFrom === undefined ? [] : [dryFrom]),
-    [lanes, todayYear, dryFrom],
+    () => verticalYears(lanes, todayYear, dryYears),
+    [lanes, todayYear, dryYears],
   );
   const people = lanes.filter((l) => l.person);
 
@@ -739,7 +746,7 @@ function VerticalTimeline({
             <button type="button" className="tlv-year" onClick={() => onPin(row.year)} aria-pressed={row.year === focusYear}>
               <span className="tlv-y">{row.year}</span>
               {row.year === todayYear && <span className="tlv-today">Today</span>}
-              {row.year === dryFrom && <span className="tlv-dry">Runs dry</span>}
+              {dryYears.includes(row.year) && <span className="tlv-dry">Runs dry</span>}
               <span className="tlv-ages">{agesFor(row.year)}</span>
             </button>
             {row.groups.length > 0 && (

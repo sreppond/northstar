@@ -6,7 +6,7 @@ import { IconBadge } from '../IconBadge';
 import { Sheet } from '../ui/Sheet';
 import { TimeSeriesChart, type DangerBand } from '../charts';
 import { usePlanner } from '../PlannerContext';
-import { planHealth } from '../health';
+import { healthDangerBand, planHealth } from '../health';
 import { presentResult } from '../impact';
 import { money } from '../format';
 import { describeSchema } from './schemaForm';
@@ -490,21 +490,9 @@ function EventEffect({ draft }: { draft: PlanEvent }) {
     return moves ? { years, withoutValues } : null;
   }, [settled, draft.id, draft.kind, draft.isIncluded, result, health.spendable]);
 
-  // V5-REVIEW-1 F2: only the years that are actually short, not "first short
-  // year to the end". TODO(V5-REVIEW-1 F2): use health.ts helper once U1's
-  // `healthDangerBand` lands; this inlines the same runs from `shortYears`.
-  const danger = useMemo<(DangerBand & { years?: number[] }) | undefined>(() => {
-    const runs: { from: number; to: number }[] = [];
-    for (const y of health.shortYears) {
-      const run = runs[runs.length - 1];
-      if (run && y === run.to + 1) run.to = y;
-      else runs.push({ from: y, to: y });
-    }
-    if (health.status !== 'short' || runs.length === 0) return undefined;
-    // The kit takes one band today (first run); `years` carries every run for
-    // the kit change that draws them separately.
-    return { from: runs[0].from, to: runs[0].to, years: health.shortYears };
-  }, [health.shortYears, health.status]);
+  // V5-REVIEW-1 F2: hatch only the years that are actually short (each run),
+  // not "first short year to the end".
+  const danger = useMemo<DangerBand | undefined>(() => healthDangerBand(health, result), [health, result]);
 
   if (!effect) return null;
   const idx = hover === null ? -1 : effect.years.indexOf(hover);

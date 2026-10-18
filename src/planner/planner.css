@@ -291,7 +291,6 @@
 
 .ns {
   min-height: 100vh;
-  padding-bottom: 72px;
   /* Two very faint pools of light so cards float in an atmosphere rather than
      on flat grey. Fixed, so scrolling doesn't drag them along. */
   background:
@@ -527,7 +526,6 @@
 .ns-kind,
 .ns-event-label,
 .ns-event-hit,
-.ns-bar,
 .ns-toggle-row input[type='checkbox'] {
   transform: translate(var(--jx, 0px), var(--jy, 0px)) scale(var(--jsx, 1), var(--jsy, 1));
   transform-origin: center;
@@ -543,8 +541,7 @@
 .ns-btn:hover:not(:disabled),
 .ns-plan-row-select:hover,
 .ns-kind:hover,
-.ns-event-label:hover,
-.ns-bar:hover {
+.ns-event-label:hover {
   --jy: -1px;
 }
 
@@ -559,15 +556,6 @@
 .ns-event-hit:active {
   --jsx: 1.045;
   --jsy: 0.915;
-  --jy: 1px;
-  transition-duration: var(--t-press);
-  transition-timing-function: var(--ease-soft);
-}
-
-/* A gantt bar can be 600px wide; 4.5% of that is a shove, not a squish. */
-.ns-bar:active {
-  --jsx: 1.012;
-  --jsy: 0.9;
   --jy: 1px;
   transition-duration: var(--t-press);
   transition-timing-function: var(--ease-soft);
@@ -619,17 +607,6 @@
   100% {
     opacity: 1;
     transform: translate(var(--jx, 0px), 0) scale(1, 1);
-  }
-}
-
-@keyframes ns-pop-in {
-  0% {
-    opacity: 0;
-    transform: translateX(-50%) scale(0.9, 0.88);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(-50%) scale(1, 1);
   }
 }
 
@@ -1276,6 +1253,11 @@ html.ns-tauri .ns-drag-strip {
      override; the inner `overflow-x: auto` surfaces then do their job of
      scrolling their own wide content instead of stretching this column. */
   min-width: 0;
+  /* V5-REVIEW-1 F4: the page's bottom breathing room is margin here, not
+     padding on `.ns`. Padding on the grid container sits outside the grid
+     area the sticky rail is confined to, so the rail unpinned and slid up
+     over the last 72px of every long page. */
+  margin-bottom: 72px;
   /* v3: no longer imposes the page's own max-width/padding/gap — every
      route now wraps its content in `<Page>` (src/planner/ui/Page.tsx),
      which owns that rhythm so it can vary by breakpoint independently of
@@ -1423,46 +1405,6 @@ html.ns-tauri .ns-drag-strip {
   }
 }
 
-/* --- chart --------------------------------------------------------------- */
-
-.ns-chart-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 24px 4px;
-}
-.ns-chart-head h2 {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink);
-  margin: 0;
-}
-.ns-legend {
-  display: flex;
-  gap: 14px;
-  margin-left: auto;
-  align-items: center;
-}
-.ns-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.ns-legend-line {
-  width: 16px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--data-nw);
-}
-.ns-legend-swatch {
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
 /* Full-bleed and viewport-scaled rather than boxed at a size derived from
    its own width (docs/REDESIGN.md §4.1, design-direction move 2): the plot
    claims a real, deliberate slice of the screen on any width. The svg's
@@ -1493,15 +1435,6 @@ html.ns-tauri .ns-drag-strip {
   filter: drop-shadow(0 2px 3px rgba(18, 48, 76, 0.16));
 }
 
-.ns-chart-overlay {
-  position: absolute;
-  /* Matches `.ns-chart`'s own `padding: 0 24px 8px` exactly (docs/REVIEW.md
-     M6) — without the bottom 8px this box was taller than the svg it
-     overlays, which pushed every `top: N%` position (event dots, ticks,
-     marks) 6-7px below where the line actually is. */
-  inset: 0 24px 8px;
-  pointer-events: none;
-}
 .ns-y-tick,
 .ns-x-tick {
   position: absolute;
@@ -1547,23 +1480,6 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-event-dot-cost {
   background: var(--out-deep);
-}
-
-/* Actual vs forecast (docs/REVIEW.md B1). Logged points draw as small solid
-   ink dots along a solid line, distinct from the coloured income/cost event
-   dots above — an actual balance isn't a life event, it's a fact. HTML for
-   the same reason the event dots are: an svg circle would show the chart's
-   non-uniform `preserveAspectRatio="none"` stretch. */
-.ns-actual-dot {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  margin-left: -3px;
-  margin-top: -3px;
-  border-radius: 50%;
-  background: var(--ink);
-  border: 1.5px solid var(--surface);
-  pointer-events: none;
 }
 
 /* The TODAY rule's own label (docs/REVIEW.md B1) — only rendered once
@@ -1679,7 +1595,7 @@ html.ns-tauri .ns-drag-strip {
    Anchored at the packed left/top corner NetWorthChart.tsx's `build()`
    already computed, not centred — no margin or transform needed, which
    keeps it clear of the one rule every HoverCard-wrapping slot in this file
-   follows (see `.ns-mark-slot` / `.ns-fan-slot` below): never put a
+   follows (see `.ns-mark-slot` below): never put a
    `transform` on an element that wraps a `HoverCard`. */
 .ns-event-label-slot {
   position: absolute;
@@ -1779,63 +1695,6 @@ html.ns-tauri .ns-drag-strip {
   outline-offset: 1px;
 }
 
-/* Scrub (docs/REDESIGN.md §4.1, design-direction move 4) — one pointer
-   surface spanning the whole plot, replacing the old per-year hover bands.
-   Rendered first, same reason the bands were: dots/labels stack above it. */
-.ns-scrub-surface {
-  position: absolute;
-  inset: 0;
-  pointer-events: auto;
-  /* Claim horizontal drags for scrubbing; let vertical page-scroll through
-     untouched — at EVERY width, including phones (docs/REVIEW.md B3): the
-     chart now fits the viewport rather than scrolling sideways at a fixed
-     800px, so there's no competing horizontal scroll to cede this to
-     anymore. */
-  touch-action: pan-y;
-}
-
-/* The tooltip pops in, then *glides* between years rather than teleporting.
-   130ms is enough to read as a soft body being dragged along and not enough
-   to feel like lag. */
-.ns-tooltip {
-  position: absolute;
-  /* Above the fan's end chip (`.ns-fan-slot`, z-index 3) and event labels
-     (`.ns-event-label-slot-live`, z-index 3) — without this the scrub
-     tooltip painted UNDER them on phones, where the plot is narrow enough
-     for a chip to sit right on top of it. */
-  z-index: 4;
-  transform: translateX(-50%);
-  transform-origin: top center;
-  pointer-events: none;
-  background-color: var(--inverse);
-  background-image: var(--jelly-gloss);
-  color: var(--on-inverse);
-  border-radius: 14px;
-  padding: 9px 13px;
-  min-width: 126px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    var(--shadow-tooltip);
-  animation: ns-pop-in 220ms var(--ease-jelly) both;
-  transition: left 130ms var(--ease-soft);
-}
-.ns-tooltip-year {
-  font-size: 12px;
-  opacity: 0.72;
-  font-variant-numeric: tabular-nums;
-}
-.ns-tooltip-value {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: var(--lh-display);
-  letter-spacing: var(--track-display);
-  font-variant-numeric: tabular-nums;
-}
-.ns-tooltip-flow {
-  font-size: 12px;
-  opacity: 0.78;
-}
-
 .ns-selection {
   display: flex;
   align-items: center;
@@ -1864,19 +1723,6 @@ html.ns-tauri .ns-drag-strip {
 .ns-selection-label {
   font-size: 15px;
   font-weight: 500;
-}
-.ns-window {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ns-window-label {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 
 /* --- tables -------------------------------------------------------------- */
@@ -2036,11 +1882,9 @@ html.ns-tauri .ns-drag-strip {
    move 6) ------------------------------------------------------------------
    A quiet bar behind each CHILD row's own figure — never the bold
    total/group rows, which already carry their own emphasis. Reuses the
-   income/cost hue convention `.ns-bar-income`/`.ns-bar-cost` establish on
-   EventsTab.tsx's Gantt bars, at low opacity so it reads as texture behind
-   the number, not a second data series competing with it. Distinct from
-   those Gantt bars mechanically, not just visually: those encode a TIME
-   SPAN on a row; this encodes a DOLLAR MAGNITUDE, scaled to each row's own
+   income/cost hue convention (the old Gantt bars, since removed) at low
+   opacity so it reads as texture behind the number, not a second data
+   series competing with it. It encodes a DOLLAR MAGNITUDE, scaled to each row's own
    max across its visible columns (never the whole table's — see
    DataTable.tsx's `rowMax`), behind a data-table row.
    A short, low, fully-rounded strip sitting near the row's text baseline
@@ -2138,113 +1982,12 @@ html.ns-tauri .ns-drag-strip {
   }
 }
 
-/* ---- Return sensitivity fan ---------------------------------------------
-   The band and its edges are context for the line, never a rival to it: they
-   sit underneath, thinner and dashed, and fade back when one end is focused. */
-.ns-nw-area,
-.ns-fan-band,
-.ns-fan-edge {
+/* Net-worth area: softens when something else takes focus. */
+.ns-nw-area {
   transition:
     opacity 220ms var(--ease-soft),
     stroke-opacity 220ms var(--ease-soft),
     stroke-width 220ms var(--ease-soft);
-}
-.ns-fan-band {
-  animation: ns-fan-in 520ms var(--ease-soft) both;
-}
-@keyframes ns-fan-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* Positioned like a pin slot: centred with a negative margin, never a
-   transform — a transform here would become the containing block for the
-   hover card and throw it across the page. */
-.ns-fan-slot {
-  position: absolute;
-  margin-right: 7px;
-  margin-top: -12px;
-  pointer-events: auto;
-  z-index: 3;
-}
-/* No z-index juggling needed here: HoverCard portals to document.body, so a
-   chip's card escapes this slot's stacking context and the opposite chip
-   cannot paint over it. */
-/* Hover-only, never clicked (`cursor: default`) — a chip that's read, not
-   pressed, so it gets the same quiet single-shadow treatment as `.ns-card`
-   rather than the jelly rise (docs/REDESIGN.md §5.2). */
-.ns-fan-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 9px;
-  border-radius: 9px;
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  cursor: default;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-control);
-  transition: border-color 140ms var(--ease-soft);
-}
-/* Ink plus muted, not green/orange (docs/REVIEW.md S3) — the fan is one
-   plan's line under two return assumptions, not two competing series, so
-   its end chips read as wayfinding labels ("which edge is which") rather
-   than as a second and third data hue next to the line's own. */
-.ns-fan-chip-high {
-  color: var(--ink);
-  border: 1px solid var(--border-strong);
-}
-.ns-fan-chip-low {
-  color: var(--muted);
-  border: 1px solid var(--border);
-}
-/* The base line's own end label (docs/REDESIGN-V3.md "Goodcast", relabelled
-   per docs/W3-REVIEW.md #11: "+2 pts … / Plan … / −2 pts …", not percentiles)
-   — plain ink rather than a data hue, since the line it labels already
-   carries the colour; this chip is wayfinding, the same call
-   `.ns-event-label` makes for a standing event name. */
-.ns-fan-chip-mid {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.ns-legend-swatch-fan {
-  background: linear-gradient(to bottom, var(--green-tint), var(--out-tint));
-  border: 1px solid var(--border-strong);
-}
-
-.ns-fan-toggle {
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--pill-border);
-  background: var(--surface);
-  color: var(--muted);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 140ms var(--ease-soft),
-    color 140ms var(--ease-soft),
-    border-color 140ms var(--ease-soft);
-}
-.ns-fan-toggle:hover {
-  color: var(--ink);
-  border-color: var(--border-strong);
-}
-.ns-fan-toggle.is-on {
-  background: var(--in-tint);
-  border-color: var(--in-line);
-  color: var(--in-deep);
 }
 
 /* Cash flow row label + its gear. Mirrors .ns-type-cell on the balance sheet
@@ -2325,73 +2068,6 @@ html.ns-tauri .ns-drag-strip {
   text-align: center;
 }
 
-/* --- events gantt -------------------------------------------------------- */
-
-.ns-gantt-head {
-  display: grid;
-  /* The track can't rely on `min-width: max-content` the way `.ns-grid`
-     does (line ~3063): its bars are `position: absolute`, so they
-     contribute nothing to the track's intrinsic size and a bare `1fr`
-     just shrinks to whatever the scroll container offers — which is how
-     the ticks and bars end up overlapping on a narrow card instead of the
-     row scrolling. `minmax(420px, 1fr)` gives the track a real floor so
-     `.ns-table-scroll`'s `overflow-x: auto` has something to trigger on. */
-  /* 276, not 268: the system face is ~3px wider on "Second child" and the
-     name truncated at desktop width. */
-  grid-template-columns: 276px minmax(420px, 1fr);
-  border-bottom: 1px solid var(--rule);
-  background: var(--surface-sub);
-}
-.ns-gantt-head > div:first-child {
-  padding: 11px 20px;
-  font-size: 13px;
-  color: var(--muted);
-}
-.ns-gantt-ticks {
-  position: relative;
-  height: 36px;
-}
-.ns-gantt-tick {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  transform: translateX(-50%);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.ns-gantt-row {
-  display: grid;
-  /* The track can't rely on `min-width: max-content` the way `.ns-grid`
-     does (line ~3063): its bars are `position: absolute`, so they
-     contribute nothing to the track's intrinsic size and a bare `1fr`
-     just shrinks to whatever the scroll container offers — which is how
-     the ticks and bars end up overlapping on a narrow card instead of the
-     row scrolling. `minmax(420px, 1fr)` gives the track a real floor so
-     `.ns-table-scroll`'s `overflow-x: auto` has something to trigger on. */
-  grid-template-columns: 276px minmax(420px, 1fr); /* matches .ns-gantt-head */
-  border-bottom: 1px solid var(--rule-light);
-}
-.ns-gantt-label {
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-}
-/* Takes the slack so the gear parks against the right edge of the label
-   column rather than floating next to the text. */
-.ns-gantt-name {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 /* Little beads. Not interactive, so they get the lit edge and nothing else. */
 .ns-code {
   width: 26px;
@@ -2421,76 +2097,6 @@ html.ns-tauri .ns-drag-strip {
 .ns-code-end {
   background-color: var(--inverse);
   color: var(--on-inverse);
-}
-
-.ns-gantt-track {
-  position: relative;
-  height: 48px;
-  border-left: 1px solid var(--rule);
-}
-.ns-gantt-gridline {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 1px;
-  background: var(--rule-light);
-}
-.ns-bar {
-  position: absolute;
-  top: 11px;
-  height: 26px;
-  min-width: 30px;
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: 999px;
-  cursor: pointer;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  background-image: var(--jelly-gloss);
-  box-shadow: var(--jelly-rise);
-}
-.ns-bar:hover {
-  box-shadow: var(--jelly-rise-hi);
-}
-/* The bar is a flex row, and bare text inside a flex container is hard-clipped
-   rather than ellipsized — so the label lives in its own shrinkable span. */
-.ns-bar-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ns-bar:active {
-  box-shadow: var(--jelly-press);
-}
-.ns-bar-income {
-  background-color: var(--in-tint);
-  border: 1px solid var(--in-line);
-  color: var(--in-deep);
-}
-.ns-bar-income:hover {
-  background-color: var(--in-hover);
-}
-.ns-bar-cost {
-  background-color: var(--out-tint);
-  border: 1px solid var(--out-line);
-  color: var(--out-deep);
-}
-.ns-bar-cost:hover {
-  background-color: var(--out-hover);
-}
-/* The horizon marker is a label, not a control: it keeps its right-anchored
-   offset through --jx and never lifts or squishes. */
-.ns-bar-end {
-  --jx: -100%;
-  background-color: var(--inverse);
-  color: var(--on-inverse);
-  border: 1px solid var(--inverse);
-  cursor: default;
 }
 
 /* --- event drawer -------------------------------------------------------- */
@@ -2849,7 +2455,6 @@ html.ns-tauri .ns-drag-strip {
   .ns-kind,
   .ns-event-label,
   .ns-event-hit,
-  .ns-bar,
   .ns-toggle-row input[type='checkbox'] {
     --jsx: 1 !important;
     --jsy: 1 !important;
@@ -2952,7 +2557,6 @@ html.ns-tauri .ns-drag-strip {
   transition: opacity 120ms ease;
 }
 .ns-row-child:hover .ns-gear,
-.ns-gantt-row:hover .ns-gear,
 .ns-gear:focus-visible {
   opacity: 1;
 }
@@ -3312,22 +2916,6 @@ html.ns-tauri .ns-drag-strip {
   color: var(--muted);
 }
 
-.ns-legend-line-compare {
-  background: repeating-linear-gradient(
-    to right,
-    var(--muted-light) 0 4px,
-    transparent 4px 7px
-  );
-}
-
-.ns-tooltip-compare {
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-  font-size: 12px;
-  opacity: 0.78;
-}
-
 /* --- sidebar plan row ----------------------------------------------------- */
 
 .ns-scenario-more {
@@ -3578,18 +3166,6 @@ html.ns-tauri .ns-drag-strip {
   padding: 2px 7px;
 }
 
-/* --- compare picker ------------------------------------------------------ */
-
-.ns-compare {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ns-compare-label {
-  font-size: 13px;
-  color: var(--muted);
-}
 .ns-select {
   font: inherit;
   font-size: 13px;
@@ -3602,46 +3178,6 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-select:hover {
   background: var(--bg);
-}
-
-/* --- compare diff — "two lines on a chart" turned into an answer ---------- */
-
-.ns-compare-diff {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  padding: 14px 24px;
-  background: var(--surface-sub);
-  border-bottom: 1px solid var(--rule);
-}
-
-.ns-compare-diff-col {
-  flex: 1 1 220px;
-  min-width: 0;
-}
-
-.ns-compare-diff-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted-light);
-  margin-bottom: 6px;
-}
-
-.ns-compare-diff-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.ns-compare-diff-outcome-label {
-  color: var(--muted);
 }
 
 .ns-person + .ns-person {
@@ -3703,16 +3239,6 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-row-child:hover > div:first-child {
   background: #fafcfd;
-}
-.ns-gantt-head > div:first-child,
-.ns-gantt-row > div:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: var(--surface);
-}
-.ns-gantt-head > div:first-child {
-  background: var(--surface-sub);
 }
 
 /* ---- ScrollTable (docs/REDESIGN-V5.md §3.7) ------------------------------
@@ -3904,22 +3430,6 @@ html.ns-tauri .ns-drag-strip {
     padding-left: 14px;
     padding-right: 14px;
   }
-  /* Not grouped with `.ns-chart` above: `.ns-chart-overlay`'s children are
-     absolutely positioned, so a left/right PADDING on it does nothing —
-     only its `inset` moves them. The missing bottom inset here is what let
-     event dots sit 6-7px below the line at this width (docs/REVIEW.md M6). */
-  .ns-chart-overlay {
-    inset: 0 14px 8px;
-  }
-  .ns-chart-head {
-    flex-wrap: wrap;
-    padding: 16px 18px 4px;
-  }
-  .ns-legend {
-    margin-left: 0;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
 
   .ns-selection {
     flex-wrap: wrap;
@@ -3945,7 +3455,7 @@ html.ns-tauri .ns-drag-strip {
      268px desktop width at every breakpoint fixed that, but on a 324px
      card that just left one value column visible instead (REVIEW.md M10).
      132px is the actual floor: still readable at a glance, and every
-     label this narrows (`.ns-type-name`, `.ns-gantt-name`, `.ns-line-name`)
+     label this narrows (`.ns-type-name`, `.ns-line-name`)
      already truncates with an ellipsis and carries a `title`, so nothing
      un-attributable is lost — `.ns-table-scroll`'s horizontal scroll (label
      column pinned via `position: sticky`, below) still makes room to read
@@ -3953,21 +3463,7 @@ html.ns-tauri .ns-drag-strip {
   .ns-grid {
     grid-template-columns: 132px repeat(var(--cols, 8), 1fr);
   }
-  .ns-gantt-head,
-  .ns-gantt-row {
-    grid-template-columns: 132px minmax(240px, 1fr);
-  }
-  /* At 132px the label's own icon + 20px padding left almost nothing for
-     the name itself ("A…", "Fi…" — docs/REVIEW.md M10). Dropping the icon
-     — the row's colour/tone still carries on the bar itself — and tightening
-     the padding gives the name back roughly 100px to work with. */
-  .ns-gantt-label {
-    padding: 10px 8px 10px 14px;
-    gap: 6px;
-  }
-  .ns-gantt-label .ns-code {
-    display: none;
-  }
+
   /* The 34px hanging indent that sets a child row off from its Assets/
      Liabilities group header was sized for a 268px column; against 132px
      it left barely two letters of the name before the ellipsis ("Ca…" for
@@ -3981,14 +3477,6 @@ html.ns-tauri .ns-drag-strip {
     max-width: calc(100vw - 24px);
   }
 
-  /* Events' per-row impact DeltaTag (docs/ROADMAP-10.md C7) fights the same
-     132px label column this breakpoint already starves for the event NAME
-     (REVIEW.md M10's "A…"/"Fi…") — the tag is supplementary, the name is
-     not, so it's the one that gives up its spot here rather than squeezing
-     the name down to a single letter. */
-  .ns-gantt-label .ns-ui-delta {
-    display: none;
-  }
 }
 
 /* Below the tablet breakpoint the chart now FITS the viewport's own width
@@ -4344,40 +3832,6 @@ html.ns-tauri .ns-drag-strip {
   font-size: 14px;
 }
 
-.ns-stat-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 14px 0;
-}
-.ns-stat {
-  flex: 1 1 160px;
-  background: var(--surface-sub);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  padding: 12px 14px;
-}
-.ns-stat-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-light);
-}
-.ns-stat-value {
-  display: block;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: var(--lh-display);
-  letter-spacing: var(--track-display);
-  color: var(--ink);
-  margin-top: 2px;
-}
-.ns-stat-note {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
 /* The basis/gain split bar — two segments summing to exactly 100% width, one
    "two-part magnitude" pattern (docs/BORROW.md-style port of Northstar v2's
    `.ns-split-bar`). Flex percentages rather than CSS-var scaleX/translateX:
@@ -4408,16 +3862,6 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-split-bar-gain {
   background: var(--data-nw);
-}
-.ns-split-bar-legend {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.ns-split-bar-legend b {
-  color: var(--ink);
 }
 
 /* Fees and the surrender schedule are independent facts about the same
@@ -4453,10 +3897,6 @@ html.ns-tauri .ns-drag-strip {
   background: var(--tint-row);
 }
 
-.ns-mini-chart {
-  display: block;
-  overflow: visible;
-}
 .ns-mini-grid {
   stroke: var(--rule);
   stroke-width: 1;
@@ -4625,146 +4065,6 @@ html.ns-tauri .ns-drag-strip {
   margin-top: 1px;
 }
 
-.ns-sepp-disclaimer {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--out-tint);
-  border: 1px solid var(--out-line);
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--out-deep);
-}
-
-/* --- SEPP tool: form + start-age strip (docs/REDESIGN.md §4.4) ----------- */
-
-.ns-sepp-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin: 14px 0;
-}
-.ns-sepp-form-group {
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  padding: 12px 14px 14px;
-  background: var(--surface-sub);
-}
-.ns-sepp-form-group-label {
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-light);
-  margin-bottom: 10px;
-}
-.ns-sepp-form-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.ns-sepp-form-row .ns-field {
-  flex: 1 1 140px;
-}
-/* The data voice (REDESIGN.md §5.3): every number this tool reads, not just
-   axis labels, is in the mono face -- what makes it read as an instrument
-   rather than an ordinary settings form. */
-.ns-sepp-form input,
-.ns-sepp-form select {
-  font-family: inherit;
-  font-variant-numeric: tabular-nums;
-}
-
-/* A horizontal set of tappable option-cards, each showing its own tradeoff,
-   in place of a table row to scan. */
-.ns-sepp-strip {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  margin-top: 10px;
-  padding: 2px 2px 10px;
-}
-.ns-sepp-option {
-  flex: 0 0 auto;
-  width: 136px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  background: var(--surface-sub);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  padding: 10px 12px 12px;
-  cursor: pointer;
-}
-.ns-sepp-option:hover {
-  border-color: var(--border-strong);
-  background: var(--surface);
-}
-.ns-sepp-option[aria-current='true'] {
-  border-color: var(--accent-line);
-  background: var(--in-tint);
-  box-shadow: 0 0 0 1px var(--accent-line);
-}
-.ns-sepp-option-age {
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted-light);
-}
-.ns-sepp-option-payment {
-  font-variant-numeric: tabular-nums;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.ns-sepp-option-unit {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted);
-  margin-left: 1px;
-}
-.ns-sepp-option-note {
-  font-size: 12px;
-  color: var(--muted);
-}
-.ns-sepp-option-balance {
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  color: var(--muted-light);
-  font-variant-numeric: tabular-nums;
-  margin-top: 3px;
-}
-
-/* A small magnitude bar (docs/REDESIGN.md §4.1's ledger-row recipe, scaled
-   down for a standalone card rather than a table-row wash), scaled per option
-   against the sweep's largest balance so the cards compare at a glance.
-   Named `ns-sepp-*` rather than reusing `.ns-mag-bar` — that name already
-   belongs to DataTable.tsx's ledger-row bar (a different component: a
-   tone-tinted, absolutely positioned strip behind a table cell), and both
-   classes landing on the same element elsewhere would have been a silent
-   cascade collision — the flat `var(--track)` background here would have
-   always beaten the ledger bar's `color-mix` tone at equal specificity,
-   which is exactly what was happening before this was split out. */
-.ns-sepp-mag-bar {
-  display: block;
-  height: 4px;
-  margin-top: 4px;
-  border-radius: 4px;
-  background: var(--track);
-  overflow: hidden;
-}
-.ns-sepp-mag-bar-fill {
-  display: block;
-  height: 100%;
-  border-radius: 4px;
-  background: var(--data-nw);
-}
-
 /* --- Retirement lens: the year slider, durability ------------------------- */
 
 .ns-freedom-slider-row {
@@ -4850,7 +4150,6 @@ html.ns-tauri .ns-drag-strip {
   color: var(--muted);
   margin-top: 2px;
 }
-
 
 /* Durability at the year actually set — a fuller alarm treatment than
    ns-house-cost's neutral-background convention, because REDESIGN.md names
@@ -5073,32 +4372,6 @@ html.ns-tauri .ns-drag-strip {
   padding: 6px 12px;
   font-size: 13px;
   border-radius: 10px;
-}
-
-.ns-progress-form {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  align-items: end;
-  /* Sits inside a flush `SectionCard` (the table above runs edge-to-edge),
-     so it carries its own horizontal margin matching the card's own
-     un-flushed body padding rather than touching the card's border. */
-  margin: 20px 22px 22px;
-  padding: 16px;
-  background: var(--surface-sub);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-}
-.ns-progress-form-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-@media (max-width: 640px) {
-  .ns-progress-form {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 .ns-datatable {

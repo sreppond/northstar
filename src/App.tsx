@@ -85,8 +85,6 @@ function PlannerShell() {
     duplicatePlan,
     renamePlan,
     deletePlan,
-    setSelected,
-    resetWindow,
     editor,
     stored,
     result,
@@ -152,8 +150,6 @@ function PlannerShell() {
           activePlanId={planId}
           onSelectPlan={(id) => {
             setActive(id);
-            setSelected(null);
-            resetWindow();
             editor.close();
           }}
           onCreatePlan={() => createPlan(`Scenario ${visiblePlans.length + 1}`)}
@@ -274,7 +270,6 @@ function PlannerShell() {
         onCancel={editor.close}
         onDelete={() => {
           if (editor.draft) deleteEvent(stored.id, editor.draft.id);
-          setSelected(null);
           editor.close();
         }}
       />

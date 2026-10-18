@@ -81,7 +81,7 @@ export function stackSeries(valuesList: number[][]): { bases: number[][]; tops: 
 /**
  * Y-axis gridline values for the domain `[min, max]` (min ≤ 0 ≤ max in
  * practice — every chart here anchors at zero). Positive ticks come from
- * chartMath's `niceAxisTicks`, so the chart and NetWorthChart agree on what
+ * chartMath's `niceAxisTicks`, so every chart agrees on what
  * a nice gridline is; if the domain dips below zero, ticks continue at the
  * same step down to `min`.
  */

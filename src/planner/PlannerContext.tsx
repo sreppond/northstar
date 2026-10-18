@@ -91,13 +91,6 @@ export interface PlannerContextValue {
   setChartRange(range: ChartRangeKey): void;
   /** Does the plan run out of money, and the spendable-money series (docs/REDESIGN-V5.md §4.2). */
   health: PlanHealth;
-  /**
-   * Inert shims: the old chart-selection and year-pager state is gone
-   * (V5-REVIEW-1 D1), but `App.tsx` (unit U4's file) still calls both when
-   * the active plan changes. Delete these two lines and those calls together.
-   */
-  setSelected(selection: null): void;
-  resetWindow(): void;
 
   // -- events & accounts --
   upsertEvent: ReturnType<typeof usePlanStore.getState>['upsertEvent'];
@@ -351,8 +344,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     chartRange,
     setChartRange,
     health,
-    setSelected: noop,
-    resetWindow: noop,
 
     upsertEvent,
     deleteEvent,
@@ -397,5 +388,3 @@ function elapsedYearsToHorizon(startYear: number, asOfDate: string | undefined, 
   const endUTC = Date.UTC(endYear, 11, 31);
   return Math.max(0, (endUTC - asOfUTC) / (365.25 * 86_400_000));
 }
-
-function noop() {}

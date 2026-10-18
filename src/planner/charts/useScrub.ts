@@ -5,7 +5,7 @@ import { keyboardYear, nearestIndex } from './seriesMath';
 
 /**
  * The scrub gesture every time chart shares (docs/REDESIGN-V5.md §3.1),
- * lifted from NetWorthChart's `scrubTo` / `handleScrub*` and generalised to
+ * lifted from the old net-worth chart's scrub handlers and generalised to
  * snap to data points, pin a year, and take keyboard input.
  *
  * - Pointer-DOWN sets hover immediately (apple-design §1: respond on press).
