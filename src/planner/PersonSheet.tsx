@@ -21,6 +21,7 @@ import {
 } from './kids';
 import { addAdult, kidStages } from './timeline';
 import { WorkPhasesEditor } from './drawer/JobSchedules';
+import { KidStagesEditor } from './KidStagesEditor';
 import { Choice, Field, NumberInput } from './drawer/fields';
 import './drawer/sheetForm.css';
 import './pages/household.css';
@@ -408,6 +409,9 @@ function ChildSheet({ id, open, onClose }: { id: string; open: boolean; onClose(
           </div>
         )}
 
+        {/* V5-REVIEW-1 F9: the stage choices Family only offered when adding a child. */}
+        <KidStagesEditor childId={id} />
+
         <div className="ns-field">
           <span className="ns-field-label">Monthly cost by age</span>
           <div className="ns-agebars" aria-hidden>
@@ -443,6 +447,8 @@ function NewAdultSheet({ open, onClose }: { open: boolean; onClose(): void }) {
       open={open}
       onClose={onClose}
       title="Add a person"
+      compact
+      width={400}
       footer={
         <div className="ns-sheet-actions">
           <div className="ns-sheet-actions-right">

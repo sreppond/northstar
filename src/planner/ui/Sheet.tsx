@@ -56,6 +56,10 @@ export interface SheetProps {
   /** The id of the element that names the dialog, when `header` supplies a
       heading of its own. Defaults to the built-in title. */
   labelledBy?: string;
+  /** Content-height instead of full-height (V5-REVIEW-1 F26): a floating card
+      inset from the right edge on desktop, a bottom sheet that stops at its
+      content on phones. For a form of a couple of fields. */
+  compact?: boolean;
 }
 
 const DEFAULT_WIDTH = 'min(600px, 100vw)';
@@ -197,6 +201,7 @@ function SheetLayer({
   footer,
   width,
   labelledBy,
+  compact,
   depth,
   isTop,
 }: SheetProps & { depth: number; isTop: boolean }) {
@@ -300,6 +305,17 @@ function SheetLayer({
   // summed in a calc() rather than in a derived value.
   const moveX = useMotionTemplate`calc(${pos}px + ${shift}px) 0px`;
   const moveY = useMotionTemplate`0px calc(${pos}px + ${shift}px)`;
+  // V5-REVIEW-1 F14: under reduced motion the enter/exit stays a fade (`pos`
+  // is not bound to the translate), but direct 1:1 tracking of the finger is
+  // not vestibular motion. `grab` carries only the drag offset, so the panel
+  // still follows the pointer and a release past the threshold fades out from
+  // where it was let go.
+  const grab = useMotionValue(0);
+  const grabX = useMotionTemplate`${grab}px 0px`;
+  const grabY = useMotionTemplate`0px ${grab}px`;
+  /** The value a drag moves: the whole position normally, just the grab offset
+      under reduced motion. */
+  const track = reduce ? grab : pos;
 
   // Focus moves into the sheet (the trigger is restored by `Sheet`).
   useEffect(() => {
@@ -374,7 +390,7 @@ function SheetLayer({
   const axisOf = (e: { clientX: number; clientY: number }) => (phone ? e.clientY : e.clientX);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
-    if (reduce || !isTop || !isPresent) return;
+    if (!isTop || !isPresent) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const target = e.target as Element;
     const panel = e.currentTarget;
@@ -418,13 +434,13 @@ function SheetLayer({
       }
       anim.current?.stop();
       d.started = true;
-      d.base = pos.get();
+      d.base = track.get();
       d.origin = axisOf(e);
       e.currentTarget.setPointerCapture(e.pointerId);
       e.currentTarget.classList.add('ns-sheet-dragging');
     }
     const p = axisOf(e);
-    pos.set(resistedOffset(d.base + (p - d.origin), travel.current));
+    track.set(resistedOffset(d.base + (p - d.origin), travel.current));
     d.samples.push({ t: e.timeStamp, p });
     if (d.samples.length > 8) d.samples.shift();
   };
@@ -436,10 +452,14 @@ function SheetLayer({
     if (!d.started) return;
     e.currentTarget.classList.remove('ns-sheet-dragging');
     const v = e.type === 'pointercancel' ? 0 : releaseVelocity(d.samples, e.timeStamp);
-    if (shouldDismiss(pos.get(), v, travel.current)) {
-      // Close: the exit effect springs from here at the finger's speed.
+    if (shouldDismiss(track.get(), v, travel.current)) {
+      // Close: the exit effect springs from here at the finger's speed. Under
+      // reduced motion `grab` stays where it was released and the sheet fades.
       handoff.current = v;
       onCloseRef.current();
+    } else if (reduce) {
+      anim.current?.stop();
+      anim.current = animate(grab, 0, FADE);
     } else {
       run(0, v);
     }
@@ -452,7 +472,7 @@ function SheetLayer({
       : { 'aria-labelledby': titleId };
 
   const style = {
-    ...(reduce ? {} : { translate: phone ? moveY : moveX }),
+    translate: reduce ? (phone ? grabY : grabX) : phone ? moveY : moveX,
     scale: reduce ? 1 : pushScale,
     opacity: reduce ? progress : fade,
     ...(reduceTransparency ? {} : { backdropFilter: blur, WebkitBackdropFilter: blur }),
@@ -475,7 +495,7 @@ function SheetLayer({
       />
       <motion.aside
         ref={panelRef}
-        className={`ns-sheet ${phone ? 'ns-sheet-bottom' : 'ns-sheet-side'}`}
+        className={`ns-sheet ${phone ? 'ns-sheet-bottom' : 'ns-sheet-side'}${compact ? ' ns-sheet-compact' : ''}`}
         role="dialog"
         aria-modal="true"
         {...labelAttrs}

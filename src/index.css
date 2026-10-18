@@ -31,7 +31,11 @@ body {
    it on `body` alone leaves `<html>` free to keep growing. */
 html,
 body {
-  overflow-x: hidden;
+  /* V5-REVIEW-1 F4: `clip`, not `hidden`. `hidden` makes html/body scroll
+     containers, so the rail's `position: sticky` binds to a box that never
+     scrolls and the nav scrolls away on every long page. `clip` stops the
+     sideways growth without creating a scroll container. */
+  overflow-x: clip;
 }
 
 button {

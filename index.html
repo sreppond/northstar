@@ -13,6 +13,16 @@
     <meta name="apple-mobile-web-app-title" content="Northstar" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Northstar Forecast</title>
+    <!-- V5-REVIEW-1 F20: stamp the chosen theme before first paint, so an
+         OS/app mismatch never flashes the wrong theme while the bundle loads.
+         Same key and values as ThemeToggle.tsx; an un-chosen theme stamps
+         nothing and the media query follows the OS. -->
+    <script>
+      try {
+        var t = localStorage.getItem('northstar:theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

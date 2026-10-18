@@ -122,25 +122,25 @@ export function Onboarding({ onBegin, onFinish }: { onBegin(): void; onFinish():
         </div>
       </div>
 
-      {editor.open && (
-        <EventDrawer
-          draft={editor.draft}
-          allEvents={plan.events}
-          participants={plan.participants}
-          accounts={plan.accounts}
-          planStartYear={plan.settings.startYear}
-          planEndYear={planEndYear}
-          isNew={editor.isNew}
-          onChange={editor.change}
-          onPickKind={(kind) => editor.pickKind(kind, plan)}
-          onSave={() => {
-            if (editor.draft) upsertEvent(plan.id, editor.draft);
-            editor.close();
-          }}
-          onCancel={editor.close}
-          onDelete={editor.close}
+      {/* Always mounted so the sheet can play its exit (V5-REVIEW-1 F13). */}
+      <EventDrawer
+        open={editor.open}
+        draft={editor.draft}
+        allEvents={plan.events}
+        participants={plan.participants}
+        accounts={plan.accounts}
+        planStartYear={plan.settings.startYear}
+        planEndYear={planEndYear}
+        isNew={editor.isNew}
+        onChange={editor.change}
+        onPickKind={(kind) => editor.pickKind(kind, plan)}
+        onSave={() => {
+          if (editor.draft) upsertEvent(plan.id, editor.draft);
+          editor.close();
+        }}
+        onCancel={editor.close}
+        onDelete={editor.close}
         />
-      )}
 
       {accountDraft && (
         <AccountDrawer
