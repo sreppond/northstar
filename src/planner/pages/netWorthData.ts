@@ -16,7 +16,7 @@ import type {
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engine';
 import { monthsIn } from '../budgetView';
 import type { ChartMarker, DangerBand } from '../charts';
-import type { PlanHealth } from '../health';
+import { healthDangerBand, type PlanHealth } from '../health';
 import { classBalances } from '../ledger';
 import { toneFor } from '../presentation';
 import { spendingGroups, type GroupKey, type SpendingGroup } from '../spendingGroups';
@@ -33,11 +33,10 @@ export function agesLabel(plan: Plan, snapshot: YearSnapshot | undefined): strin
   return parts.length ? parts.join(' · ') : undefined;
 }
 
-/** The hatched shortfall band (docs/REDESIGN-V5.md §4.2.4) for any chart over `result`'s years. */
+/** The hatched shortfall band (docs/REDESIGN-V5.md §4.2.4) for any chart over `result`'s years.
+    Delegates to `healthDangerBand` so every page hatches only the short years (V5-REVIEW-1 F2). */
 export function dangerBand(health: PlanHealth, result: PlanResult): DangerBand | undefined {
-  if (health.status !== 'short' || health.firstShortYear === undefined) return undefined;
-  const byYear = new Map(result.years.map((y) => [y.year, y.unfundedShortfall]));
-  return { from: health.firstShortYear, shortFor: (year) => byYear.get(year) };
+  return healthDangerBand(health, result);
 }
 
 /** Event ticks on the baseline: not draggable here, dragging moved to Timeline (§5.1.1). */

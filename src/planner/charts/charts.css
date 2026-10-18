@@ -249,18 +249,35 @@
   opacity: 0.4;
 }
 
-.ns-tsc-marker {
+/* V5-REVIEW-1 F18: a 12px tick under a 5px tone dot (was an 8px tick). A
+   surface-coloured halo sits under both so they stay legible on top of the
+   danger hatch. */
+.ns-tsc-marker-halo {
+  stroke: var(--surface);
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.ns-tsc-marker-tick {
+  stroke: var(--marker, var(--muted-light));
   stroke-width: 2.5;
   stroke-linecap: round;
+  paint-order: stroke;
+}
+.ns-tsc-marker-dot {
+  fill: var(--marker, var(--muted-light));
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  paint-order: stroke;
 }
 .ns-tsc-marker-income {
-  stroke: var(--in);
+  --marker: var(--in);
 }
 .ns-tsc-marker-cost {
-  stroke: var(--out);
+  --marker: var(--out);
 }
 .ns-tsc-marker-neutral {
-  stroke: var(--muted-light);
+  --marker: var(--muted-light);
 }
 
 /* Reduced motion swaps the draw-in and the range spring for a short fade.

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   areaPath,
+  dangerRuns,
+  inDanger,
   keyboardYear,
   linePath,
   monotoneCommands,
@@ -119,5 +121,49 @@ describe('monotone paths', () => {
     expect(d.endsWith('Z')).toBe(true);
     expect(d).toContain('L20.0,50.0');
     expect(areaPath([0, 10, 20], [10, NaN, 0], [50, 50, 50])).toBe('');
+  });
+});
+
+describe('dangerRuns / inDanger (V5-REVIEW-1 F2)', () => {
+  it('splits years into one run per contiguous stretch', () => {
+    expect(dangerRuns({ from: 2031, years: [2031, 2032, 2033, 2040, 2041, 2050] }, 2091)).toEqual([
+      { from: 2031, to: 2033 },
+      { from: 2040, to: 2041 },
+      { from: 2050, to: 2050 },
+    ]);
+  });
+  it('falls back to from..to (or the last year) without years', () => {
+    expect(dangerRuns({ from: 2031 }, 2091)).toEqual([{ from: 2031, to: 2091 }]);
+    expect(dangerRuns({ from: 2031, to: 2035 }, 2091)).toEqual([{ from: 2031, to: 2035 }]);
+  });
+  it('treats only member years as short', () => {
+    const band = { from: 2031, years: [2031, 2032, 2040] };
+    expect(inDanger(band, 2032)).toBe(true);
+    expect(inDanger(band, 2036)).toBe(false);
+    expect(inDanger(band, 2091)).toBe(false);
+    expect(inDanger({ from: 2031 }, 2091)).toBe(true);
+  });
+});
+
+describe('pickXTicks on round years (V5-REVIEW-1 F19)', () => {
+  const cands = (from: number, to: number, px: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => ({
+      x: (i * px) / (to - from),
+      label: String(from + i),
+      value: from + i,
+    }));
+
+  it('lands on multiples of 10 over a long plan, with the first year as the anchor', () => {
+    const c = cands(2026, 2091, 900);
+    const years = pickXTicks(c, 900).map((i) => c[i].value!);
+    expect(years[0]).toBe(2026);
+    for (const y of years.slice(1)) expect(y % 10).toBe(0);
+    expect(years.length).toBeGreaterThanOrEqual(4);
+  });
+  it('uses 5s on a mid-length window and keeps ticks apart', () => {
+    const c = cands(2026, 2046, 700);
+    const picked = pickXTicks(c, 700);
+    for (const i of picked.slice(1)) expect(c[i].value! % 5).toBe(0);
+    for (let k = 1; k < picked.length; k++) expect(c[picked[k]].x - c[picked[k - 1]].x).toBeGreaterThanOrEqual(42);
   });
 });

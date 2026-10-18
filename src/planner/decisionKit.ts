@@ -7,7 +7,7 @@
 import type { Plan, PlanResult } from '@northstar/engine';
 import type { DangerBand } from './charts';
 import { useBreakpoint } from './useBreakpoint';
-import type { PlanHealth } from './health';
+import { healthDangerBand, type PlanHealth } from './health';
 
 /** "Spencer 40 · Sarah 40" for a year, from the engine's own per-year ages. */
 export function agesLineFor(plan: Pick<Plan, 'participants'>, result: PlanResult): (year: number) => string | undefined {
@@ -21,11 +21,10 @@ export function agesLineFor(plan: Pick<Plan, 'participants'>, result: PlanResult
   };
 }
 
-/** The hatched shortfall band for a chart, or none when the plan pays its bills (§4.2.4). */
+/** The hatched shortfall band for a chart, or none when the plan pays its bills (§4.2.4).
+    Delegates to `healthDangerBand` (V5-REVIEW-1 F2): only the short years are hatched. */
 export function dangerBandFor(health: PlanHealth, result: PlanResult): DangerBand | undefined {
-  if (health.status !== 'short' || health.firstShortYear === undefined) return undefined;
-  const byYear = new Map(result.years.map((y) => [y.year, y.unfundedShortfall]));
-  return { from: health.firstShortYear, shortFor: (year) => byYear.get(year) };
+  return healthDangerBand(health, result);
 }
 
 /** A hero chart is 420px on a desktop and 280px on a phone (docs/REDESIGN-V5.md §1.1). */

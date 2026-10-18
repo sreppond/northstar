@@ -13,6 +13,30 @@
  */
 import { isWithdrawable, mandatoryEndYear, pathMarkers } from '@northstar/engine';
 import type { Account, AccountClass, AccountYear, Plan, PlanResult, YearSnapshot } from '@northstar/engine';
+import type { DangerBand } from './charts/types';
+
+/**
+ * Why money that exists is not being spent (V5-REVIEW-1 F6). Checked in this
+ * order, first match wins:
+ *  - `never`: the account's `withdrawalTiming` is `'never'`, or it is
+ *    `'starting_year'` and that year has not arrived. The timing gate is shut.
+ *  - `noRule`: no withdrawal priority rule names the account (or the plan
+ *    doesn't list it), so the engine never draws on it whatever its timing.
+ *  - `sepp`: inside a committed SEPP window; the SEPP pays out as income and
+ *    ordinary withdrawals stay off the account.
+ *  - `penalty`: the owner is under `penaltyFreeAge`, so a draw would owe the
+ *    early-withdrawal penalty and the plan treats it as not spendable.
+ */
+export type StrandedReason = 'never' | 'noRule' | 'sepp' | 'penalty';
+
+/** One account holding a balance the plan will not spend (see `PlanHealth.stranded`). */
+export interface StrandedAccount {
+  accountId: string;
+  accountClass: AccountClass;
+  /** Year-end balance at `firstShortYear`, in the result's own dollar mode. */
+  balance: number;
+  reason: StrandedReason;
+}
 
 export interface PlanHealth {
   status: 'ok' | 'short';
@@ -23,6 +47,18 @@ export interface PlanHealth {
   unfundedTotal: number;
   /** Per year (parallel to `result.years`): the year-end balance that could be spent. */
   spendable: number[];
+  /**
+   * PUBLIC CONTRACT (V5-REVIEW-1 F6, consumed by PlanHealthAlert and the pages):
+   * the accounts that still hold money at `firstShortYear` but that the plan
+   * cannot spend, with the reason, largest balance first. It is what separates
+   * "the plan really runs out" from "the plan runs dry while $876K sits in a
+   * 401(k) set to never withdraw", a settings artefact the user can fix.
+   * Empty when the plan is fine, or when `planHealth` was called without the
+   * plan (the withdrawal settings live there, not on the result).
+   * Only spendable-capable classes appear (cash, brokerage, tax-deferred,
+   * tax-free, variable annuity); home equity and the like are not "stranded".
+   */
+  stranded: StrandedAccount[];
   /**
    * Identifies this particular failure so a dismissed alert stays dismissed
    * until it changes (docs/REDESIGN-V5.md §4.3): `${firstShortYear}:${unfundedTotal
@@ -103,12 +139,55 @@ export function planHealth(result: PlanResult, plan?: Plan): PlanHealth {
     shortYears,
     unfundedTotal,
     spendable,
+    stranded: plan && gate && firstShortYear !== undefined ? strandedAt(result, gate, firstShortYear) : [],
     signature:
       firstShortYear === undefined ? 'ok' : `${firstShortYear}:${Math.round(unfundedTotal / 1000) * 1000}`,
   };
 }
 
+/**
+ * PUBLIC CONTRACT (V5-REVIEW-1 F2): the `danger` prop for every `TimeSeriesChart`
+ * on the danger path. Built from `health.shortYears`, so the hatch covers each
+ * contiguous run of short years (a plan that runs dry, recovers and runs dry
+ * again gets two bands) and the readout's red "Short" pill shows only inside
+ * them. Pages must use this rather than `{ from: health.firstShortYear }`,
+ * which hatches everything after the first short year.
+ *
+ * `perUnit` divides the Short amount for pages that show per-month figures
+ * (pass 12) so the pill uses the page's unit; pair it with
+ * `ChartReadout`'s `shortUnit` suffix (F10). Undefined when the plan is fine.
+ */
+export function healthDangerBand(health: PlanHealth, result: PlanResult, perUnit = 1): DangerBand | undefined {
+  if (health.status !== 'short' || health.firstShortYear === undefined) return undefined;
+  const byYear = new Map(result.years.map((y) => [y.year, y.unfundedShortfall]));
+  return {
+    from: health.firstShortYear,
+    to: health.shortYears[health.shortYears.length - 1],
+    years: health.shortYears,
+    shortFor: (year) => {
+      const v = byYear.get(year);
+      return v === undefined ? undefined : v / perUnit;
+    },
+  };
+}
+
 type Gate = (account: Account, year: number, ages: YearSnapshot['ages']) => boolean;
+type BlockReason = (account: Account, year: number, ages: YearSnapshot['ages']) => StrandedReason | null;
+
+function strandedAt(result: PlanResult, gate: ReturnType<typeof spendableGate>, year: number): StrandedAccount[] {
+  const snapshot = result.years.find((y) => y.year === year);
+  if (!snapshot) return [];
+  const out: StrandedAccount[] = [];
+  for (const row of snapshot.accounts) {
+    if (row.isLiability || !SPENDABLE_CLASS[row.accountClass] || !(row.close > 0)) continue;
+    const account = gate.accounts.get(row.accountId);
+    // Accounts an event created (the home) aren't the user's to unlock.
+    if (!account) continue;
+    const reason = gate.blockReason(account, snapshot.year, snapshot.ages);
+    if (reason) out.push({ accountId: row.accountId, accountClass: row.accountClass, balance: row.close, reason });
+  }
+  return out.sort((a, b) => b.balance - a.balance);
+}
 
 function isSpendable(row: AccountYear, snapshot: YearSnapshot, gate: ReturnType<typeof spendableGate> | undefined): boolean {
   if (row.isLiability || !SPENDABLE_CLASS[row.accountClass]) return false;
@@ -119,7 +198,7 @@ function isSpendable(row: AccountYear, snapshot: YearSnapshot, gate: ReturnType<
   return account !== undefined && gate.check(account, snapshot.year, snapshot.ages);
 }
 
-function spendableGate(plan: Plan): { accounts: Map<string, Account>; check: Gate } {
+function spendableGate(plan: Plan): { accounts: Map<string, Account>; check: Gate; blockReason: BlockReason } {
   const accounts = new Map(plan.accounts.map((a) => [a.id, a]));
   const ruled = new Set(plan.rules.filter((r) => r.ruleType === 'withdrawal').map((r) => r.accountId));
   // Same fallback owner the engine uses for an account with none: the oldest
@@ -131,8 +210,9 @@ function spendableGate(plan: Plan): { accounts: Map<string, Account>; check: Gat
       undefined,
     );
 
-  const check: Gate = (account, year, ages) => {
-    if (!ruled.has(account.id) || !isWithdrawable(account, year)) return false;
+  const blockReason: BlockReason = (account, year, ages) => {
+    if (!isWithdrawable(account, year)) return 'never';
+    if (!ruled.has(account.id)) return 'noRule';
 
     const ownerId = account.ownerParticipantId ?? oldestAdult?.id;
     const owner = ownerId ? plan.participants.find((p) => p.id === ownerId) : undefined;
@@ -140,7 +220,7 @@ function spendableGate(plan: Plan): { accounts: Map<string, Account>; check: Gat
 
     const sepp = account.seppElection;
     if (sepp && owner && year >= sepp.startYear && year <= mandatoryEndYear(sepp.startYear, owner.birthYear)) {
-      return false;
+      return 'sepp';
     }
 
     // Mirrors tax.ts's `penaltyApplies` (private there): an unknown age or an
@@ -150,8 +230,12 @@ function spendableGate(plan: Plan): { accounts: Map<string, Account>; check: Gat
       account.penaltyFreeAge !== undefined &&
       age !== undefined &&
       age < account.penaltyFreeAge;
-    return !penalised;
+    return penalised ? 'penalty' : null;
   };
 
-  return { accounts, check };
+  // `isSpendable` and the stranded list share the one rule set above, so they
+  // can't disagree about which accounts count.
+  const check: Gate = (account, year, ages) => blockReason(account, year, ages) === null;
+
+  return { accounts, check, blockReason };
 }

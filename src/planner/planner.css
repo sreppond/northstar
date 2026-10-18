@@ -1403,24 +1403,23 @@ html.ns-tauri .ns-drag-strip {
   color: var(--muted);
 }
 
-/* Each character replays this on mount — remounted by AnimatedFigure via a
-   changing `key` whenever the formatted string actually changes, not on
-   every re-render. A per-character delay (set inline) turns it into a roll
-   rather than a single flat fade. */
+/* V5-REVIEW-1 F1: figures are read WHILE the pointer scrubs, so they never
+   blur, slide or stagger. AnimatedFigure adds `-fade` only when a value
+   settles after a pause (a pin, a range or series switch, a plan edit); the
+   fade is opacity alone, short, from a still-legible 0.4. During a scrub the
+   class is absent and opacity stays 1. */
 .ns-figure-char {
   display: inline-block;
-  animation: ns-figure-in 420ms var(--ease-soft) both;
+}
+.ns-figure-char-fade {
+  animation: ns-figure-in 140ms var(--ease-soft) both;
 }
 @keyframes ns-figure-in {
   from {
-    opacity: 0;
-    transform: translateY(0.14em);
-    filter: blur(6px);
+    opacity: 0.4;
   }
   to {
     opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
   }
 }
 

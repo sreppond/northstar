@@ -7,6 +7,7 @@
  */
 import { niceAxisTicks } from '../chartMath';
 import { axisMoney } from '../format';
+import type { DangerBand } from './types';
 
 /** `axisMoney`, but 3 significant figures on the M-scale — used only for the
     y-axis' real-data-ceiling tick, which already sits close to the nice tick
@@ -99,6 +100,63 @@ export interface TickCandidate {
       layout, so labels don't flicker while the domain springs). */
   x: number;
   label: string;
+  /** The x-axis value itself (a calendar year). When every candidate carries
+      an integer one, ticks land on round steps (5s, 10s) instead of every
+      Nth year from the start (V5-REVIEW-1 F19). */
+  value?: number;
+}
+
+const NICE_STRIDES = [1, 2, 5, 10, 20, 25, 50, 100];
+
+/** Picks ticks on multiples of a round stride, plus the first (the "Today"
+    anchor) when there is room beside the next tick. Null when the candidates
+    don't qualify (no values, or fractional ones), so the caller falls back. */
+function pickNiceXTicks(candidates: TickCandidate[], target: number, minGap: number): number[] | null {
+  const n = candidates.length;
+  if (n < 3 || candidates.some((c) => c.value === undefined || !Number.isInteger(c.value))) return null;
+  const first = candidates[0].value!;
+  const last = candidates[n - 1].value!;
+  const raw = (last - first) / Math.max(1, target - 1);
+  const stride = NICE_STRIDES.find((s) => s >= raw) ?? NICE_STRIDES[NICE_STRIDES.length - 1];
+  const picked: number[] = [];
+  for (let i = 1; i < n; i++) {
+    if (candidates[i].value! % stride !== 0) continue;
+    const prev = picked[picked.length - 1];
+    if (prev !== undefined && candidates[i].x - candidates[prev].x < minGap) continue;
+    if (prev !== undefined && candidates[prev].label === candidates[i].label) continue;
+    picked.push(i);
+  }
+  if (picked.length === 0) return null;
+  // The anchor: kept only if it doesn't crowd the first round tick.
+  if (candidates[0].value! % stride === 0 || candidates[picked[0]].x - candidates[0].x >= minGap) {
+    picked.unshift(0);
+  }
+  return picked;
+}
+
+/** The contiguous stretches of a danger band, ascending: `years` split where
+    a gap is wider than one `step`, or the single `from..to` stretch when the
+    band has no `years` (V5-REVIEW-1 F2). */
+export function dangerRuns(
+  danger: Pick<DangerBand, 'from' | 'to' | 'years'>,
+  lastYear: number,
+  step = 1,
+): { from: number; to: number }[] {
+  const years = danger.years;
+  if (!years) return [{ from: danger.from, to: danger.to ?? lastYear }];
+  const runs: { from: number; to: number }[] = [];
+  for (const y of [...years].sort((a, b) => a - b)) {
+    const last = runs[runs.length - 1];
+    if (last && y - last.to <= step + 1e-9) last.to = y;
+    else runs.push({ from: y, to: y });
+  }
+  return runs;
+}
+
+/** Whether `year` is a short year of the band. */
+export function inDanger(danger: Pick<DangerBand, 'from' | 'to' | 'years'>, year: number): boolean {
+  if (danger.years) return danger.years.some((y) => Math.abs(y - year) < 1e-9);
+  return year >= danger.from - 1e-9 && year <= (danger.to ?? Infinity) + 1e-9;
 }
 
 /**
@@ -113,6 +171,8 @@ export function pickXTicks(candidates: TickCandidate[], plotWidth: number, minGa
   const n = candidates.length;
   if (n === 0) return [];
   const target = Math.max(2, Math.min(7, Math.floor(plotWidth / 70)));
+  const nice = pickNiceXTicks(candidates, target, minGap);
+  if (nice) return nice;
   const every = Math.max(1, Math.round(n / target));
   const picked: number[] = [];
   for (let i = 0; i < n; i++) {

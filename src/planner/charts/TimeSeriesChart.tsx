@@ -4,6 +4,8 @@ import { ChartReadout, type ReadoutItem } from './ChartReadout';
 import { rangeWindow, type RangeKey } from './range';
 import {
   areaPath,
+  dangerRuns,
+  inDanger,
   linePath,
   pickXTicks,
   stackSeries,
@@ -310,7 +312,7 @@ export function TimeSeriesChart({
   const xTickIdx = useMemo(
     () =>
       pickXTicks(
-        visYears.map((y) => ({ x: xForTarget(y), label: formatX(y) })),
+        visYears.map((y) => ({ x: xForTarget(y), label: formatX(y), value: y })),
         R - L,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -358,8 +360,8 @@ export function TimeSeriesChart({
       }
     }
 
-    const dTo = danger ? (danger.to ?? Infinity) : 0;
-    const isShort = !!danger && readoutYear! >= danger.from - 1e-9 && readoutYear! <= dTo + 1e-9;
+    // V5-REVIEW-1 F2: membership in the short years, not "after the first".
+    const isShort = !!danger && inDanger(danger, readoutYear!);
     const shortAmt = isShort ? danger!.shortFor?.(readoutYear!) : undefined;
     const label = spec.label ?? (primaryRes ? primaryRes.s.label : 'Total');
     readoutNode = (
@@ -380,12 +382,25 @@ export function TimeSeriesChart({
 
   // --- danger, markers, chips ---------------------------------------------
   const lastYear = years[years.length - 1];
-  const dFrom = danger?.from ?? 0;
-  const dTo = danger ? (danger.to ?? lastYear) : 0;
-  const dangerIn = !!danger && dTo >= win.from - 1e-9 && dFrom <= win.to + 1e-9;
-  const dangerOffRight = !!danger && dFrom > win.to + 1e-9;
-  const dangerLeft = danger ? Math.max(L, xFor(dFrom - step / 2)) : 0;
-  const dangerRight = danger ? Math.min(R, xFor(dTo + step / 2)) : 0;
+  // One rect per contiguous run of short years (V5-REVIEW-1 F2): a plan that
+  // runs dry, recovers and runs dry again is hatched only where it is short.
+  const runs = danger ? dangerRuns(danger, lastYear, step) : [];
+  const dangerRects = runs
+    .filter((r) => r.to >= win.from - 1e-9 && r.from <= win.to + 1e-9)
+    .map((r) => ({
+      run: r,
+      left: Math.max(L, xFor(r.from - step / 2)),
+      right: Math.min(R, xFor(r.to + step / 2)),
+    }))
+    .filter((r) => r.right > r.left);
+  const dangerIn = dangerRects.length > 0;
+  // The chip names the first run in view, so it still has a home after the
+  // range window scrolls past the opening one.
+  const chipRun = dangerRects[0];
+  const dFrom = chipRun ? chipRun.run.from : (runs[0]?.from ?? 0);
+  const dangerOffRight = !!danger && !dangerIn && runs.length > 0 && runs[0].from > win.to + 1e-9;
+  const dangerLeft = chipRun ? chipRun.left : 0;
+  const dangerRight = chipRun ? chipRun.right : 0;
   const dangerLabel = danger ? `${danger.label ?? 'Runs dry'}` : '';
   // The chip is HTML, so its width isn't known here; estimate it from its
   // text. Full wording when it fits inside the band, just the year on a
@@ -541,15 +556,17 @@ export function TimeSeriesChart({
 
           <g key={plotFadeKey} className={reduced ? 'ns-tsc-fade' : undefined}>
             <g clipPath={`url(#${idClip})`}>
-              {dangerIn && dangerRight > dangerLeft && (
+              {dangerRects.map((r) => (
                 <rect
-                  x={dangerLeft}
+                  key={`danger-${r.run.from}`}
+                  className="ns-tsc-danger-run"
+                  x={r.left}
                   y={TOP}
-                  width={dangerRight - dangerLeft}
+                  width={r.right - r.left}
                   height={B - TOP}
                   fill={`url(#${idHatch})`}
                 />
-              )}
+              ))}
 
               {geo.map(({ r, area }, i) =>
                 area ? (
@@ -647,15 +664,16 @@ export function TimeSeriesChart({
 
               {markers?.map((m, i) => {
                 if (m.year < x0 - 1e-9 || m.year > x1 + 1e-9) return null;
+                // V5-REVIEW-1 F18: a 12px tick topped by a 5px tone dot. The
+                // surface-coloured halo (charts.css) keeps it readable where
+                // it crosses the danger hatch.
+                const mx = xFor(m.year);
                 return (
-                  <line
-                    key={`m-${i}`}
-                    x1={xFor(m.year)}
-                    x2={xFor(m.year)}
-                    y1={B}
-                    y2={B - 8}
-                    className={`ns-tsc-marker ns-tsc-marker-${m.tone}`}
-                  />
+                  <g key={`m-${i}`} className={`ns-tsc-marker ns-tsc-marker-${m.tone}`}>
+                    <line x1={mx} x2={mx} y1={B} y2={B - 12} className="ns-tsc-marker-halo" />
+                    <line x1={mx} x2={mx} y1={B} y2={B - 12} className="ns-tsc-marker-tick" />
+                    <circle cx={mx} cy={B - 12} r={2.5} className="ns-tsc-marker-dot" />
+                  </g>
                 );
               })}
             </g>

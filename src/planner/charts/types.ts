@@ -70,8 +70,16 @@ export interface ChartBand {
 export interface DangerBand {
   /** First short year. */
   from: number;
-  /** Last short year; defaults to the chart's last year. */
+  /** Last short year; defaults to the chart's last year. Superseded by
+      `years` whenever that is given. */
   to?: number;
+  /** Every short year, ascending (V5-REVIEW-1 F2). A plan can run dry, recover
+      and run dry again, so the band is the set of years, not `from..to`:
+      each contiguous run is hatched as its own rect (the chip sits on the
+      first), and the readout's red "Short" pill appears only for members.
+      Build it with `healthDangerBand` (planner/health.ts). Without it the
+      band is the single stretch `from..to`, the pre-F2 behaviour. */
+  years?: number[];
   /** Chip text, default "Runs dry". The year is appended. */
   label?: string;
   /** The unfunded amount in a given year, for the readout's red
