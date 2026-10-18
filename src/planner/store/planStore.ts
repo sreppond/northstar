@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import type { Account, Goal, Plan, PlanEvent } from '@northstar/engine';
 import { DEFAULT_HORIZON_AGE, mergeGoalRules, planEndYear } from '@northstar/engine';
 import { SAMPLE_PLANS } from '../samplePlan';
-import type { ProgressPoint } from '../progress';
 import { toast } from '../ui/Toast';
 import { backupPlans } from '../monarchLocal';
 
@@ -22,6 +21,25 @@ import { backupPlans } from '../monarchLocal';
  * Every toast's Undo calls straight back into this store's own `undo()`
  * rather than needing a callback threaded in from React.
  */
+
+/**
+ * A user-entered historical net-worth reading (an import's snapshot totals).
+ * The Progress page is gone (V5-REVIEW-1 D1), but the store still persists
+ * these under `PROGRESS_STORAGE_KEY` so saved data keeps loading. Nothing in
+ * the engine reads them.
+ */
+export interface ProgressPoint {
+  id: string;
+  /** ISO date, `YYYY-MM-DD`. */
+  date: string;
+  netWorth: number;
+  assets: number;
+  liabilities: number;
+}
+
+export function newProgressId(): string {
+  return `pp-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export const STORAGE_KEY = 'northstar:plans:v1';
 export const PROGRESS_STORAGE_KEY = 'northstar:progress:v1';

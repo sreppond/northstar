@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { usePlanner } from '../PlannerContext';
-import { MiniChart } from '../views/MiniChart';
+import { ChartReadout, RangePicker, TimeSeriesChart, type ReadoutItem } from '../charts';
 import { Cell, type CellMagnitude } from '../tabs/DataTable';
 import { money, percent, planMetaLine, tableMoney, tablePercent } from '../format';
 import { stubYearLabel } from '../ledger';
+import { agesLabel, dangerBand } from './netWorthData';
 import {
   buildExploreRows,
   downloadTextFile,
@@ -12,7 +13,7 @@ import {
   exploreRowsToJson,
   type ExploreRow,
 } from '../reports';
-import { Page, PageHeader, SectionCard, Segmented, Stat, StatStrip } from '../ui';
+import { Page, PageHeader, SectionCard, Segmented } from '../ui';
 
 /** Expense-shaped columns get the "money out" hue; everything else (net
     worth, income, contributions, savings rate) reads as "money in" — the
@@ -48,13 +49,16 @@ const PLOT_DEFINITIONS: { key: keyof ExploreRow; label: string; color: string }[
  * differently depending on what's selected or scrubbed elsewhere.
  */
 export function ReportsPage() {
-  const { plan, result, stored } = usePlanner();
+  const { plan, result, stored, health, focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
   const [tab, setTab] = useState<ReportsTab>('explore');
 
   const rows = useMemo(() => buildExploreRows(result), [result]);
   const hasPlan = plan.accounts.length > 0 || plan.events.length > 1;
   const stub = stubYearLabel(plan.settings.startYear, plan.settings.startYear, plan.settings.asOfDate);
   const stubYear = plan.settings.startYear;
+  const years = useMemo(() => rows.map((r) => r.year), [rows]);
+  const danger = useMemo(() => dangerBand(health, result), [health, result]);
+  const shortYears = useMemo(() => new Set(health.shortYears), [health.shortYears]);
 
   // Scaled per COLUMN, across every row — the Reports equivalent of
   // DataTable's "scaled per row" rule, just transposed: here a column IS
@@ -81,6 +85,21 @@ export function ReportsPage() {
     );
     return { netWorthAtHorizon, avgContributionRate, totalTaxes, peakWithdrawalRow };
   }, [rows]);
+
+  // The old stat strip's other three figures, as the readout's small row. The
+  // swatch hues follow the table: money in is --in, money out is --out.
+  const summaryItems: ReadoutItem[] = [
+    { id: 'rate', label: 'Avg. contribution rate', color: 'var(--in)', value: percent(summary.avgContributionRate, 0) },
+    { id: 'taxes', label: 'Total taxes', color: 'var(--out)', value: money(summary.totalTaxes) },
+    {
+      id: 'peak',
+      label: 'Peak withdrawal year',
+      color: 'var(--out)',
+      value: summary.peakWithdrawalRow
+        ? `${summary.peakWithdrawalRow.year} · ${money(summary.peakWithdrawalRow.withdrawals)}`
+        : 'None modeled',
+    },
+  ];
 
   function exportCsv() {
     downloadTextFile(`${fileSlug(stored.name)}-explore.csv`, exploreRowsToCsv(rows), 'text/csv');
@@ -117,34 +136,23 @@ export function ReportsPage() {
         </div>
       ) : (
         <>
-          <StatStrip>
-            <Stat
-              size="xl"
+          <section className="ns-rpt-hero" aria-label="Plan totals">
+            <ChartReadout
               label="Net worth at horizon"
               value={money(summary.netWorthAtHorizon)}
-              explain={`Projected net worth in the plan's final modeled year, ${rows.at(-1)?.year ?? result.endYear}.`}
+              yearLabel={String(rows.at(-1)?.year ?? result.endYear)}
+              secondary={summaryItems}
             />
-            <Stat
-              label="Avg. contribution rate"
-              value={percent(summary.avgContributionRate, 0)}
-              explain="Every year's contributions ÷ income, averaged across the whole plan — a different figure than Cash Flow's savings rate, which also nets out withdrawals spent and debt paid down."
-            />
-            <Stat
-              label="Total taxes"
-              value={money(summary.totalTaxes)}
-              explain="Every projected year's income and capital-gains taxes, summed across the whole plan."
-            />
-            <Stat
-              label="Peak withdrawal year"
-              value={summary.peakWithdrawalRow ? String(summary.peakWithdrawalRow.year) : '—'}
-              sub={summary.peakWithdrawalRow ? money(summary.peakWithdrawalRow.withdrawals) : 'None modeled'}
-              explain="The single year with the largest total account withdrawals anywhere in the plan."
-            />
-          </StatStrip>
+          </section>
 
           <SectionCard
             title="Plan by year"
-            actions={<Segmented options={TAB_OPTIONS} value={tab} onChange={(v) => setTab(v as ReportsTab)} size="sm" ariaLabel="View" />}
+            actions={
+              <div className="ns-rpt-actions">
+                {tab === 'plots' && <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} />}
+                <Segmented options={TAB_OPTIONS} value={tab} onChange={(v) => setTab(v as ReportsTab)} size="sm" ariaLabel="View" />
+              </div>
+            }
             flush={tab === 'explore'}
           >
             {tab === 'explore' ? (
@@ -163,11 +171,16 @@ export function ReportsPage() {
                   </thead>
                   <tbody>
                     {rows.map((row) => (
-                      <tr key={row.year}>
+                      <tr key={row.year} className={shortYears.has(row.year) ? 'ns-col-danger' : undefined}>
                         {EXPLORE_COLUMNS.map((col) => {
                           if (col.key === 'year')
                             return (
-                              <td key={col.key}>
+                              <td key={col.key} className={shortYears.has(row.year) ? 'ns-rpt-short-year' : undefined}>
+                                {shortYears.has(row.year) && (
+                                  <span className="ns-year-short" role="img" aria-label="Plan runs short this year">
+                                    ✗
+                                  </span>
+                                )}
                                 {row.year}
                                 {row.year === stubYear && stub && <div className="ns-table-year-sub">{stub.short}</div>}
                               </td>
@@ -194,18 +207,40 @@ export function ReportsPage() {
               </div>
             ) : (
               <div className="ns-plot-grid">
-                {PLOT_DEFINITIONS.map((p) => (
-                  <div className="ns-plot-card" key={p.key}>
-                    <div className="ns-section-title">{p.label}</div>
-                    <MiniChart
-                      height={150}
-                      years={rows.map((r) => r.year)}
-                      series={[{ label: p.label, color: p.color, values: rows.map((r) => r[p.key] as number) }]}
-                      formatY={p.key === 'contributionRatePercent' ? (v) => `${Math.round(v)}%` : undefined}
-                      stubYear={stub ? { year: stubYear, label: stub.short } : undefined}
-                    />
-                  </div>
-                ))}
+                {PLOT_DEFINITIONS.map((p) => {
+                  const percentFormat = p.key === 'contributionRatePercent';
+                  return (
+                    <div className="ns-plot-card" key={p.key}>
+                      <TimeSeriesChart
+                        years={years}
+                        series={[
+                          {
+                            id: p.key,
+                            label: p.label,
+                            color: p.color,
+                            kind: 'area',
+                            values: rows.map((r) => r[p.key] as number),
+                          },
+                        ]}
+                        range={chartRange}
+                        todayYear={result.startYear}
+                        height={190}
+                        focusYear={focusYear}
+                        onFocusYear={setFocusYear}
+                        danger={danger}
+                        onRequestRange={setChartRange}
+                        yFormat={percentFormat ? (v) => `${Math.round(v)}%` : undefined}
+                        readout={{
+                          label: p.label,
+                          size: 'compact',
+                          format: percentFormat ? (v) => `${v.toFixed(1)}%` : undefined,
+                          agesFor: (year) => agesLabel(plan, result.years.find((y) => y.year === year)),
+                        }}
+                        ariaLabel={`${p.label} by year`}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </SectionCard>

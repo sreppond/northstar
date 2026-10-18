@@ -1,31 +1,38 @@
 import { useMemo, useState } from 'react';
 import type { Plan } from '@northstar/engine';
-import { headlineReturnRate, runPlan } from '@northstar/engine';
+import { deflate, runPlan } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
-import { NetWorthChart } from '../NetWorthChart';
-import { CompareDiff } from '../CompareDiff';
-import { money, percent, planMetaLine, signedMoney } from '../format';
+import { RangePicker, TimeSeriesChart, type ChartSeries } from '../charts';
+import { diffOutcomes, diffPlans } from '../diff';
+import { money, planMetaLine, signedMoney } from '../format';
+import { useBreakpoint } from '../useBreakpoint';
 import { DeltaTag, Page, PageHeader, SectionCard } from '../ui';
+import { agesLabel, dangerBand, eventMarkers } from './netWorthData';
 
 /**
- * Two ways to compare, matching the two things "compare" means elsewhere in
- * the app: pick another saved plan — now a grid of cards (name, net worth
- * at horizon, a `DeltaTag` vs the active plan, a tiny sparkline of its own
- * trajectory) rather than a row of plain buttons — or start a What-If,
- * given its own prominent `SectionCard` since it's the more-used path.
- * Clicking a card and starting a What-If both end up setting the exact same
- * `compareToPlanId`, so the chart's dashed line and `CompareDiff`'s two
- * lists work unchanged either way; the compare/diff flow itself (below)
- * keeps its existing shape entirely.
+ * Scenarios (docs/REDESIGN-V5.md §5.6; Q1: kept, retitled from "Compare").
+ * Two ways in, matching what comparing means elsewhere in the app: pick
+ * another saved plan (a card grid: net worth at horizon, a `DeltaTag` vs the
+ * active plan, a sparkline) or start a What-If. Both set the same
+ * `compareToPlanId`.
+ *
+ * Once a plan is chosen the page is one `TimeSeriesChart` with two series and
+ * a readout that shows both numbers for the year under the pointer, on the
+ * shared range and pinned year, with the active plan's danger band. The
+ * other plan is simulated HERE, only while this page is open: it used to be
+ * computed for every page on every plan edit (V5-REVIEW-1 D1).
  */
 export function ComparePage() {
   const {
     stored,
+    plans,
     plan,
     result,
-    comparePlan,
-    compare,
-    markers,
+    health,
+    focusYear,
+    setFocusYear,
+    chartRange,
+    setChartRange,
     visiblePlans,
     updateSettings,
     startWhatIf,
@@ -33,13 +40,54 @@ export function ComparePage() {
     revertWhatIf,
     forkWhatIf,
   } = usePlanner();
+  const heroHeight = useBreakpoint() === 'phone' ? 280 : 420;
 
   const [forking, setForking] = useState(false);
   const [forkName, setForkName] = useState('');
 
+  const comparePlanId = plan.settings.compareToPlanId;
+  const comparePlan = useMemo(
+    () => (comparePlanId ? plans.find((p) => p.id === comparePlanId) : undefined),
+    [plans, comparePlanId],
+  );
+  const { dollarMode, inflationRate } = plan.settings;
+  const compareResult = useMemo(() => {
+    if (!comparePlan) return undefined;
+    const raw = runPlan(comparePlan);
+    return dollarMode === 'todaysDollars' ? deflate(raw, inflationRate) : raw;
+  }, [comparePlan, dollarMode, inflationRate]);
+
   const isWhatIf = Boolean(comparePlan?.isWhatIfSnapshot);
   const otherPlans = visiblePlans.filter((p) => p.id !== stored.id);
   const activeNetWorthAtHorizon = result.years.at(-1)?.netWorth ?? 0;
+
+  // A What-If has a direction: the snapshot is the "before", the live plan the
+  // "after". Plan-vs-plan has none, so the active plan leads.
+  const activeLabel = isWhatIf ? 'Your edits' : stored.name;
+  const otherLabel = isWhatIf ? 'Before' : (comparePlan?.name ?? '');
+
+  const years = useMemo(() => result.years.map((y) => y.year), [result]);
+  const series = useMemo<ChartSeries[]>(() => {
+    if (!compareResult) return [];
+    // The other plan may run longer or shorter: clip to this plan's x-axis,
+    // and leave a gap (NaN) where it has no year.
+    const byYear = new Map(compareResult.years.map((y) => [y.year, y.netWorth]));
+    return [
+      { id: 'active', label: activeLabel, color: 'var(--data-nw)', kind: 'area', values: result.years.map((y) => y.netWorth) },
+      { id: 'other', label: otherLabel, color: 'var(--cmp)', values: years.map((y) => byYear.get(y) ?? NaN) },
+    ];
+  }, [compareResult, result, years, activeLabel, otherLabel]);
+  const danger = useMemo(() => dangerBand(health, result), [health, result]);
+  const markers = useMemo(() => eventMarkers(plan, years), [plan, years]);
+  const diffs = useMemo(() => {
+    if (!comparePlan || !compareResult) return null;
+    // The diff reads its first argument as "current" and its second as "the
+    // other one". A What-If swaps them so "OLD → NEW" and "what it costs" read
+    // as the edit's effect rather than backwards.
+    return isWhatIf
+      ? { changes: diffPlans(comparePlan, plan), outcomes: diffOutcomes(compareResult, result) }
+      : { changes: diffPlans(plan, comparePlan), outcomes: diffOutcomes(result, compareResult) };
+  }, [comparePlan, compareResult, isWhatIf, plan, result]);
 
   function confirmFork() {
     const name = forkName.trim();
@@ -49,10 +97,10 @@ export function ComparePage() {
     setForking(false);
   }
 
-  if (!comparePlan || !compare) {
+  if (!comparePlan || !compareResult || !diffs) {
     return (
       <Page>
-        <PageHeader title="Compare" meta={planMetaLine(stored, result.endYear)} />
+        <PageHeader title="Scenarios" meta={planMetaLine(stored, result.endYear)} />
 
         <SectionCard
           title="What-If"
@@ -89,99 +137,115 @@ export function ComparePage() {
   }
 
   return (
-    <Page>
-      <PageHeader title="Compare" meta={planMetaLine(stored, result.endYear)} />
+    <Page className="ns-scn">
+      <PageHeader
+        title="Scenarios"
+        meta={isWhatIf ? `What-If · your edits vs. how ${stored.name} stood before` : `${stored.name} vs. ${comparePlan.name}`}
+      />
 
-      <SectionCard
-        title={isWhatIf ? 'What-If' : 'Comparing plans'}
-        meta={
-          isWhatIf
-            ? `Your edits vs. how ${stored.name} stood before`
-            : `${stored.name} vs. ${comparePlan.name}`
-        }
-      >
-        <NetWorthChart
-          plan={plan}
-          result={result}
-          rateLabel={percent(headlineReturnRate(plan) ?? 0)}
-          selected={null}
-          compare={compare}
-          fan={undefined}
+      <section className="ns-scn-hero" aria-label="Net worth, two scenarios">
+        <TimeSeriesChart
+          years={years}
+          series={series}
+          range={chartRange}
+          todayYear={result.startYear}
+          height={heroHeight}
+          focusYear={focusYear}
+          onFocusYear={setFocusYear}
+          danger={danger}
+          onRequestRange={setChartRange}
           markers={markers}
-          canFan={false}
-          onToggleFan={() => {}}
-          onSelect={() => {}}
-          onScrubYear={() => {}}
-          onDragPreview={() => {}}
-          onDragCommit={() => {}}
+          drawKey={comparePlan.id}
+          readout={{
+            label: 'Net worth',
+            primaryId: 'active',
+            agesFor: (year) => agesLabel(plan, result.years.find((y) => y.year === year)),
+            actions: <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} />,
+          }}
+          ariaLabel={`Net worth: ${activeLabel} compared with ${otherLabel}`}
         />
+      </section>
 
-        {/* CompareDiff reads its first argument as "current" and its second as
-            "the other one" — for a read-only plan-vs-plan comparison that's an
-            arbitrary choice, but a What-If has a real direction: the snapshot
-            IS the "before", the live plan IS the "after". Swapped so "moves
-            OLD → NEW" and "what it costs" both read as the edit's effect,
-            rather than backwards. */}
-        {isWhatIf ? (
-          <CompareDiff plan={comparePlan} comparePlan={plan} result={compare.result} compareResult={result} />
-        ) : (
-          <CompareDiff plan={plan} comparePlan={comparePlan} result={result} compareResult={compare.result} />
-        )}
-
-        <div className="ns-compare-actions">
-          {isWhatIf ? (
-            forking ? (
-              <div className="ns-compare-fork-form">
-                <input
-                  className="ns-input"
-                  placeholder="Name this plan"
-                  value={forkName}
-                  onChange={(e) => setForkName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') confirmFork();
-                    if (e.key === 'Escape') setForking(false);
-                  }}
-                  autoFocus
-                />
-                <button type="button" className="ns-btn ns-btn-ghost" onClick={() => setForking(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="ns-btn ns-btn-primary"
-                  disabled={!forkName.trim()}
-                  onClick={confirmFork}
-                >
-                  Save
-                </button>
-              </div>
-            ) : (
-              <>
-                <button type="button" className="ns-btn ns-btn-ghost" onClick={() => revertWhatIf(stored.id)}>
-                  Revert changes
-                </button>
-                <button type="button" className="ns-btn ns-btn-ghost" onClick={() => setForking(true)}>
-                  Save as new plan
-                </button>
-                <button type="button" className="ns-btn ns-btn-primary" onClick={() => keepWhatIf(stored.id)}>
-                  Keep changes
-                </button>
-              </>
-            )
-          ) : (
-            <button
-              type="button"
-              className="ns-btn ns-btn-primary"
-              onClick={() => updateSettings(stored.id, { compareToPlanId: undefined })}
-            >
-              Done comparing
-            </button>
+      {(diffs.changes.length > 0 || diffs.outcomes.length > 0) && (
+        <div className="ns-scn-diff">
+          {diffs.changes.length > 0 && (
+            <div className="ns-scn-diff-col">
+              <div className="ns-scn-diff-label">What's different</div>
+              <ul className="ns-scn-diff-list">
+                {diffs.changes.slice(0, MAX_DIFF_ROWS).map((c, i) => (
+                  <li key={i}>{c.sentence}</li>
+                ))}
+                {diffs.changes.length > MAX_DIFF_ROWS && (
+                  <li className="ns-subtle">+{diffs.changes.length - MAX_DIFF_ROWS} more</li>
+                )}
+              </ul>
+            </div>
+          )}
+          {diffs.outcomes.length > 0 && (
+            <div className="ns-scn-diff-col">
+              <div className="ns-scn-diff-label">What it costs</div>
+              <ul className="ns-scn-diff-list">
+                {diffs.outcomes.map((o, i) => (
+                  <li key={i}>
+                    <span className="ns-scn-diff-outcome">{o.label}</span> {o.sentence}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
-      </SectionCard>
+      )}
+
+      <div className="ns-compare-actions">
+        {isWhatIf ? (
+          forking ? (
+            <div className="ns-compare-fork-form">
+              <input
+                className="ns-input"
+                placeholder="Name this plan"
+                value={forkName}
+                onChange={(e) => setForkName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') confirmFork();
+                  if (e.key === 'Escape') setForking(false);
+                }}
+                autoFocus
+              />
+              <button type="button" className="ns-btn ns-btn-ghost" onClick={() => setForking(false)}>
+                Cancel
+              </button>
+              <button type="button" className="ns-btn ns-btn-primary" disabled={!forkName.trim()} onClick={confirmFork}>
+                Save
+              </button>
+            </div>
+          ) : (
+            <>
+              <button type="button" className="ns-btn ns-btn-ghost" onClick={() => revertWhatIf(stored.id)}>
+                Revert changes
+              </button>
+              <button type="button" className="ns-btn ns-btn-ghost" onClick={() => setForking(true)}>
+                Save as new plan
+              </button>
+              <button type="button" className="ns-btn ns-btn-primary" onClick={() => keepWhatIf(stored.id)}>
+                Keep changes
+              </button>
+            </>
+          )
+        ) : (
+          <button
+            type="button"
+            className="ns-btn ns-btn-primary"
+            onClick={() => updateSettings(stored.id, { compareToPlanId: undefined })}
+          >
+            Done comparing
+          </button>
+        )}
+      </div>
     </Page>
   );
 }
+
+const MAX_DIFF_ROWS = 6;
 
 function PlanCard({
   plan,
@@ -222,9 +286,8 @@ function PlanCard({
   );
 }
 
-/** A bare polyline, no axes or gridlines — the "tiny sparkline" a Compare
-    card asks for (docs/REDESIGN-V3.md "Compare"), not a scaled-down
-    `MiniChart`. */
+/** A bare polyline, no axes or gridlines — the "tiny sparkline" a card asks
+    for (docs/REDESIGN-V3.md "Compare"), not a scaled-down chart. */
 function Sparkline({ values, color = 'var(--data-nw)' }: { values: number[]; color?: string }) {
   const width = 200;
   const height = 36;

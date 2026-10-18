@@ -32,10 +32,7 @@ interface Command {
 export function CommandPalette({ onClose }: { onClose(): void }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { windowLabel, clampedStart, maxStart, pageEarlier, pageLater, setSidebarOpen } = usePlanner();
-
-  const canPageEarlier = clampedStart > 0;
-  const canPageLater = clampedStart < maxStart;
+  const { setSidebarOpen } = usePlanner();
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -52,9 +49,6 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
       run: () => navigate(item.to),
     }));
 
-    if (canPageEarlier) out.push({ id: 'page-earlier', label: `Earlier years (before ${windowLabel})`, run: pageEarlier });
-    if (canPageLater) out.push({ id: 'page-later', label: `Later years (after ${windowLabel})`, run: pageLater });
-
     out.push({ id: 'switch-plan', label: 'Switch or manage plans…', run: () => setSidebarOpen(true) });
 
     out.push({ id: 'shortcuts', label: 'Keyboard shortcuts', hint: '?', run: () => openShortcutSheet() });
@@ -68,16 +62,7 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
     });
 
     return out;
-  }, [
-    location.pathname,
-    navigate,
-    windowLabel,
-    canPageEarlier,
-    canPageLater,
-    pageEarlier,
-    pageLater,
-    setSidebarOpen,
-  ]);
+  }, [location.pathname, navigate, setSidebarOpen]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
