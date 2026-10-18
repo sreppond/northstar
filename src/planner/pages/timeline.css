@@ -839,3 +839,11 @@
     box-shadow: inset 0 0 0 1px var(--ink);
   }
 }
+
+/* V5-REVIEW-1 F9: the child's stage editor stacks its choices with room
+   between them (each Choice is a bare field with no margin of its own). */
+.ns-kid-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}

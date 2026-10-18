@@ -1,10 +1,10 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Account, EventKind, Participant, PlanEvent, WorkPhase } from '@northstar/engine';
 import { EVENT_MODULES } from '@northstar/engine';
 import { labelFor } from '../presentation';
 import { IconBadge } from '../IconBadge';
 import { Sheet } from '../ui/Sheet';
-import { TimeSeriesChart } from '../charts';
+import { TimeSeriesChart, type DangerBand } from '../charts';
 import { usePlanner } from '../PlannerContext';
 import { planHealth } from '../health';
 import { presentResult } from '../impact';
@@ -32,10 +32,6 @@ const INCOME_KINDS: EventKind[] = ['income', 'windfall', 'socialSecurity'];
 const COST_KINDS: EventKind[] = ['buyAHome', 'haveAKid'];
 
 type GroupId = 'work' | 'expense';
-
-/** About one Sheet exit spring (`Sheet.tsx` SPRING is 0.38s): long enough to
-    see it leave before the parent drops the draft. */
-const LEAVE_MS = 260;
 
 // Kinds that share a real mechanic underneath (see kit.ts's IncomeSuppression,
 // and the two expense modules) but read as separate ideas when the picker
@@ -77,7 +73,26 @@ interface Props {
   onDelete(): void;
 }
 
-export function EventDrawer({
+/**
+ * Always mounted by `App.tsx`, like `AccountSheet` (V5-REVIEW-1 F13): Save,
+ * Cancel and Delete act on the plan synchronously, and the sheet then plays
+ * its exit from the last props it was shown with. Waiting out the exit
+ * animation before committing made every save feel 260ms late.
+ */
+export function EventDrawer({ open, ...props }: Props & { open: boolean }) {
+  const last = useRef<Props | null>(null);
+  if (open) last.current = props;
+  // A fresh form state (kind-picker group, delete confirmation) per opening.
+  const wasOpen = useRef(false);
+  const session = useRef(0);
+  if (open && !wasOpen.current) session.current += 1;
+  wasOpen.current = open;
+  if (!last.current) return null;
+  return <EventDrawerBody key={session.current} {...last.current} open={open} />;
+}
+
+function EventDrawerBody({
+  open,
   draft,
   allEvents,
   participants,
@@ -90,27 +105,10 @@ export function EventDrawer({
   onSave,
   onCancel,
   onDelete,
-}: Props) {
+}: Props & { open: boolean }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [group, setGroup] = useState<GroupId | null>(null);
-
-  // The shell mounts this only while an event is being edited, so on its own
-  // it would vanish the instant the editor closes. Every way out goes through
-  // `leave`: close the Sheet (it springs out), then tell the parent once it is
-  // gone. The action is held in a ref so the late call sees the latest props.
-  const [leaving, setLeaving] = useState(false);
-  const pending = useRef<{ run(): void } | null>(null);
-  const timer = useRef<number | undefined>(undefined);
-  const leave = useCallback((run: () => void) => {
-    if (pending.current) return;
-    pending.current = { run };
-    setLeaving(true);
-    timer.current = window.setTimeout(() => pending.current?.run(), LEAVE_MS);
-  }, []);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-  const latest = useRef({ onSave, onCancel, onDelete });
-  latest.current = { onSave, onCancel, onDelete };
-  const close = useCallback(() => leave(() => latest.current.onCancel()), [leave]);
+  const close = onCancel;
 
   useEffect(() => setConfirmingDelete(false), [draft?.id]);
 
@@ -155,7 +153,7 @@ export function EventDrawer({
     <div className="ns-sheet-actions">
       {!isNew &&
         (confirmingDelete ? (
-          <button type="button" className="ns-btn ns-btn-danger" onClick={() => leave(() => latest.current.onDelete())}>
+          <button type="button" className="ns-btn ns-btn-danger" onClick={onDelete}>
             Delete — are you sure?
           </button>
         ) : (
@@ -171,7 +169,7 @@ export function EventDrawer({
           type="button"
           className="ns-btn ns-btn-primary"
           disabled={validation !== null}
-          onClick={() => leave(() => latest.current.onSave())}
+          onClick={onSave}
         >
           {isNew ? 'Add event' : 'Save'}
         </button>
@@ -180,7 +178,7 @@ export function EventDrawer({
   ) : undefined;
 
   return (
-    <Sheet open={!leaving} onClose={close} title={draft ? (isNew ? labelFor(draft.kind) : draft.name) : 'New event'} footer={footer}>
+    <Sheet open={open} onClose={close} title={draft ? (isNew ? labelFor(draft.kind) : draft.name) : 'New event'} footer={footer}>
       <div className="ns-sheet-form">
           {!draft && !group && (
             <>
@@ -492,6 +490,22 @@ function EventEffect({ draft }: { draft: PlanEvent }) {
     return moves ? { years, withoutValues } : null;
   }, [settled, draft.id, draft.kind, draft.isIncluded, result, health.spendable]);
 
+  // V5-REVIEW-1 F2: only the years that are actually short, not "first short
+  // year to the end". TODO(V5-REVIEW-1 F2): use health.ts helper once U1's
+  // `healthDangerBand` lands; this inlines the same runs from `shortYears`.
+  const danger = useMemo<(DangerBand & { years?: number[] }) | undefined>(() => {
+    const runs: { from: number; to: number }[] = [];
+    for (const y of health.shortYears) {
+      const run = runs[runs.length - 1];
+      if (run && y === run.to + 1) run.to = y;
+      else runs.push({ from: y, to: y });
+    }
+    if (health.status !== 'short' || runs.length === 0) return undefined;
+    // The kit takes one band today (first run); `years` carries every run for
+    // the kit change that draws them separately.
+    return { from: runs[0].from, to: runs[0].to, years: health.shortYears };
+  }, [health.shortYears, health.status]);
+
   if (!effect) return null;
   const idx = hover === null ? -1 : effect.years.indexOf(hover);
 
@@ -517,11 +531,7 @@ function EventEffect({ draft }: { draft: PlanEvent }) {
         height={170}
         onHoverYear={setHover}
         drawKey={draft.id}
-        danger={
-          health.status === 'short' && health.firstShortYear !== undefined
-            ? { from: health.firstShortYear }
-            : undefined
-        }
+        danger={danger}
         ariaLabel={`${draft.name || 'This event'}'s effect on spendable money`}
       />
     </div>

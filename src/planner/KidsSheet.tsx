@@ -4,6 +4,7 @@ import { TimeSeriesChart, type ChartBand, type ChartSeries } from './charts';
 import { money } from './format';
 import { Segmented, Sheet } from './ui';
 import { budgetView, lineTiming, ownerColor } from './budgetView';
+import { KidStagesEditor } from './KidStagesEditor';
 import './pages/budget.css';
 
 /**
@@ -186,8 +187,13 @@ export function KidsSheet({
                   </li>
                 ))}
               </ul>
-              <p className="ns-bgt-muted">Rounded national estimates in today's dollars.</p>
             </section>
+
+            {/* V5-REVIEW-1 F9: change childcare, school, college and the 529
+                for this child, previewed against the plan as it is. The
+                template amounts are rounded national estimates in today's
+                dollars; F22 moved that caption here, out of the way. */}
+            <KidStagesEditor key={picked.id} childId={picked.id} />
           </>
         )}
       </div>

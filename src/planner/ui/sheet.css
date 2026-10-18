@@ -33,6 +33,8 @@
   backdrop-filter: var(--material-blur);
   color: var(--ink);
   outline: none;
+  /* The opaque body below has square corners; clip them to the panel's. */
+  overflow: hidden;
   will-change: transform, opacity;
   /* The panel is the thing being dragged: no text selection mid-gesture. */
   overscroll-behavior: contain;
@@ -72,6 +74,24 @@
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -12px 40px rgb(var(--sh) / calc(16% * var(--sh-k)));
   transform-origin: center bottom;
+}
+
+/* V5-REVIEW-1 F26: content-height. The travel allowance in Sheet.tsx (panel
+   size + 48) already covers the 16px inset plus the shadow. */
+.ns-sheet-side.ns-sheet-compact {
+  top: 16px;
+  right: 16px;
+  bottom: auto;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgb(var(--sh) / calc(18% * var(--sh-k)));
+}
+.ns-sheet-bottom.ns-sheet-compact {
+  height: auto;
+  max-height: 92vh;
+  max-height: 92dvh;
 }
 
 .ns-sheet-head {
@@ -140,6 +160,15 @@
   transform: scale(0.94);
 }
 
+/* V5-REVIEW-1 F15: the translucent material lives on the header and the
+   panel edge, where the blur reads as glass. The body and footer, where text
+   and fields sit, are a near-opaque surface so the page's donut and bars never
+   show through them (apple-design: never stack translucent on content). */
+.ns-sheet-body,
+.ns-sheet-foot {
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
 .ns-sheet-body {
   flex: 1;
   min-height: 0;
@@ -153,6 +182,13 @@
   padding: 12px 22px;
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--rule);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ns-sheet-body,
+  .ns-sheet-foot {
+    background: var(--surface);
+  }
 }
 
 /* Higher-contrast preference (skill §14): near-solid, defined edge. */

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import './planner/planner.css';
 import './planner/ui/ui.css';
@@ -27,8 +27,15 @@ import { HousePage } from './planner/pages/HousePage';
 import { AnnuityPage } from './planner/pages/AnnuityPage';
 import { ComparePage } from './planner/pages/ComparePage';
 import { ReportsPage } from './planner/pages/ReportsPage';
-import { DevChartsPage } from './planner/dev/DevChartsPage';
-import { DevUiPage } from './planner/dev/DevUiPage';
+
+// V5-REVIEW-1 F29: dev-only routes are lazy, and only ever referenced inside
+// the `import.meta.env.DEV` branch, so the production build drops the chunks.
+const DevChartsPage = import.meta.env.DEV
+  ? lazy(() => import('./planner/dev/DevChartsPage').then((m) => ({ default: m.DevChartsPage })))
+  : null;
+const DevUiPage = import.meta.env.DEV
+  ? lazy(() => import('./planner/dev/DevUiPage').then((m) => ({ default: m.DevUiPage })))
+  : null;
 
 /**
  * The gate in front of the planner (docs/REDESIGN.md §6 item 6). A
@@ -128,8 +135,12 @@ function PlannerShell() {
           <Route path="/events" element={<Navigate to="/timeline" replace />} />
           <Route path="/family" element={<Navigate to="/timeline" replace />} />
           <Route path="/progress" element={<Navigate to="/net-worth" replace />} />
-          {import.meta.env.DEV && <Route path="/dev/charts" element={<DevChartsPage />} />}
-          {import.meta.env.DEV && <Route path="/dev/ui" element={<DevUiPage />} />}
+          {DevChartsPage && (
+            <Route path="/dev/charts" element={<Suspense fallback={null}><DevChartsPage /></Suspense>} />
+          )}
+          {DevUiPage && (
+            <Route path="/dev/ui" element={<Suspense fallback={null}><DevUiPage /></Suspense>} />
+          )}
           <Route path="*" element={<Navigate to="/net-worth" replace />} />
         </Routes>
       </main>
@@ -243,29 +254,30 @@ function PlannerShell() {
           its exit (docs/REDESIGN-V5.md §5.1.4). */}
       <AccountSheet />
 
-      {editor.open && (
-        <EventDrawer
-          draft={editor.draft}
-          allEvents={stored.events}
-          participants={stored.participants}
-          accounts={stored.accounts}
-          planStartYear={stored.settings.startYear}
-          planEndYear={result.endYear}
-          isNew={editor.isNew}
-          onChange={editor.change}
-          onPickKind={(kind) => editor.pickKind(kind, stored)}
-          onSave={() => {
-            if (editor.draft) upsertEvent(stored.id, editor.draft);
-            editor.close();
-          }}
-          onCancel={editor.close}
-          onDelete={() => {
-            if (editor.draft) deleteEvent(stored.id, editor.draft.id);
-            setSelected(null);
-            editor.close();
-          }}
-        />
-      )}
+      {/* Always mounted (V5-REVIEW-1 F13): Save commits at once and the sheet
+          plays its exit from its last draft, as `AccountSheet` does. */}
+      <EventDrawer
+        open={editor.open}
+        draft={editor.draft}
+        allEvents={stored.events}
+        participants={stored.participants}
+        accounts={stored.accounts}
+        planStartYear={stored.settings.startYear}
+        planEndYear={result.endYear}
+        isNew={editor.isNew}
+        onChange={editor.change}
+        onPickKind={(kind) => editor.pickKind(kind, stored)}
+        onSave={() => {
+          if (editor.draft) upsertEvent(stored.id, editor.draft);
+          editor.close();
+        }}
+        onCancel={editor.close}
+        onDelete={() => {
+          if (editor.draft) deleteEvent(stored.id, editor.draft.id);
+          setSelected(null);
+          editor.close();
+        }}
+      />
     </div>
   );
 }

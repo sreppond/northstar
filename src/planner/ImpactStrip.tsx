@@ -56,11 +56,15 @@ export function ImpactStrip({
           value={shown.savingsRate !== undefined ? percent(shown.savingsRate, 0) : '—'}
           delta={rateDelta !== undefined && Math.abs(rateDelta) >= 0.5 ? { value: `${rateDelta > 0 ? '+' : '−'}${Math.abs(rateDelta).toFixed(0)} pts`, tone: rateDelta > 0 ? 'in' : 'out' } : undefined}
         />
-        <Cell
-          label={shown.netWorthAt60 ? `Net worth at 60 · ${shown.netWorthAt60.year}` : 'Net worth at 60'}
-          value={shown.netWorthAt60 ? money(shown.netWorthAt60.value) : '—'}
-          delta={nwDelta !== undefined && Math.abs(nwDelta) >= 1 ? { value: signedMoney(nwDelta), tone: nwDelta > 0 ? 'in' : 'out' } : undefined}
-        />
+        {/* V5-REVIEW-1 F22: a cell that can only say "—" (nobody reaches 60
+            inside the plan) hasn't earned its place. */}
+        {shown.netWorthAt60 && (
+          <Cell
+            label={`Net worth at 60 · ${shown.netWorthAt60.year}`}
+            value={money(shown.netWorthAt60.value)}
+            delta={nwDelta !== undefined && Math.abs(nwDelta) >= 1 ? { value: signedMoney(nwDelta), tone: nwDelta > 0 ? 'in' : 'out' } : undefined}
+          />
+        )}
         <Cell
           label="Money lasts"
           value={shown.runsDryYear ? `Until ${shown.runsDryYear}` : 'Through the plan'}
