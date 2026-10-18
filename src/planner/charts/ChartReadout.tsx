@@ -37,6 +37,11 @@ export interface ChartReadoutProps {
   short?: boolean;
   /** "$88.7K", shown after "Short" when the shortfall is known. */
   shortAmount?: string;
+  /** Unit suffix after the Short amount: `/yr` (default) or `/mo`
+      (V5-REVIEW-1 F10). A page shows ONE unit; the pill must say which, since
+      a hero "Short $67K" next to a donut's "Short $5.6K a month" read as two
+      different shortfalls. */
+  shortUnit?: string;
   size?: 'hero' | 'compact';
   /** Right-hand slot: RangePicker, What-if. */
   actions?: ReactNode;
@@ -51,6 +56,7 @@ export function ChartReadout({
   secondary = [],
   short = false,
   shortAmount,
+  shortUnit = '/yr',
   size = 'hero',
   actions,
 }: ChartReadoutProps) {
@@ -59,7 +65,7 @@ export function ChartReadout({
   const announcement = [
     `${yearLabel}${ages ? `, ${ages}` : ''}`,
     `${labelText ?? (typeof label === 'string' ? label : 'Value')} ${value}`,
-    short ? `Short ${shortAmount ?? ''}`.trim() : '',
+    short ? `Short ${shortAmount ? `${shortAmount} ${shortUnit === '/mo' ? 'a month' : 'a year'}` : ''}`.trim() : '',
   ]
     .filter(Boolean)
     .join('. ');
@@ -67,7 +73,7 @@ export function ChartReadout({
 
   const pill = short ? (
     <span className="ns-readout-short">
-      <span aria-hidden="true">✗</span> Short{shortAmount ? ` ${shortAmount}` : ''}
+      <span aria-hidden="true">✗</span> Short{shortAmount ? ` ${shortAmount}${shortUnit}` : ''}
     </span>
   ) : null;
 

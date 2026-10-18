@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { availableRanges, effectiveRange, rangeLabel, type RangeKey } from './range';
 import './charts.css';
 
@@ -21,6 +21,7 @@ export function RangePicker({
   openingYear,
   options,
   ariaLabel = 'Chart time range',
+  compact = false,
 }: {
   value: RangeKey;
   onChange(range: RangeKey): void;
@@ -31,6 +32,12 @@ export function RangePicker({
   /** Explicit option list, overriding the plan-length rule. */
   options?: RangeKey[];
   ariaLabel?: string;
+  /** V5-REVIEW-1 F5: a long plan offers up to seven options, which on a phone
+      pushed "What if" and "…" off-screen. Compact lets the picker shrink to
+      the room it has and scroll sideways inside itself, with edge fades that
+      show there is more. Under 480px the same rules apply to every picker
+      (charts.css), so a page only needs this to force it wider up. */
+  compact?: boolean;
 }) {
   const shown = useMemo(
     () => options ?? (years?.length ? availableRanges(years, openingYear ?? years[0]) : availableRanges([], 0)),
@@ -43,6 +50,8 @@ export function RangePicker({
   const [pill, setPill] = useState<{ x: number; w: number } | null>(null);
   // The pill snaps into place on first measure, and only slides afterwards.
   const [armed, setArmed] = useState(false);
+  // Which edges have more options beyond them (the fades).
+  const [edges, setEdges] = useState({ left: false, right: false });
 
   useLayoutEffect(() => {
     const el = root.current?.querySelector<HTMLElement>(`[data-range="${current}"]`);
@@ -50,6 +59,38 @@ export function RangePicker({
     setPill({ x: el.offsetLeft, w: el.offsetWidth });
     const id = requestAnimationFrame(() => setArmed(true));
     return () => cancelAnimationFrame(id);
+  }, [current, shown]);
+
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const measure = () =>
+      setEdges((prev) => {
+        const next = {
+          left: el.scrollLeft > 1,
+          right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+        };
+        return prev.left === next.left && prev.right === next.right ? prev : next;
+      });
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', measure);
+      ro?.disconnect();
+    };
+  }, [shown]);
+
+  // Keep the chosen option on screen when the track scrolls.
+  useEffect(() => {
+    const el = root.current;
+    const opt = el?.querySelector<HTMLElement>(`[data-range="${current}"]`);
+    if (!el || !opt || el.scrollWidth <= el.clientWidth) return;
+    const left = opt.offsetLeft - 8;
+    const right = opt.offsetLeft + opt.offsetWidth + 8;
+    if (left < el.scrollLeft) el.scrollTo({ left, behavior: 'smooth' });
+    else if (right > el.scrollLeft + el.clientWidth) el.scrollTo({ left: right - el.clientWidth, behavior: 'smooth' });
   }, [current, shown]);
 
   function move(delta: number) {
@@ -65,7 +106,9 @@ export function RangePicker({
       ref={root}
       role="radiogroup"
       aria-label={ariaLabel}
-      className="ns-rp"
+      className={`ns-rp${compact ? ' ns-rp-compact' : ''}`}
+      data-fade-left={edges.left || undefined}
+      data-fade-right={edges.right || undefined}
       onKeyDown={(e) => {
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
           e.preventDefault();

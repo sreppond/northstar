@@ -183,6 +183,10 @@ export function DonutChart({
       {legend !== false && (
         <ul className="ns-donut-legend" aria-label={`${ariaLabel} legend`}>
           {segments.map((s) => {
+            // V5-REVIEW-1 F16: a $0 / 0% row is noise. Hidden from the legend
+            // only; the segment keeps its (zero-width) arc so the Before/After
+            // morph still has something to grow from.
+            if (Math.abs(s.value) < 0.5) return null;
             const on = hovered === s.key;
             return (
               <li key={s.key}>

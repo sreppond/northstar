@@ -374,6 +374,7 @@ export function TimeSeriesChart({
         secondary={secondary}
         short={isShort}
         shortAmount={shortAmt !== undefined && shortAmt > 0 ? money(shortAmt) : undefined}
+        shortUnit={spec.shortUnit}
         size={spec.size ?? 'hero'}
         actions={spec.actions}
       />

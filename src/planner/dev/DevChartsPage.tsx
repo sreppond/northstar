@@ -95,6 +95,18 @@ const SHORT_SERIES: ChartSeries[] = [
   { label: 'Cash', color: 'var(--data-nw)', kind: 'area', values: [41_000, 52_400, 61_100, 58_700, 70_200] },
 ];
 
+/** Runs dry, recovers (a windfall), runs dry again: the shape F2 is about. */
+const SHORT_RUNS = [2031, 2032, 2033, 2034, 2035, 2044, 2045, 2046, 2060, 2061, 2062];
+const RECOVERING_SERIES: ChartSeries[] = [
+  {
+    id: 'bal',
+    label: 'Balance',
+    color: 'var(--data-nw)',
+    kind: 'area',
+    values: YEARS.map((y) => (SHORT_RUNS.includes(y) ? 0 : 160_000 + ((y * 37) % 90) * 3_000)),
+  },
+];
+
 const GHOST_BASE: ChartSeries[] = [
   { id: 'nw', label: 'Net worth', color: 'var(--data-nw)', values: fixture.netWorth, kind: 'area' },
 ];
@@ -136,6 +148,15 @@ export function DevChartsPage() {
   const [lastSlice, setLastSlice] = useState<string | null>(null);
 
   const danger = useMemo(() => ({ from: fixture.firstShort, shortFor }), []);
+  const dangerRuns3 = useMemo(
+    () => ({
+      from: SHORT_RUNS[0],
+      to: SHORT_RUNS[SHORT_RUNS.length - 1],
+      years: SHORT_RUNS,
+      shortFor: (y: number) => (SHORT_RUNS.includes(y) ? 22_000 + (y - 2030) * 600 : undefined),
+    }),
+    [],
+  );
   const dangerInside = useMemo(() => ({ from: 2051, to: 2064, shortFor: (y: number) => (y - 2050) * 4_000 }), []);
 
   return (
@@ -202,6 +223,25 @@ export function DevChartsPage() {
           readout={{ label: 'Balance', size: 'compact' }}
           ariaLabel="Balance with a shortfall"
         />
+      </section>
+
+      <section>
+        <h2 style={HEADING}>Non-contiguous danger band · three runs (2031–35, 2044–46, 2060–62), recovered years clean (V5-REVIEW-1 F2)</h2>
+        <TimeSeriesChart
+          years={YEARS}
+          series={RECOVERING_SERIES}
+          todayYear={START}
+          height={260}
+          focusYear={focus}
+          onFocusYear={setFocus}
+          danger={dangerRuns3}
+          markers={MARKERS}
+          readout={{ label: 'Balance', size: 'compact', agesFor, shortUnit: '/yr' }}
+          ariaLabel="Balance that runs dry, recovers and runs dry again"
+        />
+        <div style={{ marginTop: 8, maxWidth: 260 }}>
+          <RangePicker value={range} onChange={setRange} years={YEARS} openingYear={START} compact ariaLabel="Compact range picker" />
+        </div>
       </section>
 
       <section>

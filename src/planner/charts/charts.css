@@ -358,6 +358,48 @@
   border-radius: 10px;
   background: var(--chip);
 }
+/* V5-REVIEW-1 F5: compact (and every picker under 480px) shrinks to the room
+   it has and scrolls sideways inside itself instead of shoving its siblings
+   off-screen. The pill is absolutely positioned inside the scroller, so it
+   travels with the options. `min-width: 0` lets a flex parent squeeze it. */
+.ns-rp-compact {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.ns-rp-compact::-webkit-scrollbar {
+  display: none;
+}
+@media (max-width: 480px) {
+  .ns-rp {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .ns-rp::-webkit-scrollbar {
+    display: none;
+  }
+  .ns-rp-opt {
+    flex: none;
+  }
+}
+/* Edge fades: only on the side that has more to show. */
+.ns-rp[data-fade-right='true'] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+}
+.ns-rp[data-fade-left='true'] {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 20px), transparent);
+}
+.ns-rp[data-fade-left='true'][data-fade-right='true'] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+}
 .ns-rp-pill {
   position: absolute;
   top: 2px;

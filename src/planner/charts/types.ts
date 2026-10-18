@@ -108,6 +108,9 @@ export interface ReadoutSpec {
   size?: 'hero' | 'compact';
   /** Right-hand slot — the RangePicker, a What-if button. */
   actions?: ReactNode;
+  /** Unit suffix on the red Short pill's amount, `/yr` (default) or `/mo`
+      (V5-REVIEW-1 F10). Match it to the unit your `danger.shortFor` returns. */
+  shortUnit?: string;
   /** Hide the small `●label value` row for the other series. */
   hideSecondary?: boolean;
 }
