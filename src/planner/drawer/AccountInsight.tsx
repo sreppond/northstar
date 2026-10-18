@@ -102,6 +102,7 @@ export function AccountInsight({
         ? flowSteps(
             snapshot.accounts.filter((a) => a.accountClass === accountClass && a.isLiability === liability),
             liability,
+            snapshot.income,
           )
         : [],
     [snapshot, accountClass, liability],
@@ -139,6 +140,8 @@ export function AccountInsight({
             label,
             primaryId: 'class',
             size: 'compact',
+            // V5-REVIEW-2 N10: the danger band is per month, like the page behind the sheet.
+            shortUnit: '/mo',
             agesFor: (y) => agesLabel(plan, result.years.find((s) => s.year === y)),
           }}
           ariaLabel={`${label} balance over time`}

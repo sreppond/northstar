@@ -25,3 +25,98 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/*
+ * Phone: one line (V5-REVIEW-2 N6). "Runs dry 2031 · $10.2K short", then the
+ * "See 2031 →" action and ×, all on one row. The stranded-accounts
+ * explanation sits behind "Why?" and opens inline, its height animating
+ * 0fr -> 1fr like the alert's own dismissal does. The overrides beat ui.css's
+ * narrow-screen wrap (which stacks the action under the message) by
+ * specificity, and only apply at phone width.
+ */
+@media (max-width: 640px) {
+  .ns-shell-alerts .ns-alert {
+    flex-wrap: wrap;
+    gap: 0 5px;
+    padding: 8px 5px 8px 11px;
+    align-items: flex-start;
+  }
+  .ns-shell-alerts .ns-alert-icon {
+    margin-top: 2px;
+  }
+  /* The text wrapper and the compact block dissolve, so the line is a flex
+     item beside the action and ×, and the "Why?" panel can take a full row
+     underneath instead of being squeezed into the narrow text column. */
+  .ns-shell-alerts .ns-alert-text,
+  .ns-alert-compact {
+    display: contents;
+  }
+  .ns-shell-alerts .ns-alert-action {
+    order: 0;
+    margin-left: 0;
+    height: 26px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+  .ns-shell-alerts .ns-alert-dismiss {
+    order: 0;
+    width: 26px;
+    height: 26px;
+  }
+  .ns-alert-compact-line {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .ns-alert-why-panel {
+    order: 1;
+    flex: 0 0 100%;
+    padding-left: 22px;
+    box-sizing: border-box;
+  }
+}
+.ns-alert-compact-line {
+  line-height: 20px;
+  font-size: 13px;
+}
+.ns-alert-compact-part {
+  white-space: nowrap;
+}
+.ns-alert-compact-head {
+  font-weight: 600;
+}
+.ns-alert-why {
+  margin-left: 8px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-alert-why-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 200ms var(--ease-damped),
+    visibility 0s linear 200ms;
+}
+.ns-alert-why-panel[data-open='true'] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.ns-alert-why-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.ns-alert-why-body {
+  margin: 0;
+  padding: 2px 0 4px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ns-alert-why-panel,
+  .ns-alert-why-panel[data-open='true'] {
+    transition: none;
+  }
+}

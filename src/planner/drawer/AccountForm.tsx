@@ -1,6 +1,8 @@
+import { useEffect, useRef } from 'react';
 import type { Account } from '@northstar/engine';
 import { ACCOUNT_TYPES, visibleFields } from '@northstar/engine';
 import { AccountField } from './fields';
+import { takeAccountFocus } from './sheetFocus';
 
 /**
  * The per-account-type form body, extracted from the old `AccountDrawer`
@@ -42,16 +44,47 @@ export function AccountForm({
     onChange(next);
   };
 
+  // V5-REVIEW-2 N11: a caller that opened this sheet to fix one setting (the
+  // health alert's "Review") asked for it by name. Claim that on arrival,
+  // bring the field to the middle of the sheet, focus it, and flash a ring.
+  // Keyed on the account, so picking a sibling in the segmented control, or a
+  // second Review while the sheet is already open, re-runs it.
+  const formRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const field = takeAccountFocus();
+    if (!field) return;
+    let timer = 0;
+    // A frame late: the sheet's own mount effect moves focus to its panel after
+    // ours (children's effects run first), and would take it back.
+    const frame = requestAnimationFrame(() => {
+      const target = formRef.current?.querySelector<HTMLElement>(`[data-field="${field}"]`);
+      if (!target) return;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+      // The segmented choice's current option, so a keypress changes it from where it is.
+      const option =
+        target.querySelector<HTMLElement>('[aria-pressed="true"]') ?? target.querySelector<HTMLElement>('button, input');
+      option?.focus({ preventScroll: true });
+      target.classList.add('ns-field-flash');
+      timer = window.setTimeout(() => target.classList.remove('ns-field-flash'), reduce ? 1000 : 400);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [draft.id]);
+
   return (
-    <div className="ns-account-form">
+    <div className="ns-account-form" ref={formRef}>
       {visibleFields(spec, draft).map((field) => (
-        <AccountField
-          key={String(field.key)}
-          field={field}
-          value={draft[field.key]}
-          planYears={{ startYear: planStartYear, endYear: planEndYear }}
-          onChange={(v) => set(field.key, v)}
-        />
+        <div key={String(field.key)} data-field={String(field.key)} className="ns-account-field">
+          <AccountField
+            field={field}
+            value={draft[field.key]}
+            planYears={{ startYear: planStartYear, endYear: planEndYear }}
+            onChange={(v) => set(field.key, v)}
+          />
+        </div>
       ))}
 
       {synthetic.length > 0 && (

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Ellipsis } from 'lucide-react';
 import { newAccountOfType } from '@northstar/engine';
@@ -23,7 +23,6 @@ import { PlanCheckBanner } from '../PlanCheckBanner';
 import { AccountsTab } from '../tabs/AccountsTab';
 import { asOfDateLabel, money } from '../format';
 import { classBalances } from '../ledger';
-import { healthDangerBand } from '../health';
 import { Page, accountClassColor } from '../ui';
 import { DismissibleAlert } from '../ui/Alert';
 import { Sheet } from '../ui/Sheet';
@@ -33,6 +32,7 @@ import {
   classBalanceAt,
   eventMarkers,
   groupMonthlySeries,
+  monthlyDangerBand,
   presentClasses,
   spendingModel,
   type ClassRow,
@@ -58,6 +58,20 @@ import './net-worth.css';
 type SeriesId = 'networth' | 'spendable' | AccountClass;
 
 const SPENDABLE_ID = 'spendable';
+
+/** Below this width the What if and "…" buttons join the title row (V5-REVIEW-2 N22). */
+const NARROW = '(max-width: 479px)';
+function subscribeNarrow(notify: () => void) {
+  const mq = window.matchMedia(NARROW);
+  mq.addEventListener('change', notify);
+  return () => mq.removeEventListener('change', notify);
+}
+const useNarrow = () =>
+  useSyncExternalStore(
+    subscribeNarrow,
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  );
 
 const signedBalance = (value: number, liability: boolean) => (liability && value > 0 ? `−${money(value)}` : money(value));
 
@@ -100,12 +114,7 @@ export function NetWorthPage() {
   // V5-REVIEW-1 F10: this page's unit is the month (the donut beside the hero
   // says "Short $5.6K a month"), so the hero's Short pill is per month too, from
   // the same `months` the donut divides by, and the readout says "/mo".
-  const danger = useMemo<DangerBand | undefined>(() => {
-    const band = healthDangerBand(health, result);
-    if (!band) return undefined;
-    const perMonth = new Map(result.years.map((y, i) => [y.year, (y.unfundedShortfall ?? 0) / (spending.months[i] || 12)]));
-    return { ...band, shortFor: (year) => perMonth.get(year) };
-  }, [health, result, spending.months]);
+  const danger = useMemo<DangerBand | undefined>(() => monthlyDangerBand(health, plan, result), [health, plan, result]);
   const ghostYears = levers.ghostResult?.years;
 
   // --- hero series --------------------------------------------------------
@@ -216,6 +225,25 @@ export function NetWorthPage() {
 
   const localSnapshot = localMonarch.snapshot;
 
+  // V5-REVIEW-2 N22: on a phone these two sit on the "Net worth ▾" title row,
+  // right-aligned, so the range picker is the only thing on the row below. One
+  // pair of elements, placed in either slot, never rendered twice.
+  const narrow = useNarrow();
+  const whatIfButton = (
+    <button type="button" className={`ns-btn${levers.isDirty ? ' ns-nw-whatif-on' : ''}`} onClick={() => setWhatIfOpen(true)}>
+      What if
+    </button>
+  );
+  const moreMenu = (
+    <PopMenu
+      label="More"
+      align="end"
+      className="ns-btn-ghost ns-nw-more"
+      groups={moreGroups}
+      trigger={() => <Ellipsis size={16} strokeWidth={2} aria-hidden />}
+    />
+  );
+
   return (
     <Page className="ns-nw">
       <h1 className="ns-nw-sr">Net worth</h1>
@@ -265,17 +293,25 @@ export function NetWorthPage() {
           drawKey={seriesId}
           readout={{
             label: (
-              <PopMenu
-                label="Chart series"
-                className="ns-nw-series"
-                groups={seriesGroups}
-                trigger={() => (
-                  <>
-                    {seriesLabel}
-                    <ChevronDown size={16} strokeWidth={2.25} aria-hidden />
-                  </>
+              <div className="ns-nw-titlerow">
+                <PopMenu
+                  label="Chart series"
+                  className="ns-nw-series"
+                  groups={seriesGroups}
+                  trigger={() => (
+                    <>
+                      {seriesLabel}
+                      <ChevronDown size={16} strokeWidth={2.25} aria-hidden />
+                    </>
+                  )}
+                />
+                {narrow && (
+                  <div className="ns-nw-title-actions">
+                    {whatIfButton}
+                    {moreMenu}
+                  </div>
                 )}
-              />
+              </div>
             ),
             primaryId: seriesId === 'networth' ? 'nw' : seriesId,
             shortUnit: '/mo',
@@ -283,20 +319,8 @@ export function NetWorthPage() {
             actions: (
               <div className="ns-nw-actions">
                 <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} compact />
-                <button
-                  type="button"
-                  className={`ns-btn${levers.isDirty ? ' ns-nw-whatif-on' : ''}`}
-                  onClick={() => setWhatIfOpen(true)}
-                >
-                  What if
-                </button>
-                <PopMenu
-                  label="More"
-                  align="end"
-                  className="ns-btn-ghost ns-nw-more"
-                  groups={moreGroups}
-                  trigger={() => <Ellipsis size={16} strokeWidth={2} aria-hidden />}
-                />
+                {!narrow && whatIfButton}
+                {!narrow && moreMenu}
               </div>
             ),
           }}

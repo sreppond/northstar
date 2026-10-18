@@ -77,6 +77,20 @@
   min-width: 0;
   max-width: 100%;
 }
+/* Title row: the series menu, and below 480px What if and "…" at the right
+   (V5-REVIEW-2 N22). On a wider screen it is just the menu. */
+.ns-nw-titlerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ns-nw-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
 /* A What-if is in flight: ink dot on the button, so closing the sheet doesn't
    hide that the dashed line on the chart is a draft. */
 .ns-nw-whatif-on {
@@ -278,8 +292,9 @@
   background: var(--c);
   transition: width var(--spring-duration, 0.38s) var(--ease-damped, ease-out);
 }
+/* V5-REVIEW-2 N4: a liability is not money-out; orange stays for out and danger. */
 .ns-nw-snap-fill-out {
-  background: var(--out);
+  background: var(--muted-light);
   opacity: 0.8;
 }
 .ns-nw-snap-total {
@@ -657,8 +672,48 @@
   }
 }
 
+@media (max-width: 479px) {
+  /* The readout's main column takes the full row so the title row can push
+     What if and "…" to the right edge; the actions row below is the picker alone. */
+  .ns-nw-hero .ns-readout-main {
+    flex: 1 1 100%;
+  }
+  .ns-nw-title-actions .ns-btn {
+    height: 30px;
+    padding-inline: 12px;
+  }
+  .ns-nw-title-actions .ns-nw-more {
+    padding-inline: 8px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ns-nw-menu-pop {
     animation: none;
+  }
+}
+
+/* The field a caller asked the account sheet to open on (V5-REVIEW-2 N11): an
+   accent ring that settles in 400ms. The ring sits outside the box, so the
+   form doesn't reflow. Reduced motion holds a static ring instead (the form
+   removes the class after 1s). */
+.ns-account-field {
+  border-radius: 12px;
+}
+.ns-field-flash {
+  animation: ns-field-flash 400ms var(--ease-damped) both;
+}
+@keyframes ns-field-flash {
+  from {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ns-field-flash {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--accent);
   }
 }

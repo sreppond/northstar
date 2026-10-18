@@ -59,6 +59,56 @@ describe('flowSteps: the account sheet waterfall always adds up', () => {
   });
 });
 
+describe('flowSteps: required distributions and the residual (V5-REVIEW-2 N5, N16)', () => {
+  it('shows an RMD as its own row, not as "Withdrawals", and keeps the bars adding up', () => {
+    const result = runPlan(kitchenSinkPlan());
+    let seen = 0;
+    for (const snapshot of result.years) {
+      const rmd = snapshot.income.filter((l) => l.label.startsWith('Required minimum distribution'));
+      for (const line of rmd) {
+        const row = snapshot.accounts.filter((a) => a.accountId === line.accountId);
+        const steps = flowSteps(row, false, snapshot.income);
+        const required = steps.find((s) => s.key === 'rmd');
+        expect(required?.label).toBe('Required distributions');
+        expect(required?.value).toBeCloseTo(-line.amount, 4);
+        // Nothing else was drawn from that account, so there is no plain "Withdrawals" row...
+        const drawnElsewhere = row.reduce((a, r) => a + r.withdrawals, 0) - line.amount;
+        if (Math.abs(drawnElsewhere) < 1) expect(steps.map((s) => s.key)).not.toContain('withdrawals');
+        // ...and no unexplained "Other" either: it folds into Growth or reads "Inflation adjustment".
+        expect(steps.map((s) => s.label)).not.toContain('Other');
+        const moves = steps.slice(1, -1);
+        expect(moves[moves.length - 1].to).toBeCloseTo(steps[steps.length - 1].value, 4);
+        seen += 1;
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('splits SEPP payments out of withdrawals', () => {
+    const rows = [
+      { accountId: 'a', name: 'IRA', accountClass: 'taxDeferredInvestment', isLiability: false, open: 1000, growth: 50, contributions: 0, withdrawals: 300, interest: 0, principal: 0, close: 750 },
+    ] as Parameters<typeof flowSteps>[0];
+    const steps = flowSteps(rows, false, [
+      { label: 'SEPP — IRA', amount: 200, accountId: 'a', category: 'sepp' },
+    ] as Parameters<typeof flowSteps>[2]);
+    expect(steps.find((s) => s.key === 'sepp')?.value).toBe(-200);
+    expect(steps.find((s) => s.key === 'withdrawals')?.value).toBe(-100);
+  });
+
+  it('folds a small residual into Growth and labels a large one "Inflation adjustment"', () => {
+    const row = (close: number) =>
+      [
+        { accountId: 'a', name: 'X', accountClass: 'cash', isLiability: false, open: 100_000, growth: 0, contributions: 0, withdrawals: 0, interest: 0, principal: 0, close },
+      ] as Parameters<typeof flowSteps>[0];
+    const small = flowSteps(row(100_163), false);
+    expect(small.map((s) => s.key)).not.toContain('other');
+    expect(small.find((s) => s.key === 'growth')?.value).toBeCloseTo(163, 6);
+    expect(small.find((s) => s.key === 'growth')?.label).toBe('Growth (net of fees)');
+    const large = flowSteps(row(103_000), false);
+    expect(large.find((s) => s.key === 'other')?.label).toBe('Inflation adjustment');
+  });
+});
+
 describe('spendingModel: the donut keeps one key set across every year', () => {
   it.each(plans)('%s', (_n, plan) => {
     const result = runPlan(plan);
