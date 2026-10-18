@@ -1,8 +1,11 @@
+import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ACCOUNT_TYPES } from '@northstar/engine';
 import { usePlanner } from './PlannerContext';
 import { DismissibleAlert } from './ui/Alert';
 import { money } from './format';
+import { useBreakpoint } from './useBreakpoint';
+import { requestAccountFocus } from './drawer/sheetFocus';
 import type { StrandedAccount, StrandedReason } from './health';
 import './plan-health-alert.css';
 
@@ -20,6 +23,10 @@ import './plan-health-alert.css';
  * of them. "Runs out of money" would otherwise read as a forecast fact when it
  * is often a withdrawal setting the user can change in one place.
  *
+ * V5-REVIEW-2 N6: below 640px the alert is one line ("Runs dry 2031 · $10.2K
+ * short", the year action, ×) and the stranded explanation hides behind
+ * "Why?". N11: Review opens the sheet on the setting that strands the money.
+ *
  * Dismissible per signature (§4.3): `health.signature` is the first short year
  * plus the unfunded total, so editing the plan into a different failure
  * brings it back. The rail pill (`Sidebar.tsx`) stays regardless — hiding
@@ -28,7 +35,10 @@ import './plan-health-alert.css';
 
 /** How each reason reads after "…is" in the second clause. */
 const REASON_PHRASE: Record<StrandedReason, string> = {
-  never: 'set to never withdraw',
+  // V5-REVIEW-2 N5: an RMD still comes out of a "never" account, so "never
+  // withdraw" contradicted the account's own sheet. What the setting means is
+  // that the shortfall waterfall won't reach for it.
+  never: 'never drawn to cover a shortfall',
   noRule: 'left out of the withdrawal order',
   sepp: 'locked in a SEPP',
   penalty: 'still under the early-withdrawal age',
@@ -61,6 +71,9 @@ export function strandedClauses(stranded: StrandedAccount[]): { reason: Stranded
 export function PlanHealthAlert() {
   const { health, planId, setFocusYear, stored, setAccountDraft } = usePlanner();
   const navigate = useNavigate();
+  const compact = useBreakpoint() === 'phone';
+  const [whyOpen, setWhyOpen] = useState(false);
+  const whyId = useId();
   const year = health.firstShortYear;
   if (health.status !== 'short' || year === undefined) return null;
 
@@ -68,7 +81,30 @@ export function PlanHealthAlert() {
   const clauses = strandedClauses(health.stranded);
   // `stranded` is largest-first. An account the plan lists is always in `stored`,
   // so the sheet opens on the real thing (a draft clone, as every other opener does).
-  const biggest = health.stranded.map((s) => stored.accounts.find((a) => a.id === s.accountId)).find((a) => a !== undefined);
+  const biggestEntry = health.stranded.find((s) => stored.accounts.some((a) => a.id === s.accountId));
+  const biggest = biggestEntry && stored.accounts.find((a) => a.id === biggestEntry.accountId);
+
+  // V5-REVIEW-2 N11: Review lands on the setting that strands the money, not the
+  // top of the sheet. Only the timing reason is fixed by that setting.
+  const review = biggest && (
+    <button
+      type="button"
+      className="ns-alert-link"
+      onClick={() => {
+        if (biggestEntry?.reason === 'never') requestAccountFocus('withdrawalTiming');
+        setAccountDraft(structuredClone(biggest));
+      }}
+    >
+      Review {ACCOUNT_TYPES[biggest.accountClass].label} →
+    </button>
+  );
+
+  const stranded = clauses.length > 0 && (
+    <>
+      <span className="ns-alert-stranded">Meanwhile, {clauses.map((c) => c.text).join('; ')}.</span>
+      {review && <> {review}</>}
+    </>
+  );
 
   return (
     // `:empty` hides the wrapper once the alert has collapsed away (ui.css).
@@ -86,22 +122,44 @@ export function PlanHealthAlert() {
           },
         }}
       >
-        This plan runs out of money in {year}. {count} {count === 1 ? 'year goes' : 'years go'} short,{' '}
-        {money(health.unfundedTotal)} unfunded.
-        {clauses.length > 0 && (
-          <>
-            {' '}
-            <span className="ns-alert-stranded">
-              Meanwhile, {clauses.map((c) => c.text).join('; ')}.
-            </span>
-            {biggest && (
-              <>
-                {' '}
-                <button type="button" className="ns-alert-link" onClick={() => setAccountDraft(structuredClone(biggest))}>
-                  Review {ACCOUNT_TYPES[biggest.accountClass].label} →
+        {compact ? (
+          // The danger message is the line; the stranded explanation is one tap away, inline.
+          <div className="ns-alert-compact">
+            <div className="ns-alert-compact-line">
+              {/* Two unbreakable halves: if the line is too narrow it breaks at the dot, never mid-amount. */}
+              <span>
+                <span className="ns-alert-compact-part">
+                  <strong className="ns-alert-compact-head">Runs dry {year}</strong> ·
+                </span>{' '}
+                <span className="ns-alert-compact-part">{money(health.unfundedTotal)} short</span>
+              </span>
+              {stranded && (
+                <button
+                  type="button"
+                  className="ns-alert-link ns-alert-why"
+                  aria-expanded={whyOpen}
+                  aria-controls={whyId}
+                  onClick={() => setWhyOpen((v) => !v)}
+                >
+                  Why?
                 </button>
-              </>
+              )}
+            </div>
+            {stranded && (
+              <div id={whyId} className="ns-alert-why-panel" data-open={whyOpen} inert={!whyOpen}>
+                <div className="ns-alert-why-clip">
+                  <p className="ns-alert-why-body">
+                    {count} {count === 1 ? 'year goes' : 'years go'} short. {stranded}
+                  </p>
+                </div>
+              </div>
             )}
+          </div>
+        ) : (
+          <>
+            This plan runs out of money in {year}. {count} {count === 1 ? 'year goes' : 'years go'} short,{' '}
+            {money(health.unfundedTotal)} unfunded.
+            {stranded && <> {stranded}</>}
           </>
         )}
       </DismissibleAlert>

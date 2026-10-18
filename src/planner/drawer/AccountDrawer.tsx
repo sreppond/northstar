@@ -4,7 +4,7 @@ import { ACCOUNT_TYPES, LIABILITY_CLASSES, newAccountOfType } from '@northstar/e
 import { usePlanner } from '../PlannerContext';
 import { ACCOUNT_ICON } from '../domainIcons';
 import { presentResult } from '../impact';
-import { dangerBand } from '../pages/netWorthData';
+import { monthlyDangerBand } from '../pages/netWorthData';
 import { Segmented } from '../ui';
 import { Sheet } from '../ui/Sheet';
 import { AnnuityAccountSection } from '../views/AnnuityAccountSection';
@@ -207,7 +207,7 @@ function AccountSheetBody({ draft, open }: { draft: Account; open: boolean }) {
         initialRange={initialRange}
         focusYear={focusYear}
         onFocusYear={setFocusYear}
-        danger={dangerBand(health, result)}
+        danger={monthlyDangerBand(health, plan, result)}
         onRequestRange={setChartRange}
       />
     </>

@@ -8,6 +8,7 @@ import type {
   Account,
   AccountClass,
   AccountYear,
+  LineItem,
   OpeningSnapshot,
   Plan,
   PlanResult,
@@ -142,37 +143,84 @@ export interface FlowStep {
   to: number;
 }
 
+/** Smallest row worth showing: under a dollar it is rounding, not a flow (V5-REVIEW-2 N5). */
+const MIN_ROW = 1;
+
 /**
  * Open -> contributions -> growth -> withdrawals -> close for one class in one
  * year (docs/REDESIGN-V5.md §5.1.4), summed over its accounts. A liability
  * flows differently — interest is paid in cash, only the principal moves the
- * balance — so it gets its own steps. Anything the engine moved that these don't name lands in
- * "Other" rather than the bars quietly failing to add up.
+ * balance — so it gets its own steps.
+ *
+ * V5-REVIEW-2 N5: money the engine is *required* to pull out (an RMD, a SEPP
+ * payment) gets its own row, so a "never withdraw" account doesn't show a plain
+ * "Withdrawals" line that contradicts its setting. `income` is the year's
+ * income lines; they are matched to `rows` by account id.
+ *
+ * V5-REVIEW-2 N16: the residual that no named step explains (a deflation
+ * artefact) is folded into Growth when it is small, and otherwise shown as
+ * "Inflation adjustment", so the bars still add up without an unexplained row.
  */
-export function flowSteps(rows: AccountYear[], liability: boolean): FlowStep[] {
+export function flowSteps(rows: AccountYear[], liability: boolean, income: readonly LineItem[] = []): FlowStep[] {
   const sum = (pick: (r: AccountYear) => number) => rows.reduce((a, r) => a + pick(r), 0);
   const open = sum((r) => r.open);
   const close = sum((r) => r.close);
 
-  const parts: { key: string; label: string; value: number }[] = liability
-    ? [{ key: 'paid', label: 'Principal paid', value: -sum((r) => r.principal) }]
-    : [
-        { key: 'contributions', label: 'Contributions', value: sum((r) => r.contributions) },
-        { key: 'growth', label: 'Growth', value: sum((r) => r.growth) },
-        { key: 'withdrawals', label: 'Withdrawals', value: -sum((r) => r.withdrawals) },
-      ];
-  const named = parts.reduce((a, p) => a + p.value, 0);
-  const other = close - open - named;
-  if (Math.abs(other) >= 1) parts.push({ key: 'other', label: 'Other', value: other });
+  let parts: { key: string; label: string; value: number }[];
+  if (liability) {
+    parts = [{ key: 'paid', label: 'Principal paid', value: -sum((r) => r.principal) }];
+  } else {
+    const ids = new Set(rows.map((r) => r.accountId));
+    const mine = income.filter((l) => l.accountId !== undefined && ids.has(l.accountId));
+    const required = mine
+      .filter((l) => l.category !== 'sepp' && l.label.startsWith('Required minimum distribution'))
+      .reduce((a, l) => a + l.amount, 0);
+    const sepp = mine.filter((l) => l.category === 'sepp').reduce((a, l) => a + l.amount, 0);
+    const withdrawn = sum((r) => r.withdrawals);
+    parts = [
+      { key: 'contributions', label: 'Contributions', value: sum((r) => r.contributions) },
+      { key: 'growth', label: 'Growth (net of fees)', value: sum((r) => r.growth) },
+      { key: 'rmd', label: 'Required distributions', value: -required },
+      { key: 'sepp', label: 'SEPP payments', value: -sepp },
+      { key: 'withdrawals', label: 'Withdrawals', value: -(withdrawn - required - sepp) },
+    ];
+  }
+
+  const other = close - open - parts.reduce((a, p) => a + p.value, 0);
+  const growth = parts.find((p) => p.key === 'growth');
+  if (growth && Math.abs(other) < Math.max(1000, 0.005 * Math.abs(open))) {
+    growth.value += other;
+  } else if (Math.abs(other) >= MIN_ROW) {
+    parts.push({ key: 'other', label: 'Inflation adjustment', value: other });
+  }
+
+  // A sub-dollar row isn't drawn, but its cents still move the running balance
+  // somewhere: Growth (always drawn) takes them, so the bars land on `close`.
+  const visible = (p: { key: string; value: number }) =>
+    p.key === 'growth' || p.key === 'contributions' || Math.abs(p.value) >= MIN_ROW;
+  const crumbs = parts.filter((p) => !visible(p)).reduce((a, p) => a + p.value, 0);
+  if (growth) growth.value += crumbs;
 
   let running = open;
   const steps: FlowStep[] = [{ key: 'open', label: 'Opening', value: open, kind: 'total', from: 0, to: open }];
   for (const p of parts) {
-    if (Math.abs(p.value) < 0.5 && p.key !== 'growth' && p.key !== 'contributions') continue;
+    if (!visible(p)) continue;
     const from = running;
     running += p.value;
     steps.push({ ...p, kind: p.value >= 0 ? 'in' : 'out', from, to: running });
   }
   steps.push({ key: 'close', label: 'Closing', value: close, kind: 'total', from: 0, to: close });
   return steps;
+}
+
+/**
+ * The danger band re-unitised per month, for the sheets that sit over this
+ * page's "/mo" figures (V5-REVIEW-2 N10). `shortFor` divides each short year's
+ * unfunded total by that year's months, like the spending donut does.
+ */
+export function monthlyDangerBand(health: PlanHealth, plan: Plan, result: PlanResult): DangerBand | undefined {
+  const band = healthDangerBand(health, result);
+  if (!band) return undefined;
+  const perMonth = new Map(result.years.map((y) => [y.year, (y.unfundedShortfall ?? 0) / (monthsIn(plan, y.year) || 12)]));
+  return { ...band, shortFor: (year) => perMonth.get(year) };
 }
