@@ -185,9 +185,23 @@ describe('stranded accounts (V5-REVIEW-1 F6)', () => {
     expect(health.stranded.find((s) => s.accountId === 'k401')?.reason).toBe('sepp');
   });
 
-  it("reports 'penalty' while the owner is under the penalty-free age", () => {
-    const { health } = strandedOf(dryWith({ withdrawalTiming: 'always' }, true));
-    expect(health.stranded.find((s) => s.accountId === 'k401')?.reason).toBe('penalty');
+  it("never lists a penalty-age account: the engine draws it at a penalty (V5-REVIEW-2 N5)", () => {
+    // A ruled, 'always' 401(k) whose owner is under 59.5 in the short year.
+    const plan = dryWith({ withdrawalTiming: 'always' }, true);
+    const { health, result } = strandedOf(plan);
+    const k401 = plan.accounts.find((a) => a.id === 'k401')!;
+    const owner = plan.participants.find((p) => p.id === (k401.ownerParticipantId ?? plan.participants[0].id))!;
+    const snap = result.years.find((y) => y.year === health.firstShortYear)!;
+    expect(snap.year - owner.birthYear).toBeLessThan(k401.penaltyFreeAge!);
+    expect(health.stranded.find((s) => s.accountId === 'k401')).toBeUndefined();
+    // ...yet its balance is still not counted as spendable (§4.2): spendable
+    // stays penalty-free, so only the cash/brokerage accounts count.
+    const k401Close = snap.accounts.find((a) => a.accountId === 'k401')!.close;
+    expect(k401Close).toBeGreaterThan(0);
+    const freeMoney = snap.accounts
+      .filter((a) => a.accountClass === 'cash' || a.accountClass === 'taxableInvestment')
+      .reduce((n, a) => n + a.close, 0);
+    expect(health.spendable[result.years.indexOf(snap)]).toBeCloseTo(freeMoney, 0);
   });
 
   it('never lists spendable money, home equity or a plan that survives', () => {
