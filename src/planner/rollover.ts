@@ -31,7 +31,7 @@ export interface RollForwardResult {
  * Touches four things:
  * - `startYear` becomes `today`'s (UTC) calendar year.
  * - `asOfDate` becomes that year's January 1st — the same "no explicit
- *   as-of" convention `planFreshness`/`planMetaLine`/`progress.ts` already
+ *   as-of" convention `planFreshness`/`planMetaLine` already
  *   fall back to for a plan with no `asOfDate` set, so a rolled-forward plan
  *   reads exactly like one freshly created this January.
  * - `projectionYears` shrinks by the same number of years `startYear` moved,

@@ -85,8 +85,9 @@ export function applyLevers(plan: Plan, levers: LeverInputs): Plan {
 /**
  * How much a lever-shifted plan moves the ending net worth, against the same
  * plan's own un-levered projection — the live readout's "+$310K by 2046"
- * (docs/ROADMAP-10.md C5). Mirrors `NetWorthChart.tsx`'s `rankImpact`, which
- * answers the identical question for a single event's counterfactual.
+ * (docs/ROADMAP-10.md C5). The same question the old per-event
+ * counterfactual impact tag asked (cut in v5, docs/REDESIGN-V5.md §4.4), asked
+ * of the levers as a set.
  *
  * Reads off `base.endYear` rather than each series' own last year: the two
  * results are projections of the SAME plan (one lever-shifted), so they
@@ -108,7 +109,7 @@ function isAdjustable(plan: Plan, line: NonNullable<Plan['budget']>[number]): bo
 }
 
 /** Yearly, today's dollars: the budget lines the spending lever scales. 0 for a plan with no budget. */
-export function adjustableBudgetAnnual(plan: Plan): number {
+function adjustableBudgetAnnual(plan: Plan): number {
   return (plan.budget ?? []).filter((l) => isAdjustable(plan, l)).reduce((sum, l) => sum + l.amount * 12, 0);
 }
 

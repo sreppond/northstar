@@ -1,7 +1,7 @@
 /*
  * Shared page-frame components (docs/REDESIGN-V3.md "Page frame + shared
- * components"): Page, PageHeader, StatStrip/Stat, StatCard, SectionCard,
- * Segmented, Select, Badge, DeltaTag, StackedBar, ProgressBar, EmptyState,
+ * components"): Page, PageHeader, SectionCard,
+ * Segmented, Select, Badge, DeltaTag, StackedBar, EmptyState,
  * Eyebrow. Every token referenced here (--border, --chip, --ink, --in-tint,
  * --mix-1..6, etc.) is defined in planner.css, which this file is imported
  * after (src/App.tsx) so nothing here needs its own theme blocks — light and

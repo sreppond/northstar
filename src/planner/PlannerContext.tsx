@@ -383,7 +383,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 }
 
 /** Real elapsed time from `asOfDate` (or Jan 1st of `startYear` when unset —
-    the same fallback `planFreshness`/`planMetaLine`/`progress.ts` all use) to
+    the same fallback `planFreshness`/`planMetaLine` both use) to
     December 31st of `endYear`, in fractional years — the CAGR clock `growth`
     above uses (docs/MATH.md "Today vs. years[0]", queued for this wave). A
     365.25-day year, matching the leap-year-averaged convention a "years

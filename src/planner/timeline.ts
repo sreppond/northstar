@@ -17,8 +17,7 @@ import { toneFor, type EventTone } from './presentation';
 /** One year's column width (§5.4: "64px / year"). */
 export const YEAR_PX = 64;
 
-/** Same click-vs-drag ambiguity threshold `NetWorthChart`'s own event drag
-    uses: a pointer that hasn't moved more than this many px yet is still a
+/** The click-vs-drag ambiguity threshold: a pointer that hasn't moved more than this many px yet is still a
     plain click, not a drag (docs/ROADMAP-10.md C7). */
 export const DRAG_THRESHOLD_PX = 4;
 

@@ -101,9 +101,8 @@ function takeHomeIncome(plan: Plan): number {
 
 /**
  * `plan` is optional and additive: passing it appends a "Referenced by"
- * section (`eventReferences.ts`) for callers that have the whole plan handy
- * (currently only `EventsTab.tsx`). Callers that only have the one event —
- * `NetWorthChart.tsx`'s chart-pin hover cards, `CashFlowTab.tsx`'s row hover —
+ * section (`eventReferences.ts`) for callers that have the whole plan handy.
+ * Callers that only have the one event (`CashFlowTab.tsx`'s row hover, say)
  * are unaffected; omitting it renders exactly what this always rendered.
  */
 export function eventDetail(event: PlanEvent, plan?: Plan): Detail {

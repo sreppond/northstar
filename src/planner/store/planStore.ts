@@ -72,7 +72,7 @@ interface PlanState {
   past: Plan[][];
   future: Plan[][];
 
-  /** The actual, historical net-worth ledger — see `../progress.ts`. Not part of undo/redo. */
+  /** The actual, historical net-worth ledger — see `ProgressPoint` above. Not part of undo/redo. */
   progressPoints: ProgressPoint[];
   upsertProgressPoint(point: ProgressPoint): void;
   deleteProgressPoint(id: string): void;

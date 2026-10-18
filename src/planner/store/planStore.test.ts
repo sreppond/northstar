@@ -8,7 +8,7 @@ import { usePlanStore } from './planStore';
  * every pointer-move for the live preview, and calls `upsertEvent` exactly
  * once, on release — never on every move — which is what this file checks
  * from the store side. (The pointer gesture itself lives in
- * NetWorthChart.tsx, a .tsx component; this repo's test runner only
+ * a .tsx component; this repo's test runner only
  * collects `*.test.ts`, so the gesture is verified live in the browser
  * instead — see the Phase 3 report.)
  *

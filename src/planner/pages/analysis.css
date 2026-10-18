@@ -86,13 +86,8 @@
   gap: 14px;
 }
 
-/* S9: geometry matched to `ui/StatCard`'s `.ns-ui-statcard` exactly (12px
-   radius, 14px/16px padding, 8px gap) rather than this card's own
-   14px/16px18px — the two sit side by side across the app (Overview's
-   horizon cards use `StatCard` itself) and used to read as two different
-   card systems. Not rendered as an actual `StatCard`: that component has no
-   slot for the sparkline body this card needs (label/badge/value/foot only)
-   — see StatCard.tsx, owned by fix-2's Overview/StatCard pass. */
+/* Geometry matched to the app's other small cards: 12px radius, 14px/16px
+   padding, 8px gap. */
 .ns-compare-card {
   display: flex;
   flex-direction: column;
