@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { runPlan, withHomePurchase } from '@northstar/engine';
+import { readHome, runPlan, withHomePurchase, type Plan } from '@northstar/engine';
 import { SAMPLE_PLANS } from './samplePlan';
-import { investableSplit, retirementSources } from './retirementSources';
+import { investableSplit, retirementSources, spendableIgnoringPenalty } from './retirementSources';
 import { agesLineFor, dangerBandFor } from './decisionKit';
 import { planHealth } from './health';
-import { priceGrid, pricePoints } from './priceCurve';
-import { currentTerms } from './homeView';
+import { priceGrid, pricePoints, shownCashLeft, shownPrice } from './priceCurve';
+import { applyTerms, currentTerms } from './homeView';
+import { buildLanes } from './timeline';
+import { money } from './format';
+import { incomeSourceLabel } from './cashFlowView';
 import { runsDryPlan, healthyPlan, basePlan, account, event } from './planFixtures';
 
 describe('retirementSources', () => {
@@ -113,5 +116,83 @@ describe('priceCurve', () => {
     // And it is the rail's number: the same plan, health over its own full run.
     const full = runPlan(withHomePurchase(plan, 2027, 200_000, {}));
     expect(point.firstShortYear).toBe(planHealth(full).firstShortYear);
+  });
+});
+
+describe('investableSplit: the penalty band (V5-REVIEW-2 N5)', () => {
+  it('shows money held back only by the early-withdrawal age as "With 10% penalty", not Locked', () => {
+    const plan = basePlan({
+      settings: { ...basePlan().settings, baselineIncome: 0, baselineExpenses: 20_000, projectionYears: 25 },
+      accounts: [
+        account({ id: 'cash', accountClass: 'cash', initialBalance: 400_000, growthRate: 1 }),
+        account({ id: 'k401', accountClass: 'taxDeferredInvestment', initialBalance: 300_000, penaltyRate: 10, penaltyFreeAge: 59.5 }),
+        account({ id: 'never', accountClass: 'taxableInvestment', initialBalance: 100_000, withdrawalTiming: 'never' }),
+      ],
+      events: [event({ id: 'end', kind: 'endOfPlan', startYear: 2050, isRequired: true })],
+      rules: [
+        { accountId: 'cash', ruleType: 'withdrawal', order: 1 },
+        { accountId: 'k401', ruleType: 'withdrawal', order: 2 },
+        { accountId: 'never', ruleType: 'withdrawal', order: 3 },
+      ],
+    });
+    const result = runPlan(plan);
+    const health = planHealth(result, plan);
+    const split = investableSplit(result, health.spendable, spendableIgnoringPenalty(plan, result));
+    const at = (year: number) => result.years.findIndex((y) => y.year === year);
+    const close = (year: number, id: string) => result.years[at(year)].accounts.find((a) => a.accountId === id)!.close;
+
+    // Alex is 46 in 2026: the 401(k) is penalty-gated; the never-withdraw account is locked.
+    expect(split.penalty[0]).toBeCloseTo(close(2026, 'k401'), 4);
+    expect(split.locked[0]).toBeCloseTo(close(2026, 'never'), 4);
+    // Past 59.5 (2040) the penalty is gone: nothing is left in that band.
+    expect(split.penalty[at(2041)]).toBe(0);
+    result.years.forEach((y, i) => {
+      const total = y.accounts.filter((a) => !a.isLiability).reduce((sum, a) => sum + Math.max(0, a.close), 0);
+      expect(split.canSpend[i] + split.penalty[i] + split.locked[i]).toBeCloseTo(total, 4);
+      expect(split.locked[i]).toBeGreaterThanOrEqual(-1e-6);
+    });
+  });
+
+  it('is unchanged (no band) when the caller does not pass the penalty-free spendable', () => {
+    const plan = runsDryPlan();
+    const result = runPlan(plan);
+    const split = investableSplit(result, planHealth(result, plan).spendable);
+    expect(split.penalty.every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('Cash Flow labels (V5-REVIEW-2 N5)', () => {
+  it('reads an RMD as a required distribution from the named account', () => {
+    expect(incomeSourceLabel('Required minimum distribution — Tax-deferred investments')).toBe('Required distributions · Tax-deferred investments');
+    expect(incomeSourceLabel('Social Security')).toBe('Social Security');
+  });
+});
+
+describe('one home, one set of figures (V5-REVIEW-2 N7)', () => {
+  const dollars = (plan: Plan): Plan => ({
+    ...plan,
+    settings: { ...plan.settings, dollarMode: 'todaysDollars' as const, inflationRate: 3 },
+  });
+
+  it("Timeline's price for the home is the price Home shows on its slider and curve", () => {
+    const plan = dollars(SAMPLE_PLANS[0]);
+    const t = currentTerms(plan);
+    const home = plan.events.find((e) => e.kind === 'buyAHome')!;
+    const homeShows = shownPrice(plan, t.price, t.year);
+    // Not a coincidence of a zero-inflation plan: the shown price is deflated.
+    expect(homeShows).toBeLessThan(t.price);
+    const lanes = buildLanes(plan, plan.settings.startYear, plan.settings.startYear + plan.settings.projectionYears);
+    const chip = lanes.flatMap((l) => l.events).find((e) => e.event.id === home.id)!;
+    expect(chip.detail).toBe(money(homeShows));
+  });
+
+  it('the price curve and the draft plan agree on cash left after closing, so one figure serves every readout', () => {
+    const plan = dollars(SAMPLE_PLANS[0]);
+    const t = currentTerms(plan);
+    const [onCurve] = pricePoints(plan, t, [t.price]);
+    const draft = applyTerms(plan, t);
+    const reading = readHome(draft, runPlan(draft))!;
+    expect(onCurve.reading.liquidAfterClosing).toBeCloseTo(reading.liquidAfterClosing, 4);
+    expect(shownCashLeft(plan, onCurve.reading, t.year)).toBeCloseTo(shownCashLeft(plan, reading, t.year), 4);
   });
 });

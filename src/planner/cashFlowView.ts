@@ -294,6 +294,18 @@ function accumulate(map: Map<string, Acc>, key: string, label: string, i: number
   acc.values[i] += amount;
 }
 
+/**
+ * How an income source reads in the tree (V5-REVIEW-2 N5). The engine's label
+ * is "Required minimum distribution — Tax-deferred investments", which truncated
+ * to "Required minimum distribution — T…" and read as an ordinary withdrawal. As
+ * "Required distributions · Tax-deferred investments" it says what the money is
+ * and which account it came from, and fits.
+ */
+export function incomeSourceLabel(label: string): string {
+  const m = /^Required minimum distribution — (.+)$/.exec(label);
+  return m ? `Required distributions · ${m[1]}` : label;
+}
+
 function lineNodes(prefix: string, map: Map<string, Acc>): FlowNode[] {
   return [...map.values()]
     .filter((a) => !isZero(a.values))
@@ -344,7 +356,7 @@ export function cashFlowTree(plan: Plan, snapshots: YearSnapshot[]): CashFlowTre
     .filter((a) => !isZero(a.gross) || !isZero(a.tax))
     .map((a) => ({
       key: `income:${a.key}`,
-      label: a.label,
+      label: incomeSourceLabel(a.label),
       values: a.gross.map((g, i) => g - a.tax[i]),
       ...(a.sourceEventId ? { sourceEventId: a.sourceEventId } : {}),
       ...(PLAN_DRIVEN.has(a.label) ? { planDriven: true } : {}),

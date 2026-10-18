@@ -10,7 +10,7 @@
  * converts to what the user reads.
  */
 import { pathMarkers, readHome, runPlan, withHomePurchase, type HomeReading, type Plan } from '@northstar/engine';
-import { zoneOf, type HomeTerms, type Zone } from './homeView';
+import { toDisplay, zoneOf, type HomeTerms, type Zone } from './homeView';
 
 export interface PricePoint {
   /** Nominal, purchase-year dollars. */
@@ -54,4 +54,20 @@ export function pricePoints(plan: Plan, t: HomeTerms, prices: number[]): PricePo
     const reading = readHome(candidate, result);
     return reading ? [{ price, reading, zone: zoneOf(reading), firstShortYear: pathMarkers(result).shortfallYears[0] }] : [];
   });
+}
+
+/**
+ * The two figures Home prints about a purchase, from ONE place (V5-REVIEW-2 N7).
+ * The price lever, the price-curve readout, the house-poor check and Timeline's
+ * "Buy a home" chip all read these, so one home can no longer show $1.01M,
+ * $1.02M and $1.15M, or $7.6K and $7.8K of cash left. Both are the plan's
+ * nominal figure deflated to the PURCHASE year, the units the user reads.
+ */
+export function shownPrice(plan: Pick<Plan, 'settings'>, nominalPrice: number, purchaseYear: number): number {
+  return toDisplay(plan, nominalPrice, purchaseYear);
+}
+
+/** Cash and taxable investments left after closing, in the same units as `shownPrice`. */
+export function shownCashLeft(plan: Pick<Plan, 'settings'>, reading: Pick<HomeReading, 'liquidAfterClosing'>, purchaseYear: number): number {
+  return toDisplay(plan, reading.liquidAfterClosing, purchaseYear);
 }

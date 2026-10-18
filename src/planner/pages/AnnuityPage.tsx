@@ -12,7 +12,7 @@ import {
   withSeppElection,
 } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
-import { AnnuityForecastView, isAnnuityContract } from '../views/AnnuityForecastView';
+import { AnnuityForecastView, isAnnuityContract, setAnnuityHoverYear } from '../views/AnnuityForecastView';
 import { SeppBars } from '../views/SeppBars';
 import { RangePicker, TimeSeriesChart } from '../charts';
 import { DataTable, type TableRow } from '../tabs/DataTable';
@@ -188,7 +188,7 @@ function SeppSection({ candidates }: { candidates: ReturnType<typeof usePlanner>
   return (
     <>
       <section className="ns-dec-section">
-        <SeppBars options={options} selectedYear={startYear} onSelect={setStartYear} height={heroHeight} actions={controls} />
+        <SeppBars options={options} selectedYear={startYear} onSelect={setStartYear} onHoverYear={setAnnuityHoverYear} height={heroHeight} actions={controls} />
         {method !== 'rmd' && (
           <label className="ns-sepp-rate">
             <span>Interest rate</span>
@@ -244,6 +244,7 @@ function SeppSection({ candidates }: { candidates: ReturnType<typeof usePlanner>
           height={heroHeight - 100}
           focusYear={focusYear}
           onFocusYear={setFocusYear}
+          onHoverYear={setAnnuityHoverYear}
           danger={danger}
           onRequestRange={setChartRange}
           bandFrom={lockedUntil !== undefined && lockedUntil + 1 <= chartEnd ? lockedUntil + 1 : undefined}

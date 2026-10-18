@@ -223,7 +223,7 @@ export const CashFlowTab = memo(function CashFlowTab({
   return (
     <div ref={root} className="ns-cf-table" data-hot={hot ?? undefined} onPointerOver={hotRow} onPointerLeave={() => onHot(null)}>
       <DataTable
-        caption="Per year"
+        caption=""
         years={tree.years}
         rows={rows}
         focusYear={focusYear}

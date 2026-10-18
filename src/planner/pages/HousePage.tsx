@@ -8,12 +8,13 @@ import { HouseForecastView } from '../views/HouseForecastView';
 import { AffordabilityMap, type MapPoint } from '../views/AffordabilityMap';
 import { PriceCurve, type CurveDatum } from '../views/PriceCurve';
 import { HomeBudgetDonut } from '../views/HomeBudgetDonut';
-import { RangePicker, TimeSeriesChart, rangeWindow } from '../charts';
+import { ChartReadout, RangePicker, TimeSeriesChart, rangeWindow, type ChartNote, type RangeKey } from '../charts';
+import { inDanger } from '../charts/seriesMath';
 import { ImpactStrip, PreviewActions } from '../ImpactStrip';
 import { impactMetrics, presentResult } from '../impact';
 import { planHealth } from '../health';
 import { agesLineFor, dangerBandFor, useHeroHeight } from '../decisionKit';
-import { priceGrid, pricePoints } from '../priceCurve';
+import { priceGrid, pricePoints, shownCashLeft, shownPrice as shownPriceOf } from '../priceCurve';
 import {
   ZONE_LABEL,
   applyTerms,
@@ -22,7 +23,6 @@ import {
   fromDisplay,
   ownCost,
   toDisplay,
-  nicePrice,
   zoneOf,
   type HomeTerms,
   type Zone,
@@ -70,6 +70,14 @@ function HomeDecision() {
   const [t, setT] = useState<HomeTerms>(saved);
   useEffect(() => setT(saved), [saved]);
   const heroHeight = useHeroHeight();
+  // The cushion chart reads a window around the purchase until the user picks a
+  // range themselves (V5-REVIEW-2 N8); `chartRange` alone can't say "picked All".
+  const [pickedRange, setPickedRange] = useState(false);
+  const [cushionHover, setCushionHover] = useState<number | null>(null);
+  const pickRange = (r: RangeKey) => {
+    setPickedRange(true);
+    setChartRange(r);
+  };
 
   const start = stored.settings.startYear;
   const years = useMemo(() => candidateYears(start, planEndYear(stored)), [start, stored]);
@@ -117,7 +125,8 @@ function HomeDecision() {
   const draftAges = useMemo(() => agesLineFor(draftPlan, draftResult), [draftPlan, draftResult]);
 
   const setPrice = (shown: number) => setT((x) => ({ ...x, price: fromDisplay(stored, shown, x.year) }));
-  const shownPrice = show(t.price, t.year);
+  // One price for the whole page (V5-REVIEW-2 N7): the lever, the curve readout and Timeline.
+  const shownPrice = shownPriceOf(stored, t.price, t.year);
   const priceMax = Math.max(1_000_000, ...points.map((p) => p.stretch * 1.5), shownPrice * 1.25);
 
   // --- the price curve: this purchase year at a ladder of prices ----------
@@ -134,7 +143,7 @@ function HomeDecision() {
         share: p.reading.housingShare,
         zone: p.zone,
         monthly: toDisplay(stored, p.reading.housingMonthly, deferredYear + 1),
-        cashLeft: toDisplay(stored, p.reading.liquidAfterClosing, deferredYear),
+        cashLeft: shownCashLeft(stored, p.reading, deferredYear),
         shortfallYear: p.firstShortYear,
       })),
     [stored, deferredYear, deferredTerms, grid],
@@ -146,15 +155,37 @@ function HomeDecision() {
           share: reading.housingShare,
           zone,
           monthly: show(reading.housingMonthly, firstYear),
-          cashLeft: show(reading.liquidAfterClosing, t.year),
+          cashLeft: shownCashLeft(stored, reading, t.year),
           // The whole-plan answer, the same number the rail pill shows for this price (F7).
           shortfallYear: draftHealth.firstShortYear,
         }
       : undefined;
 
   // --- the cushion --------------------------------------------------------
+  // V5-REVIEW-2 N8: "Keep renting" compounds to ~$7M and used to set the y-axis,
+  // flattening the buy line it is compared with. The chart now sees a window
+  // (purchase year -2 .. +10 by default), its y-domain comes from the buy line
+  // and the reserve only, and the rent line is clipped at the top with a chip
+  // carrying its true value (the readout below also reads the true value).
   const cushionYears = cushion.years;
-  const reserve = draftNominal.years.map((y) => show(recurringSpending(y) / 2, y.year));
+  const explicitRange = chartRange !== 'all' || pickedRange;
+  const cushionWin = explicitRange
+    ? rangeWindow(cushionYears, start, chartRange)
+    : { from: Math.max(cushionYears[0] ?? t.year, t.year - 2), to: Math.min(cushionYears[cushionYears.length - 1] ?? t.year, t.year + 10) };
+  const cIdx = cushionYears.flatMap((y, i) => (y >= cushionWin.from && y <= cushionWin.to ? [i] : []));
+  const cYears = cIdx.map((i) => cushionYears[i]);
+  const buyValues = cIdx.map((i) => show(cushion.withHome[i], cushionYears[i]));
+  const rentValues = cIdx.map((i) => show(cushion.renting[i], cushionYears[i]));
+  const reserveValues = cIdx.map((i) => show(recurringSpending(draftNominal.years[i]) / 2, cushionYears[i]));
+  const cushionTop = Math.max(0, ...buyValues, ...reserveValues);
+  const rentCap = cushionTop * 1.15;
+  const rentDrawn = rentValues.map((v) => (rentCap > 0 ? Math.min(v, rentCap) : v));
+  const lastRent = rentValues[rentValues.length - 1];
+  const cushionNotes: ChartNote[] =
+    rentCap > 0 && lastRent > rentCap ? [{ year: cYears[cYears.length - 1], value: rentCap, text: `↑ Keep renting ${money(lastRent)}` }] : [];
+  const cushionPinned = pageYear(focusYear !== null && cYears.includes(focusYear) ? focusYear : null, t.year, cYears);
+  const cushionYear = cushionHover !== null && cYears.includes(cushionHover) ? cushionHover : (cushionPinned ?? cYears[cYears.length - 1]);
+  const cushionAt = cYears.indexOf(cushionYear);
 
   return (
     <>
@@ -168,7 +199,7 @@ function HomeDecision() {
           focusYear={focusYear}
           onFocusYear={setFocusYear}
           agesFor={agesFor}
-          actions={<RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={start} />}
+          actions={<RangePicker value={chartRange} onChange={pickRange} years={years} openingYear={start} />}
         />
       </section>
 
@@ -177,7 +208,7 @@ function HomeDecision() {
           <h2 className="ns-dec-title">{hasHome ? 'Try a different home' : 'Try a home'}</h2>
         </div>
         <div className="ns-levers ns-dec-levers">
-          <Lever label="Price" display={money(nicePrice(shownPrice))} value={shownPrice} min={100_000} max={Math.round(priceMax / 50_000) * 50_000} step={25_000} onChange={setPrice} />
+          <Lever label="Price" display={money(shownPrice)} value={shownPrice} min={100_000} max={Math.round(priceMax / 50_000) * 50_000} step={25_000} onChange={setPrice} />
           <Lever
             label="Buy in"
             display={String(t.year)}
@@ -251,7 +282,7 @@ function HomeDecision() {
               showRent={(v) => show(v, t.year - 1)}
             />
           )}
-          <HousePoorCheck reading={reading} show={(v) => show(v, firstYear)} firstShortYear={draftHealth.firstShortYear} endYear={planEndYear(stored)} />
+          <HousePoorCheck reading={reading} cashLeft={shownCashLeft(stored, reading, t.year)} firstShortYear={draftHealth.firstShortYear} endYear={planEndYear(stored)} />
         </div>
       )}
 
@@ -259,22 +290,37 @@ function HomeDecision() {
         <div className="ns-dec-head">
           <h2 className="ns-dec-title">Your cash cushion</h2>
         </div>
+        {cushionAt >= 0 && (
+          <ChartReadout
+            label="Cash and taxable investments"
+            value={money(buyValues[cushionAt])}
+            yearLabel={String(cushionYear)}
+            ages={draftAges(cushionYear)}
+            size="compact"
+            secondary={[
+              { id: 'rent', label: 'Keep renting', color: 'var(--muted)', value: money(rentValues[cushionAt]), dashed: true },
+              { id: 'reserve', label: '6-month reserve', color: 'var(--warn)', value: money(reserveValues[cushionAt]), dashed: true },
+            ]}
+            short={!!danger && inDanger(danger, cushionYear)}
+          />
+        )}
         <TimeSeriesChart
-          years={cushionYears}
+          years={cYears}
           series={[
-            { id: 'buy', label: `Buying in ${t.year}`, color: 'var(--data-nw)', values: cushion.withHome.map((v, i) => show(v, cushionYears[i])), kind: 'area' },
-            { id: 'rent', label: 'Keep renting', color: 'var(--muted)', values: cushion.renting.map((v, i) => show(v, cushionYears[i])), dashed: true },
-            { id: 'reserve', label: '6-month reserve', color: 'var(--warn)', values: reserve, dashed: true, lineWidth: 1.5 },
+            { id: 'buy', label: `Buying in ${t.year}`, color: 'var(--data-nw)', values: buyValues, kind: 'area' },
+            { id: 'rent', label: 'Keep renting', color: 'var(--muted)', values: rentDrawn, dashed: true },
+            { id: 'reserve', label: '6-month reserve', color: 'var(--warn)', values: reserveValues, dashed: true, lineWidth: 1.5 },
           ]}
-          range={chartRange}
           todayYear={start}
           height={Math.max(220, heroHeight - 110)}
-          focusYear={pageYear(focusYear, t.year, cushionYears)}
+          focusYear={cushionPinned}
           onFocusYear={setFocusYear}
+          onHoverYear={setCushionHover}
           danger={danger}
-          onRequestRange={setChartRange}
+          onRequestRange={pickRange}
           markers={[{ year: t.year, label: 'Buy', tone: 'cost' }]}
-          readout={{ label: 'Cash and taxable investments', primaryId: 'buy', size: 'compact', agesFor: draftAges }}
+          notes={cushionNotes}
+          readout={false}
           ariaLabel="Cash and taxable investments, buying versus renting, with the six-month reserve"
         />
       </section>
@@ -315,12 +361,13 @@ function Lever({
 /** The house-poor check: every rule, its threshold, and where this purchase lands. */
 function HousePoorCheck({
   reading,
-  show,
+  cashLeft,
   firstShortYear,
   endYear,
 }: {
   reading: NonNullable<ReturnType<typeof readHome>>;
-  show(nominal: number): number;
+  /** Cash left after closing, in the units the user reads; the same figure the price curve prints (V5-REVIEW-2 N7). */
+  cashLeft: number;
   /** Whole-plan first short year (V5-REVIEW-1 F7), not the ten-year carry window. */
   firstShortYear?: number;
   endYear: number;
@@ -342,7 +389,7 @@ function HousePoorCheck({
     },
     {
       label: 'Cash left after closing',
-      value: Number.isFinite(reading.reserveMonths) ? `${reading.reserveMonths.toFixed(1)} mo · ${money(show(reading.liquidAfterClosing))}` : '—',
+      value: Number.isFinite(reading.reserveMonths) ? `${reading.reserveMonths.toFixed(1)} mo · ${money(cashLeft)}` : '—',
       rule: `≥ ${comfortable.minReserveMonths} mo · ≥ ${stretch.minReserveMonths} mo`,
       zone: status(reading.reserveMonths >= comfortable.minReserveMonths, reading.reserveMonths >= stretch.minReserveMonths),
     },

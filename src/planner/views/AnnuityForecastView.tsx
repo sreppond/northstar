@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import type { Account, Plan, PlanResult } from '@northstar/engine';
 import { DonutChart } from '../charts';
 import { usePlanner } from '../PlannerContext';
@@ -34,6 +34,34 @@ export function isAnnuityContract(account: Account): boolean {
   );
 }
 
+/**
+ * The year an Annuity & SEPP chart is being hovered at (V5-REVIEW-2 N19). The
+ * page has two kit charts (the SEPP start-year bars and the balance chart) and
+ * the basis/gain donut should follow hover like every other chart, not just the
+ * pin. This is a one-value store rather than page state so a hover step
+ * re-renders the donut alone, not the page's tables and impact strip.
+ */
+let hoveredYear: number | null = null;
+const hoverListeners = new Set<() => void>();
+export function setAnnuityHoverYear(year: number | null): void {
+  if (year === hoveredYear) return;
+  hoveredYear = year;
+  hoverListeners.forEach((l) => l());
+}
+function subscribeHover(listener: () => void): () => void {
+  hoverListeners.add(listener);
+  return () => {
+    hoverListeners.delete(listener);
+    // Leaving the page must not strand a hover for the next visit.
+    if (hoverListeners.size === 0) hoveredYear = null;
+  };
+}
+const hoverSnapshot = () => hoveredYear;
+const noHover = () => null;
+function useAnnuityHoverYear(): number | null {
+  return useSyncExternalStore(subscribeHover, hoverSnapshot, noHover);
+}
+
 /** `accountId`: show just that contract (the Annuity & SEPP page drives the choice); unset, the first one. */
 export function AnnuityForecastView({ plan, result, accountId }: { plan: Plan; result: PlanResult; accountId?: string }) {
   const all = plan.accounts.filter((a) => !a.isSynthetic && isAnnuityContract(a));
@@ -43,13 +71,16 @@ export function AnnuityForecastView({ plan, result, accountId }: { plan: Plan; r
 }
 
 function AnnuityContent({ account, result }: { account: Account; result: PlanResult }) {
-  const { focusYear } = usePlanner();
+  const { focusYear: pinnedYear } = usePlanner();
+  // Hover wins over the pin, as in every chart's readout.
+  const hovered = useAnnuityHoverYear();
+  const focusYear = hovered ?? pinnedYear;
   // "As of today" (docs/MATH.md "Today vs. years[0]"): `result.opening` is the
   // plan's real `asOfDate` balance, not the first year's projected close.
   const opening = result.opening?.accounts.find((a) => a.accountId === account.id);
   const todayBalance = opening?.balance ?? account.initialBalance;
 
-  // V5-REVIEW-1 F27: the donut follows the pinned year like every other chart:
+  // V5-REVIEW-1 F27 / V5-REVIEW-2 N19: the donut follows the hovered year, else the pinned one, like every other chart:
   // that year's closing balance, split into the basis still left and the gain.
   // With nothing pinned (or a year this account has no row for) it reads today.
   const pinned = focusYear === null ? undefined : result.years.find((y) => y.year === focusYear)?.accounts.find((a) => a.accountId === account.id);
