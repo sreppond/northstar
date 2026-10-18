@@ -79,6 +79,9 @@ export interface CareerSegment {
   label: string;
   /** Share of full pay, 0–1. */
   share: number;
+  /** Which kind of stretch it is: Timeline draws full solid, part lighter,
+      leave hatched, off as a gap (docs/REDESIGN-V5.md §5.4). */
+  mode: WorkPhase['mode'];
   eventId: string;
 }
 
@@ -113,18 +116,21 @@ export function careerSegments(plan: Plan, participantId: string, startYear: num
 
     let cursor = from;
     let share = 1;
+    let mode: WorkPhase['mode'] = 'full';
     let label = job.name;
     for (const b of breaks) {
       if (b.year <= cursor) {
         ({ share, label } = phaseLabel(job.name, b.phase));
+        mode = b.phase.mode;
         continue;
       }
       if (b.year >= to) break;
-      out.push({ from: cursor, to: b.year, label, share, eventId: job.id });
+      out.push({ from: cursor, to: b.year, label, share, mode, eventId: job.id });
       cursor = b.year;
       ({ share, label } = phaseLabel(job.name, b.phase));
+      mode = b.phase.mode;
     }
-    out.push({ from: cursor, to, label, share, eventId: job.id });
+    out.push({ from: cursor, to, label, share, mode, eventId: job.id });
   });
   return out.filter((s) => s.to > s.from);
 }

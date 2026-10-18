@@ -1,68 +1,62 @@
-import { useState } from 'react';
+import { useState, type PointerEvent, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { LineItem, PlanEvent, YearSnapshot } from '@northstar/engine';
+import type { PlanEvent, YearSnapshot } from '@northstar/engine';
 import { DataTable, type TableRow } from './DataTable';
 import { tableMoney, signedTableMoney, percent, ZERO_DASH } from '../format';
 import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { GearIcon } from '../icons';
-import {
-  lifeChangeRows,
-  savedThisYear,
-  savingsRateNote,
-  savingsRatePercent,
-  spendingThisYear,
-  stubYearLabel,
-} from '../ledger';
-import type { Detail } from '../detail';
+import { savingsRateNote, savingsRatePercent, stubYearLabel } from '../ledger';
+import type { CashFlowTree, FlowKey, FlowNode } from '../cashFlowView';
 
 /**
- * Rows the engine produces from plan settings rather than from an event, so
- * their gear belongs to the assumptions drawer. Matched by the exact labels
- * `run.ts` emits — see steps 3, 4 and 7 of the year loop.
- */
-const PLAN_DRIVEN = new Set(['Living expenses', 'Baseline income', 'Taxes']);
-
-/**
- * The tab that pays off the engine's provenance work: every LineItem carries a
- * sourceEventId, so income and expenses break out by the event that caused
- * them instead of collapsing into two totals (docs/PLAN.md §4.7).
+ * Cash Flow's year-by-year table (docs/REDESIGN-V5.md §5.2): every year in a
+ * sideways-scrolling `DataTable`, in groups that open on demand.
+ *
+ * Top to bottom: Income (after tax) with one row per source and its gross and
+ * tax underneath, Spending by group, Saved on purpose, Withdrawals, then the
+ * totals. Tax lives under the income it came from, so there is no standalone
+ * Taxes row (§7.2). Unfunded sits above the net line, in red, and only
+ * exists when a year is short (§4.2 item 7).
+ *
+ * Rows are tagged `data-cf-row` on their label so the page can hover-link a
+ * row to its waterfall bar without `DataTable` knowing about either.
  */
 export function CashFlowTab({
-  window,
+  tree,
+  snapshots,
   events,
-  highlightYear,
+  perColumn,
   focusYear,
   onFocusYear,
   dangerYears,
+  hot,
+  onHot,
   onEdit,
   onEditAssumptions,
   startYear,
   asOfDate,
 }: {
-  window: YearSnapshot[];
+  tree: CashFlowTree;
+  /** The same years `tree` was built from, for the savings-rate cells. */
+  snapshots: YearSnapshot[];
   events: PlanEvent[];
-  /** The scrubbed year (docs/REDESIGN.md §4.1) — null/undefined highlights
-      nothing. */
-  highlightYear?: number | null;
-  /** Passed straight to `DataTable` (docs/REDESIGN-V5.md §3.7). */
+  /** What each column's figures are divided by: months in the year for /mo, else 1. */
+  perColumn: number[];
   focusYear?: number | null;
   onFocusYear?(year: number | null): void;
   dangerYears?: number[];
+  /** The waterfall bar being pointed at, so its row can light up. */
+  hot: FlowKey | null;
+  onHot(key: FlowKey | null): void;
   onEdit(event: PlanEvent): void;
   onEditAssumptions(): void;
-  /** The plan's own `settings.startYear`/`settings.asOfDate` — flags the
-      stub first year's column header (docs/ROADMAP-10.md C7). Optional so a
-      caller that hasn't wired them yet just gets no sub-label. */
   startYear?: number;
   asOfDate?: string;
 }) {
-  const years = window.map((y) => y.year);
-  const rows: TableRow[] = [];
   const eventById = new Map(events.map((e) => [e.id, e]));
-  // Which life-change rows are open (docs/REDESIGN-V4.md §1.5). Collapsed by
-  // default: the point is one row per decision, with the detail on demand.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  // Income and Spending open; everything under them is one click away.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['income', 'spending']));
   const toggle = (key: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -71,263 +65,165 @@ export function CashFlowTab({
       return next;
     });
 
-  /**
-   * Income or expense lines as life-change rows: one row per event, summed,
-   * expandable into its own lines when it produced more than one.
-   */
-  const pushLines = (prefix: string, lines: GroupedLine[], tone: 'income' | 'cost') => {
-    for (const row of lifeChangeRows(lines, (id) => eventById.get(id))) {
-      const key = `${prefix}-${row.key}`;
-      const open = expanded.has(key);
-      rows.push({
-        key,
-        kind: 'child',
-        label: row.parts ? (
-          <span className="ns-group-cell">
-            <button
-              type="button"
-              className="ns-group-toggle"
-              aria-expanded={open}
-              aria-label={`${open ? 'Collapse' : 'Expand'} ${row.label}`}
-              onClick={() => toggle(key)}
-            >
-              <ChevronRight size={13} strokeWidth={2} aria-hidden />
-            </button>
-            {rowLabel(row.label, row.sourceEventId)}
+  const rows: TableRow[] = [];
+  const scaled = (values: number[]) => values.map((v, i) => v / perColumn[i]);
+
+  const labelFor = (node: FlowNode, depth: number, open: boolean, link: FlowKey | undefined): ReactNode => {
+    const event = node.sourceEventId ? eventById.get(node.sourceEventId) : undefined;
+    const hasKids = !!node.children?.length;
+
+    let name: ReactNode = (
+      <span className="ns-line-name" title={node.label}>
+        {node.label}
+      </span>
+    );
+    if (node.note === 'taxShare') {
+      name = (
+        <HoverCard content={<TaxShareNote />} side="bottom">
+          <span className="ns-line-name ns-cf-hint" tabIndex={0}>
+            {node.label}
           </span>
-        ) : (
-          rowLabel(row.label, row.sourceEventId)
-        ),
-        cells: row.cells.map(tableMoney),
-        values: row.cells,
-        bar: { tone, direction: 'diverging' },
-      });
-      if (!row.parts || !open) continue;
-      for (const part of row.parts) {
-        rows.push({
-          key: `${key}-${part.label}`,
-          kind: 'grandchild',
-          label: part.label,
-          cells: part.cells.map(tableMoney),
-        });
-      }
+        </HoverCard>
+      );
     }
-  };
 
-  /**
-   * Every cash flow row carries a gear, and it always leads somewhere useful:
-   * to the event that produced the line, or — for baseline living costs, tax
-   * and baseline income — to the plan assumptions that did.
-   */
-  const rowLabel = (label: string, sourceEventId?: string) => {
-    const event = sourceEventId ? eventById.get(sourceEventId) : undefined;
+    let gear: ReactNode = null;
     if (event) {
-      return (
-        <LineLabel
-          text={label}
-          detail={eventDetail(event)}
-          ariaLabel={`${event.name} settings`}
-          onClick={() => onEdit(event)}
-        />
+      gear = (
+        <HoverCard detail={eventDetail(event)}>
+          <button type="button" className="ns-gear" aria-label={`${event.name} settings`} onClick={() => onEdit(event)}>
+            <GearIcon />
+          </button>
+        </HoverCard>
       );
-    }
-    if (PLAN_DRIVEN.has(label)) {
-      return (
-        <LineLabel
-          text={label}
-          ariaLabel={`${label} — plan assumptions`}
+    } else if (node.planDriven || node.note === 'taxShare') {
+      gear = (
+        <button
+          type="button"
+          className="ns-gear"
+          aria-label={`${node.label}: plan assumptions`}
           onClick={onEditAssumptions}
-        />
+        >
+          <GearIcon />
+        </button>
       );
     }
-    return label;
+
+    return (
+      <span className="ns-cf-label" data-cf-row={link} style={{ paddingLeft: depth * 16 }}>
+        {hasKids ? (
+          <button
+            type="button"
+            className="ns-group-toggle"
+            aria-expanded={open}
+            aria-label={`${open ? 'Collapse' : 'Expand'} ${node.label}`}
+            onClick={() => toggle(node.key)}
+          >
+            <ChevronRight size={13} strokeWidth={2} aria-hidden />
+          </button>
+        ) : (
+          <span className="ns-cf-spacer" aria-hidden="true" />
+        )}
+        {name}
+        {gear}
+      </span>
+    );
   };
 
-  rows.push({
-    key: 'income',
-    kind: 'group',
-    label: 'Income',
-    cells: window.map((y) => tableMoney(y.totalIncome)),
-  });
-  // Diverging (docs/REDESIGN.md §4.1): every income line grows toward the
-  // SAME side, from a baseline shared across the whole table, so the table
-  // as a whole reads as one two-sided chart rather than each row inventing
-  // its own zero point the way Accounts' bars do.
-  pushLines('i', groupLines(window, (y) => y.income), 'income');
-
-  const expenseTotals = window.map((y) => spendingThisYear(y) + y.totalTaxes);
-  rows.push({
-    key: 'expenses',
-    kind: 'group',
-    label: 'Expenses',
-    cells: expenseTotals.map(tableMoney),
-  });
-  rows.push({
-    key: 'e-taxes',
-    kind: 'child',
-    label: rowLabel('Taxes'),
-    cells: window.map((y) => tableMoney(y.totalTaxes)),
-    values: window.map((y) => y.totalTaxes),
-    bar: { tone: 'cost', direction: 'diverging' },
-  });
-  pushLines('e', groupLines(window, (y) => y.expenses), 'cost');
-
-  const hasWithdrawals = window.some((y) => y.withdrawals.length > 0);
-  if (hasWithdrawals) {
+  /** One node, then (if open) its children, depth-first. */
+  const push = (node: FlowNode, depth: number, tone: 'income' | 'cost', inherited?: FlowKey) => {
+    const link = node.link ?? inherited;
+    const open = expanded.has(node.key);
+    const display = node.negate ? node.values.map((v) => -v) : node.values;
+    const kind: TableRow['kind'] = depth === 0 ? 'group' : depth === 1 ? 'child' : 'grandchild';
+    const shown = scaled(display);
     rows.push({
-      key: 'withdrawals',
-      kind: 'group',
-      label: 'Withdrawals',
-      cells: window.map((y) => tableMoney(total(y.withdrawals))),
+      key: node.key,
+      kind,
+      label: labelFor(node, depth, open, link),
+      cells: shown.map((v) => (node.negate ? signedTableMoney(v) : tableMoney(v))),
+      ...(depth === 1 ? { values: node.values, bar: { tone: node.negate ? 'cost' : tone, direction: 'diverging' as const } } : {}),
     });
-    for (const { label, cells } of groupLines(window, (y) => y.withdrawals)) {
-      rows.push({
-        key: `w-${label}`,
-        kind: 'child',
-        label,
-        cells: cells.map(tableMoney),
-        // A withdrawal is money becoming available to spend that year —
-        // the same direction as income, even though it's leaving an
-        // account rather than being earned.
-        values: cells,
-        bar: { tone: 'income', direction: 'diverging' },
-      });
-    }
+    if (open) for (const child of node.children ?? []) push(child, depth + 1, tone, link);
+  };
+
+  push(tree.income, 0, 'income');
+  push(tree.spending, 0, 'cost');
+  if (tree.saving) push(tree.saving, 0, 'cost');
+  if (tree.withdrawals) push(tree.withdrawals, 0, 'income');
+
+  if (tree.unfunded) {
+    rows.push({
+      key: 'unfunded',
+      kind: 'group',
+      label: (
+        <span className="ns-cf-label" data-cf-row="unfunded">
+          <span className="ns-cf-spacer" aria-hidden="true" />
+          <span className="ns-line-name">
+            <span aria-hidden="true">✗</span> Unfunded
+          </span>
+        </span>
+      ),
+      cells: scaled(tree.unfunded).map(tableMoney),
+    });
   }
 
-  // Styled as a group row, the same weight as Income/Expenses above
-  // (docs/REDESIGN-V3.md "Cash Flow" — "section headers Income / Expenses /
-  // Savings styled as group rows") rather than the heavier tinted `total`
-  // treatment `.ns-row-total` reserves for Accounts' Net worth line.
   rows.push({
-    key: 'savings',
-    kind: 'group',
-    label: 'Savings',
-    cells: window.map((y) => signedTableMoney(savedThisYear(y))),
-    // The one row that can genuinely flip sign year to year — its bar's
-    // side and tone follow each cell's own value rather than a fixed
-    // per-row direction (see `RowBar.signed` in DataTable.tsx).
-    values: window.map((y) => savedThisYear(y)),
+    key: 'saved',
+    kind: 'total',
+    label: (
+      <span className="ns-cf-label" data-cf-row="saved">
+        <span className="ns-cf-spacer" aria-hidden="true" />
+        <span className="ns-line-name">Saved / drawn down</span>
+      </span>
+    ),
+    cells: scaled(tree.saved).map(signedTableMoney),
+    // The one row that flips sign year to year: each cell's own sign picks its side.
+    values: tree.saved,
     bar: { direction: 'diverging', signed: true },
   });
   rows.push({
-    key: 'savings-rate',
+    key: 'rate',
     kind: 'child',
     label: 'Savings rate',
-    cells: window.map((y) => {
-      const rate = savingsRatePercent(y);
+    cells: snapshots.map((s) => {
+      const rate = savingsRatePercent(s);
       return rate === undefined ? ZERO_DASH : percent(rate, 0);
     }),
-    // A negative rate (a house-purchase year, say) reads as an error out of
-    // context — this names what actually caused it (docs/ROADMAP-10.md C7).
-    cellTitles: window.map((y) => savingsRateNote(y)),
+    // A negative rate reads as an error out of context; this names its cause.
+    cellTitles: snapshots.map((s) => savingsRateNote(s)),
   });
 
-  const shortfalls = window.filter((y) => y.unfundedShortfall);
-  if (shortfalls.length > 0) {
-    rows.push({
-      key: 'shortfall',
-      kind: 'child',
-      label: 'Unfunded shortfall',
-      // A year with no shortfall now falls out as the same en-dash every other
-      // nil cell uses, so this no longer needs its own placeholder.
-      cells: window.map((y) => tableMoney(y.unfundedShortfall ?? 0)),
-      values: window.map((y) => y.unfundedShortfall ?? 0),
-      bar: { tone: 'cost', direction: 'diverging' },
-    });
-  }
-
-  // The page's SectionCard already titles this "Annual cash flow" — this
-  // column header just needs to say what its own rows are.
-  return (
-    <DataTable
-      caption="Category"
-      years={years}
-      rows={rows}
-      highlightYear={highlightYear}
-      focusYear={focusYear}
-      onFocusYear={onFocusYear}
-      dangerYears={dangerYears}
-      columnSubLabel={
-        startYear !== undefined ? (y) => stubYearLabel(y, startYear, asOfDate)?.short : undefined
-      }
-    />
-  );
-}
-
-/** A cash flow row label with its gear. Detail is optional — the assumptions
- *  rows have no single event to describe, so they get the gear alone. */
-function LineLabel({
-  text,
-  detail,
-  ariaLabel,
-  onClick,
-}: {
-  text: string;
-  detail?: Detail;
-  ariaLabel: string;
-  onClick(): void;
-}) {
-  const gear = (
-    <button type="button" className="ns-gear" aria-label={ariaLabel} onClick={onClick}>
-      <GearIcon />
-    </button>
-  );
+  const hotRow = (e: PointerEvent<HTMLDivElement>) => {
+    const grid = (e.target as HTMLElement).closest('.ns-grid');
+    const key = grid?.querySelector<HTMLElement>('[data-cf-row]')?.dataset.cfRow as FlowKey | undefined;
+    onHot(key ?? null);
+  };
 
   return (
-    <span className="ns-line-cell">
-      <span className="ns-line-name" title={text}>
-        {text}
-      </span>
-      {detail ? <HoverCard detail={detail}>{gear}</HoverCard> : gear}
-    </span>
+    <div className="ns-cf-table" data-hot={hot ?? undefined} onPointerOver={hotRow} onPointerLeave={() => onHot(null)}>
+      <DataTable
+        caption="Per year"
+        years={tree.years}
+        rows={rows}
+        focusYear={focusYear}
+        onFocusYear={onFocusYear}
+        dangerYears={dangerYears}
+        columnSubLabel={startYear !== undefined ? (y) => stubYearLabel(y, startYear, asOfDate)?.short : undefined}
+      />
+    </div>
   );
 }
 
-export interface GroupedLine {
-  label: string;
-  cells: number[];
-  /**
-   * The event that produced this line, when there is one. Baseline living
-   * expenses and income tax have none — they come from plan settings, and the
-   * gear on those rows opens the assumptions drawer instead.
-   */
-  sourceEventId?: string;
-}
-
-/**
- * Collapse line items to one row per distinct label, aligned across the
- * window. Rows that are zero everywhere in view are dropped.
- */
-function groupLines(
-  window: YearSnapshot[],
-  pick: (snapshot: YearSnapshot) => LineItem[],
-): GroupedLine[] {
-  const labels: string[] = [];
-  const sourceByLabel = new Map<string, string | undefined>();
-
-  for (const snapshot of window) {
-    for (const item of pick(snapshot)) {
-      if (!labels.includes(item.label)) {
-        labels.push(item.label);
-        sourceByLabel.set(item.label, item.sourceEventId);
-      }
-    }
-  }
-
-  return labels
-    .map((label) => ({
-      label,
-      sourceEventId: sourceByLabel.get(label),
-      cells: window.map((snapshot) =>
-        pick(snapshot)
-          .filter((i) => i.label === label)
-          .reduce((sum, i) => sum + i.amount, 0),
-      ),
-    }))
-    .filter(({ cells }) => cells.some((v) => Math.abs(v) >= 1));
-}
-
-function total(items: LineItem[]): number {
-  return items.reduce((sum, i) => sum + i.amount, 0);
+/** Why "Tax (share)" is a share and not a bill (docs/REDESIGN-V5.md §7.2). */
+function TaxShareNote() {
+  return (
+    <div className="ns-cf-note">
+      <strong>Tax (share)</strong>
+      <p>
+        The brackets are household-wide, so no source owes its own tax. This is the household’s income tax split by
+        each source’s share of taxable income. It is not what the job costs you at the margin.
+      </p>
+    </div>
+  );
 }

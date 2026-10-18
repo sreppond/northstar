@@ -35,6 +35,10 @@ export interface ChartSeries {
   /** Line width in px; 0 draws the fill alone. Defaults to 2. */
   lineWidth?: number;
   dashed?: boolean;
+  /** `false` keeps the hover dot (and its halo) off this series. For a fill that
+      only shades a band between two lines (Cash Flow's gain/gap wash): the
+      lines carry the dots, and a second dot on the same spot would be noise. */
+  activeDot?: boolean;
   /** A filled dot at every real (non-`NaN`) data point — Progress's "actual"
       series, where each point is a real logged reading rather than an
       annual sample of a smooth projection. */
@@ -46,6 +50,19 @@ export interface ChartSeries {
       into existence at its full purchase-year value, it doesn't appreciate
       up from zero over the prior year. */
   stepAt?: number;
+  /** In a `stacked` chart, draw this series on its own scale instead of adding
+      it to the stack: Budget's after-tax income line over the spending
+      columns (docs/REDESIGN-V5.md §5.3). Ignored when the chart isn't stacked. */
+  overlay?: boolean;
+}
+
+/** A labelled background stretch of the x-axis, such as a child's
+    daycare / school / college years (docs/REDESIGN-V5.md §5.3). `from` and
+    `to` are x-axis values, drawn exactly as given. */
+export interface ChartBand {
+  from: number;
+  to: number;
+  label: string;
 }
 
 /** The shortfall region (docs/REDESIGN-V5.md §4.2.4): hatched and tinted

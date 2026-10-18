@@ -1,0 +1,168 @@
+/*
+ * Waterfall (docs/REDESIGN-V5.md §5.2). Tokens only, so light and dark both
+ * come from the variables already flipping. Rows are [label | plot]; the plot
+ * keeps a gutter on the right so the amount printed after the longest bar
+ * never runs off the edge.
+ */
+
+.ns-wfall {
+  --wf-label: 148px;
+  --wf-gutter: 124px;
+  --wf-row: 34px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (max-width: 640px) {
+  .ns-wfall {
+    --wf-label: 96px;
+    --wf-gutter: 88px;
+  }
+}
+
+.ns-wfall-row {
+  display: grid;
+  grid-template-columns: var(--wf-label) minmax(0, 1fr);
+  align-items: center;
+  height: var(--wf-row);
+  border-radius: 6px;
+  outline: none;
+  transition:
+    opacity 160ms var(--ease-damped, ease),
+    background-color 160ms var(--ease-damped, ease);
+}
+.ns-wfall-row[data-active] {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.ns-wfall-row:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.ns-wfall-row[data-dim] {
+  opacity: 0.45;
+}
+
+.ns-wfall-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 4px;
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ns-wfall-row[data-kind='total'] .ns-wfall-label {
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+.ns-wfall-row[data-tone='danger'] .ns-wfall-label {
+  font-weight: 600;
+  color: var(--danger);
+}
+/* A fixed slot so the words line up whether or not a row has an operator. */
+.ns-wfall-op {
+  flex: none;
+  width: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.ns-wfall-row[data-tone='danger'] .ns-wfall-op {
+  color: var(--danger);
+}
+
+.ns-wfall-plot {
+  position: relative;
+  height: 100%;
+  margin-right: var(--wf-gutter);
+}
+
+.ns-wfall-bar {
+  position: absolute;
+  top: 50%;
+  height: 18px;
+  margin-top: -9px;
+  border-radius: 4px;
+  background: var(--bar);
+  transition:
+    left var(--spring-duration, 0.38s) var(--ease-damped, ease),
+    width var(--spring-duration, 0.38s) var(--ease-damped, ease);
+}
+/* Unfunded: hatched red, and the ✗ + word in the label, so it never rides on colour alone. */
+.ns-wfall-row[data-tone='danger'] .ns-wfall-bar {
+  background:
+    repeating-linear-gradient(135deg, var(--danger) 0 2px, transparent 2px 6px),
+    var(--danger-wash, rgba(184, 40, 63, 0.08));
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+}
+
+/* The running total carried from the bar above into this one. */
+.ns-wfall-conn {
+  position: absolute;
+  top: -9px;
+  height: 18px;
+  width: 0;
+  border-left: 1px dashed var(--ink-3, var(--muted-light));
+  opacity: 0.9;
+  pointer-events: none;
+}
+.ns-wfall-row:first-child .ns-wfall-conn {
+  display: none;
+}
+.ns-wfall-zero {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.ns-wfall-value {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  transition: left var(--spring-duration, 0.38s) var(--ease-damped, ease);
+}
+.ns-wfall-amount {
+  font-weight: 600;
+}
+.ns-wfall-row[data-tone='danger'] .ns-wfall-amount {
+  color: var(--danger);
+}
+.ns-wfall-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .ns-wfall-note {
+    display: none;
+  }
+}
+
+@keyframes ns-wfall-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+.ns-wfall-row {
+  animation: ns-wfall-in 260ms var(--ease-damped, ease) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ns-wfall-row {
+    animation: none;
+    transition: none;
+  }
+  .ns-wfall-bar,
+  .ns-wfall-value {
+    transition: none;
+  }
+}

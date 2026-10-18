@@ -1,0 +1,841 @@
+/*
+ * Timeline (docs/REDESIGN-V5.md §5.4): a calm, typographic life. Lanes sit on
+ * the page background, separated by hairlines rather than cards; the lane
+ * labels and the year axis are translucent materials that stay put while the
+ * canvas scrolls under them (§1.6). Colour is data (§1.9): a person's colour
+ * on their bars, income green and cost orange on their events, and nothing
+ * else.
+ *
+ * Geometry here is mirrored in `timeline.ts` / `TimelinePage.tsx`:
+ * 64px a year, a 176px label column, 24px chips on 28px rows.
+ */
+
+.tl {
+  --tl-label: 176px;
+  --tl-axis: 54px;
+  position: relative;
+  min-width: 0;
+}
+
+/* Native sideways scroll: a two-finger swipe on a trackpad just works. */
+.tl-scroller {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  border-radius: 14px;
+  outline: none;
+}
+.tl-scroller:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.tl-canvas {
+  position: relative;
+}
+
+/* --- axis -------------------------------------------------------------------- */
+
+.tl-axis {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  height: var(--tl-axis);
+}
+.tl-corner {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex: none;
+  width: var(--tl-label);
+}
+.tl-years {
+  position: relative;
+  flex: none;
+  background: var(--material-bg);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  /* A scroll-edge fade instead of a divider line (§1.6). */
+  -webkit-mask-image: linear-gradient(180deg, #000 78%, rgb(0 0 0 / 0.55));
+  mask-image: linear-gradient(180deg, #000 78%, rgb(0 0 0 / 0.55));
+}
+.tl-corner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--material-bg);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+}
+
+.tl-year {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 64px;
+  padding: 0 0 9px;
+  border: 0;
+  background: none;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--muted-light);
+}
+.tl-year-num {
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: 0.01em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  transition:
+    background-color 160ms var(--ease-damped),
+    color 160ms var(--ease-damped);
+}
+.tl-year[data-major] .tl-year-num {
+  font-weight: 600;
+  color: var(--ink);
+}
+.tl-year:hover .tl-year-num {
+  color: var(--ink);
+}
+.tl-year[data-today] .tl-year-num {
+  color: var(--accent);
+  font-weight: 600;
+}
+.tl-year[data-pinned] .tl-year-num {
+  background: var(--pin);
+  color: var(--bg);
+  font-weight: 600;
+}
+.tl-dry-tag,
+.tlv-dry {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--danger);
+  white-space: nowrap;
+}
+.tl-today-tag {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* The scrub chip: "2034 · Spencer 38 · Sarah 38". */
+.tl-chip {
+  position: absolute;
+  top: 7px;
+  z-index: 3;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--rule),
+    var(--shadow-tooltip);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tl-chip b {
+  font-weight: 650;
+  color: var(--ink);
+  letter-spacing: var(--track-title);
+}
+
+/* --- canvas: columns, lines ---------------------------------------------------- */
+
+.tl-body {
+  position: relative;
+  /* Hairlines span the whole body, so sizing is the lanes' own. */
+}
+.tl-columns {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--tl-label);
+  z-index: 0;
+  pointer-events: none;
+}
+.tl-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background-image: linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: 320px 100%;
+  opacity: 0.8;
+}
+.tl-today-wash {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 11%, transparent),
+    color-mix(in srgb, var(--accent) 2.5%, transparent)
+  );
+  border-radius: 0 0 10px 10px;
+}
+/* The years the plan can't fund (§4.2.4): hatched and tinted, never colour alone. */
+.tl-dry {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background:
+    repeating-linear-gradient(-45deg, var(--danger-hatch) 0 1px, transparent 1px 9px),
+    var(--danger-wash);
+  opacity: 0.55;
+}
+.tl-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+  /* A dashed hairline drawn as a gradient, not a border. */
+  background: repeating-linear-gradient(180deg, var(--muted-light) 0 4px, transparent 4px 7px);
+  z-index: 3;
+}
+.tl-line[data-pinned] {
+  width: 2px;
+  margin-left: -1px;
+  background: var(--pin);
+  border-radius: 1px;
+}
+
+/* --- lanes ----------------------------------------------------------------------- */
+
+.tl-lane {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  border-top: 1px solid var(--rule-light);
+}
+.tl-lane:first-of-type {
+  border-top-color: transparent;
+}
+.tl-label {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  flex: none;
+  width: var(--tl-label);
+  padding: 10px 10px 0 0;
+}
+/* Lane labels are a material too: the canvas blurs under them as it scrolls,
+   and a soft edge appears only once it has (§1.6). */
+.tl-label::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 -2px;
+  background: color-mix(in srgb, var(--bg) 93%, transparent);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  box-shadow: 14px 0 18px -14px rgb(var(--sh) / calc(16% * var(--sh-k)));
+  opacity: 0;
+  transition: opacity 200ms var(--ease-damped);
+}
+.tl[data-scrolled] .tl-label::before {
+  opacity: 1;
+}
+.tl-person {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-damped);
+}
+.tl-person[data-static] {
+  cursor: default;
+}
+.tl-person:not([data-static]):hover {
+  background: var(--chip);
+}
+.tl-person:not([data-static]):active {
+  transform: scale(0.985);
+}
+.tl-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 650;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+}
+.tl-avatar[data-neutral] {
+  background: var(--chip);
+  color: var(--muted);
+  box-shadow: none;
+}
+.tl-person-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.tl-person-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: var(--track-title);
+  color: var(--ink-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-person-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tl-track {
+  position: relative;
+  flex: none;
+}
+
+/* --- career + stage bars ------------------------------------------------------ */
+
+.tl-bars {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 32px;
+}
+/* One continuous rounded bar: the run clips its segments to a pill. */
+.tl-run {
+  position: absolute;
+  top: 0;
+  height: 32px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(var(--sh) / calc(14% * var(--sh-k)));
+}
+.tl-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.003em;
+  text-align: left;
+  color: #fff;
+  background: var(--c);
+  cursor: pointer;
+  transition: filter 160ms var(--ease-damped);
+}
+.tl-seg > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-seg:hover {
+  filter: brightness(1.07) saturate(1.05);
+}
+/* A hairline of the page between neighbouring segments, so a leave inside a
+   career still reads as part of it without the two colours bleeding. */
+.tl-seg:not([data-first]) {
+  box-shadow: inset 2px 0 0 var(--bg);
+}
+.tl-seg[data-mode='part'] {
+  background: color-mix(in srgb, var(--c) 44%, var(--surface));
+  color: var(--ink);
+}
+.tl-seg[data-mode='leave'] {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--c) 46%, transparent) 0 5px,
+      color-mix(in srgb, var(--c) 14%, transparent) 5px 10px
+    ),
+    var(--surface);
+  color: var(--ink);
+}
+.tl-seg[data-stage='daycare'] {
+  background: color-mix(in srgb, var(--c) 40%, var(--surface));
+  color: var(--ink);
+}
+.tl-seg[data-stage='school'] {
+  background: color-mix(in srgb, var(--c) 74%, var(--surface));
+}
+.tl-seg[data-stage='college'] {
+  background: var(--c);
+}
+/* Time off: the bar simply isn't there, only a dotted trace of the gap. */
+.tl-off {
+  position: absolute;
+  top: 15px;
+  height: 0;
+  border-top: 2px dotted color-mix(in srgb, var(--c) 55%, transparent);
+}
+
+/* --- event chips ------------------------------------------------------------------ */
+
+.tl-event {
+  --tone: var(--out);
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.003em;
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+  /* The dot's centre, so the lift grows from it rather than the chip's middle. */
+  transform-origin: 11px 50%;
+  transition:
+    transform 180ms var(--ease-damped),
+    background-color 160ms var(--ease-damped),
+    box-shadow 160ms var(--ease-damped);
+}
+.tl-event[data-tone='income'] {
+  --tone: var(--in);
+}
+.tl-event[data-tone='cost'] {
+  --tone: var(--out);
+}
+.tl-event[data-tone='end'] {
+  --tone: var(--muted-light);
+  color: var(--muted);
+}
+.tl-event:hover,
+.tl-event:focus-visible {
+  transform: scale(1.04);
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--rule),
+    0 4px 14px rgb(var(--sh) / calc(14% * var(--sh-k)));
+  z-index: 5;
+}
+.tl-event:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tl-event:active {
+  transform: scale(1.01);
+}
+.tl-event[data-draggable] {
+  cursor: grab;
+  touch-action: none;
+}
+.tl-event[data-dragging] {
+  cursor: grabbing;
+  z-index: 7;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 10px 28px rgb(var(--sh) / calc(24% * var(--sh-k)));
+  transition:
+    transform 110ms var(--ease-damped),
+    box-shadow 160ms var(--ease-damped);
+}
+.tl-event[data-excluded] {
+  color: var(--muted);
+}
+.tl-event[data-excluded] .tl-mark {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--tone);
+}
+/* Where it was, for the whole gesture. */
+.tl-event-ghost {
+  opacity: 0.4;
+  outline: 1px dashed var(--border-strong);
+  outline-offset: -1px;
+  pointer-events: none;
+}
+/* The one-shot "it landed" squish on release. */
+.tl-event[data-landed] {
+  animation: tl-land 360ms var(--ease-soft);
+}
+@keyframes tl-land {
+  0% {
+    transform: scale(1.04);
+  }
+  35% {
+    transform: scale(1.1, 0.86);
+  }
+  68% {
+    transform: scale(0.97, 1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.tl-mark {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+}
+.tl-event[data-shape='diamond'] .tl-mark,
+.tlv-item[data-shape='diamond'] .tl-mark {
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0.88);
+}
+.tl-detail {
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--muted);
+}
+.tl-who-pill {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--chip);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.tl-drag-year {
+  position: absolute;
+  left: 3px;
+  top: -26px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+/* --- person sheet ---------------------------------------------------------------------- */
+
+.tl-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.tl-who-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tl-who-name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: var(--track-display);
+  line-height: 1.15;
+  color: var(--ink-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-who-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.tl-sheet-job-name {
+  margin-bottom: 6px;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--muted);
+}
+.tl-sheet-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.tl-stage-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tl-stage-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--rule-light);
+  font-size: 13.5px;
+}
+.tl-stage-list li:first-child {
+  border-top: 0;
+}
+.tl-stage-name {
+  font-weight: 600;
+}
+.tl-stage-years {
+  color: var(--muted);
+}
+
+/* --- phone: one vertical list ------------------------------------------------------------ */
+
+.tlv {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.tlv-people {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 2px 16px;
+  scrollbar-width: none;
+}
+.tlv-person {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tlv-person .tl-avatar {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+.tlv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+/* The spine the years hang from. */
+.tlv-list::before {
+  content: '';
+  position: absolute;
+  left: 58px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--rule);
+}
+.tlv-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 0 18px;
+  padding: 10px 0 14px;
+}
+.tlv-row::before {
+  content: '';
+  position: absolute;
+  left: 54px;
+  top: 17px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 2px var(--border-strong);
+}
+.tlv-row[data-today]::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.tlv-row[data-pinned]::before {
+  background: var(--pin);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--pin) 18%, transparent);
+}
+.tlv-row[data-today] {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
+  border-radius: 12px;
+}
+.tlv-year {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.tlv-y {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: var(--track-title);
+  line-height: 1.2;
+  color: var(--ink-deep);
+}
+.tlv-row[data-pinned] .tlv-y {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.tlv-today {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.tlv-ages {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+  display: none;
+}
+.tlv-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.tlv-group {
+  --tone: var(--c);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.tlv-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tlv-who::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.tlv-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tlv-item:active {
+  transform: scale(0.98);
+}
+.tlv-item[data-tone='income'] {
+  --tone: var(--in);
+}
+.tlv-item[data-tone='cost'] {
+  --tone: var(--out);
+}
+.tlv-item[data-tone='end'] {
+  --tone: var(--muted-light);
+}
+.tlv-item:not([data-tone]) .tl-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  box-shadow: none;
+}
+.tlv-item[data-type='birth'] .tl-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Add person / Add child keep their icons and drop their words on a phone, so
+   all three actions fit beside the title row. */
+@media (max-width: 767.98px) {
+  .tl-btn-text {
+    display: none;
+  }
+}
+.tlv-item[data-type='career'] .tl-mark,
+.tlv-item[data-type='stage'] .tl-mark {
+  height: 4px;
+  width: 14px;
+  border-radius: 2px;
+}
+.tlv-item[data-excluded] {
+  color: var(--muted);
+}
+.tlv-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-event[data-landed] {
+    animation: none;
+  }
+  .tl-event:hover,
+  .tl-event:focus-visible {
+    transform: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .tl-seg[data-mode='leave'],
+  .tl-seg[data-mode='part'] {
+    box-shadow: inset 0 0 0 1px var(--ink);
+  }
+}
