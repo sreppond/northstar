@@ -5,7 +5,18 @@
  * slide over.
  */
 
+/* V5-REVIEW-1 F5: on a 66-year plan the seven-option range picker plus the
+   /mo switch ended at 419px on a 390px phone. Both boxes may shrink to the
+   header (the picker scrolls inside itself, see RangePicker `compact`). */
+.ns-page-header-side:has(.ns-cf-controls),
+.ns-page-header-side:has(.ns-cf-controls) .ns-page-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
 .ns-cf-controls {
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

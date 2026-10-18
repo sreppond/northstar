@@ -35,8 +35,11 @@
 /* --- your month: the donut and the envelope figures ------------------------ */
 .ns-bgt-month {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 24px 56px;
+  /* V5-REVIEW-1 F23: the figures sat ~400px from their labels at 1440. The
+     envelope list is capped so a label and its number read as one row. */
+  grid-template-columns: auto minmax(0, 520px);
+  justify-content: start;
+  gap: 24px 64px;
   align-items: center;
 }
 .ns-bgt-donut {
@@ -128,6 +131,15 @@
 .ns-bgt-fig:hover {
   background: var(--track);
 }
+/* An editable figure says so on hover, focus and press (F23): a dotted
+   underline, the same hint the Cash Flow table uses for a hover card. */
+.ns-bgt-fig:not(.ns-bgt-fig-static):not(.ns-bgt-fig-open):hover,
+.ns-bgt-fig:not(.ns-bgt-fig-static):not(.ns-bgt-fig-open):focus-visible,
+.ns-bgt-fig:not(.ns-bgt-fig-static):not(.ns-bgt-fig-open):active {
+  text-decoration: underline dotted var(--muted-light);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 7px;
+}
 .ns-bgt-fig:active {
   transform: scale(0.97);
 }
@@ -163,8 +175,10 @@
   background: transparent;
   transform: none;
 }
-.ns-bgt-fig-short {
-  color: var(--danger);
+/* Drawing on savings is money out, in the orange "out" hue; only the unfunded
+   part is Short (red, via .ns-bgt-short). F3. */
+.ns-bgt-fig-drawn {
+  color: color-mix(in srgb, var(--out) 82%, var(--ink-deep));
 }
 .ns-bgt-short {
   display: inline-flex;

@@ -1,4 +1,4 @@
-import { useState, type PointerEvent, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { PlanEvent, YearSnapshot } from '@northstar/engine';
 import { DataTable, type TableRow } from './DataTable';
@@ -13,16 +13,21 @@ import type { CashFlowTree, FlowKey, FlowNode } from '../cashFlowView';
  * Cash Flow's year-by-year table (docs/REDESIGN-V5.md §5.2): every year in a
  * sideways-scrolling `DataTable`, in groups that open on demand.
  *
- * Top to bottom: Income (after tax) with one row per source and its gross and
- * tax underneath, Spending by group, Saved on purpose, Withdrawals, then the
- * totals. Tax lives under the income it came from, so there is no standalone
- * Taxes row (§7.2). Unfunded sits above the net line, in red, and only
- * exists when a year is short (§4.2 item 7).
+ * Top to bottom: Unfunded (red, only when some year is short: pinned above
+ * everything so the shortfall is the first thing a row-reader meets, V5-REVIEW-1
+ * F12), Income (after tax) with one row per source and its gross and tax
+ * underneath, Spending by group, Saved on purpose, Withdrawals, then the net
+ * line. Tax lives under the income it came from, so there is no standalone
+ * Taxes row (§7.2) (§4.2 item 7).
+ *
+ * Memoised (F28): the page re-renders on every hover step of the chart above,
+ * and this is the heaviest thing on it. Every prop is stable across a hover,
+ * so a scrub no longer re-renders the table.
  *
  * Rows are tagged `data-cf-row` on their label so the page can hover-link a
  * row to its waterfall bar without `DataTable` knowing about either.
  */
-export function CashFlowTab({
+export const CashFlowTab = memo(function CashFlowTab({
   tree,
   snapshots,
   events,
@@ -147,11 +152,6 @@ export function CashFlowTab({
     if (open) for (const child of node.children ?? []) push(child, depth + 1, tone, link);
   };
 
-  push(tree.income, 0, 'income');
-  push(tree.spending, 0, 'cost');
-  if (tree.saving) push(tree.saving, 0, 'cost');
-  if (tree.withdrawals) push(tree.withdrawals, 0, 'income');
-
   if (tree.unfunded) {
     rows.push({
       key: 'unfunded',
@@ -167,6 +167,11 @@ export function CashFlowTab({
       cells: scaled(tree.unfunded).map(tableMoney),
     });
   }
+
+  push(tree.income, 0, 'income');
+  push(tree.spending, 0, 'cost');
+  if (tree.saving) push(tree.saving, 0, 'cost');
+  if (tree.withdrawals) push(tree.withdrawals, 0, 'income');
 
   rows.push({
     key: 'saved',
@@ -200,8 +205,23 @@ export function CashFlowTab({
     onHot(key ?? null);
   };
 
+  // F19: the header is the year and nothing else ("2026 / from Oct 18" took
+  // three lines). The partial first year keeps its note as a native tooltip.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (startYear === undefined) return;
+    for (const y of tree.years) {
+      const note = stubYearLabel(y, startYear, asOfDate)?.short;
+      const head = root.current?.querySelector<HTMLElement>(`.ns-row-head [data-year="${y}"]`);
+      if (head) {
+        if (note) head.title = `${y} ${note}`;
+        else head.removeAttribute('title');
+      }
+    }
+  }, [tree.years, startYear, asOfDate]);
+
   return (
-    <div className="ns-cf-table" data-hot={hot ?? undefined} onPointerOver={hotRow} onPointerLeave={() => onHot(null)}>
+    <div ref={root} className="ns-cf-table" data-hot={hot ?? undefined} onPointerOver={hotRow} onPointerLeave={() => onHot(null)}>
       <DataTable
         caption="Per year"
         years={tree.years}
@@ -209,11 +229,10 @@ export function CashFlowTab({
         focusYear={focusYear}
         onFocusYear={onFocusYear}
         dangerYears={dangerYears}
-        columnSubLabel={startYear !== undefined ? (y) => stubYearLabel(y, startYear, asOfDate)?.short : undefined}
       />
     </div>
   );
-}
+});
 
 /** Why "Tax (share)" is a share and not a bill (docs/REDESIGN-V5.md §7.2). */
 function TaxShareNote() {
