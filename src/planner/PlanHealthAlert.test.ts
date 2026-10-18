@@ -22,7 +22,7 @@ describe('strandedClauses (V5-REVIEW-1 F6)', () => {
       { accountId: 'c', accountClass: 'taxFreeInvestment', balance: 900_000, reason: 'penalty' },
     ]);
     expect(clauses.map((c) => c.reason)).toEqual(['penalty', 'never']);
-    expect(clauses[1].text).toContain('Tax-deferred investments and Variable annuity is set to never withdraw');
+    expect(clauses[1].text).toContain('Tax-deferred investments and Variable annuity are set to never withdraw');
   });
 
   it('says nothing when nothing is stranded', () => {

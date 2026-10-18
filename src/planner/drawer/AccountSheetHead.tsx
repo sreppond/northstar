@@ -8,12 +8,13 @@ import { takeRowOrigin, type RowOrigin } from './rowMorph';
  * The account sheet's header: icon, name, and an (i) for what the account type
  * is (V5-REVIEW-1 F22 moved that paragraph behind it).
  *
- * V5-REVIEW-1 F25, the row to header hand-off. The first try was `layoutId`
- * on the row's icon and label and on this header, and it does not hold up
- * here, for three reasons:
+ * V5-REVIEW-1 F25, the row to header hand-off. `layoutId` on the row's icon
+ * and label and on this header was the first choice, and I judged it unfit from
+ * how the sheet moves (reasoned from motion's projection model, not run side
+ * by side with this one):
  *  - the sheet slides in on a CSS `translate` driven by its own motion value,
  *    not by a projected layout, so the header is measured while the panel is
- *    still parked off-screen and the morph's endpoint is wrong for the whole
+ *    still parked off-screen and the morph's endpoint is stale for the whole
  *    flight;
  *  - the panel is also `opacity: 0 -> 1` over the first half of that slide, so
  *    a morphing child is invisible for exactly the stretch where the motion

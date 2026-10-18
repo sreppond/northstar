@@ -38,10 +38,10 @@ const REASON_PHRASE: Record<StrandedReason, string> = {
 const MAX_CLAUSES = 2;
 
 /** "Tax-deferred and Variable annuity", "A, B and C". Classes, not accounts, so two 401(k)s read once. */
-function classList(accounts: StrandedAccount[]): string {
+function classList(accounts: StrandedAccount[]): { text: string; plural: boolean } {
   const labels = [...new Set(accounts.map((a) => ACCOUNT_TYPES[a.accountClass].label))];
-  if (labels.length <= 1) return labels[0] ?? '';
-  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+  if (labels.length <= 1) return { text: labels[0] ?? '', plural: false };
+  return { text: `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`, plural: true };
 }
 
 /** The stranded accounts grouped by reason, biggest pile first (they arrive largest-first). */
@@ -52,11 +52,10 @@ export function strandedClauses(stranded: StrandedAccount[]): { reason: Stranded
     .map(([reason, accounts]) => ({ reason, accounts, total: accounts.reduce((sum, a) => sum + a.balance, 0) }))
     .sort((a, b) => b.total - a.total)
     .slice(0, MAX_CLAUSES)
-    .map(({ reason, accounts, total }) => ({
-      reason,
-      total,
-      text: `${money(total)} in ${classList(accounts)} is ${REASON_PHRASE[reason]}`,
-    }));
+    .map(({ reason, accounts, total }) => {
+      const classes = classList(accounts);
+      return { reason, total, text: `${money(total)} in ${classes.text} ${classes.plural ? 'are' : 'is'} ${REASON_PHRASE[reason]}` };
+    });
 }
 
 export function PlanHealthAlert() {

@@ -265,7 +265,7 @@ function RetirementReady({
           years={years}
           series={[
             { id: 'canSpend', label: 'Can spend now', color: 'var(--data-nw)', values: split.canSpend, kind: 'area' },
-            { id: 'locked', label: 'Locked', color: 'var(--muted)', values: split.locked, kind: 'area' },
+            { id: 'locked', label: 'Locked', color: 'var(--muted-light)', values: split.locked, kind: 'area' },
           ]}
           stacked
           range={chartRange}
