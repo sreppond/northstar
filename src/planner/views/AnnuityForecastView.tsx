@@ -48,19 +48,18 @@ export function setAnnuityHoverYear(year: number | null): void {
   hoveredYear = year;
   hoverListeners.forEach((l) => l());
 }
+function subscribeHover(listener: () => void): () => void {
+  hoverListeners.add(listener);
+  return () => {
+    hoverListeners.delete(listener);
+    // Leaving the page must not strand a hover for the next visit.
+    if (hoverListeners.size === 0) hoveredYear = null;
+  };
+}
+const hoverSnapshot = () => hoveredYear;
+const noHover = () => null;
 function useAnnuityHoverYear(): number | null {
-  return useSyncExternalStore(
-    (l) => {
-      hoverListeners.add(l);
-      return () => {
-        hoverListeners.delete(l);
-        // Leaving the page must not strand a hover for the next visit.
-        if (hoverListeners.size === 0) hoveredYear = null;
-      };
-    },
-    () => hoveredYear,
-    () => null,
-  );
+  return useSyncExternalStore(subscribeHover, hoverSnapshot, noHover);
 }
 
 /** `accountId`: show just that contract (the Annuity & SEPP page drives the choice); unset, the first one. */

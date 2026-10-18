@@ -61,6 +61,15 @@
 
 /* --- the table ------------------------------------------------------------- */
 
+/* V5-REVIEW-2 N5: "Required distributions · Tax-deferred investments" is the
+   longest label the table carries, and at the shared 300px stub it truncated.
+   The wider stub is Cash Flow's own; the table scrolls sideways regardless. */
+@media (min-width: 1280px) {
+  .ns-cf-table .ns-scroll-table {
+    --ns-label-w: 392px;
+  }
+}
+
 /* One indent system for every row kind: a caret slot (or a spacer of the same
    width), then the name. Depth is set per row, so a kid's line sits under the
    kid, under Kids, under Spending, whatever DataTable's three kinds say. */

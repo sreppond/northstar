@@ -16,7 +16,7 @@ import { money } from '../format';
  * here rather than read from the context.
  */
 export function SeppBars({
-  options,
+  options: allOptions,
   selectedYear,
   onSelect,
   onHoverYear,
@@ -31,7 +31,15 @@ export function SeppBars({
   /** The account and method controls, top right of the readout. */
   actions?: ReactNode;
 }) {
-  if (options.length === 0) return null;
+  if (allOptions.length === 0) return null;
+  // V5-REVIEW-2 N17: the x-domain ends at the last bar's year (+0.5, the kit's
+  // column padding). Start years past the last non-empty bar are zero-height, and
+  // used to leave years of empty axis; the chosen year always stays.
+  let lastBar = -1;
+  allOptions.forEach((o, i) => {
+    if (o.annualPayment > 0.5 || o.startYear === selectedYear) lastBar = i;
+  });
+  const options = allOptions.slice(0, Math.max(0, lastBar) + 1);
   const byYear = new Map(options.map((o) => [o.startYear, o]));
 
   return (

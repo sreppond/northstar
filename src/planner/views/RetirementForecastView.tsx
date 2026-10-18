@@ -269,7 +269,8 @@ function RetirementReady({
           years={years}
           series={[
             { id: 'canSpend', label: 'Can spend now', color: 'var(--data-nw)', values: split.canSpend, kind: 'area' },
-            { id: 'penalty', label: 'With 10% penalty', color: 'var(--data-nw)', values: split.penalty, kind: 'area', fillOpacity: 0.45 },
+            // "Can spend" at 45% opacity; the mix (not fillOpacity) so the legend swatch matches the band.
+            { id: 'penalty', label: 'With 10% penalty', color: 'color-mix(in srgb, var(--data-nw) 45%, transparent)', values: split.penalty, kind: 'area', fillOpacity: 1 },
             { id: 'locked', label: 'Locked', color: 'var(--muted-light)', values: split.locked, kind: 'area' },
           ]}
           stacked
