@@ -1,32 +1,27 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DEFAULT_RETURN_SHIFT,
   deflate,
   headlineReturnRate,
   pathMarkers,
   planFreshness,
   runPlan,
-  withReturnShift,
 } from '@northstar/engine';
 import type {
   AccountClass,
   Account,
   Plan,
-  PlanEvent,
   PlanFreshness,
   RetirementConfig,
   ChartRangeKey,
 } from '@northstar/engine';
 import { newAccountOfType } from '@northstar/engine';
 import { usePlanStore } from './store/planStore';
-import type { ProgressPoint } from './progress';
+import type { ProgressPoint } from './store/planStore';
 import { useMonarch } from './useMonarch';
 import { useLocalMonarch } from './useLocalMonarch';
 import { rollForward } from './rollover';
 import { useEventEditor, withDraft } from './drawer/useEventEditor';
-import type { ChartSelection, CompareSeries, FanSeries } from './NetWorthChart';
-import { useBreakpoint, yearColumnsFor } from './useBreakpoint';
 import { asOfDateLabel, cagr } from './format';
 import { heroReading } from './reading';
 import { useGlobalShortcuts } from './shortcuts';
@@ -76,16 +71,6 @@ export interface PlannerContextValue {
   allAccounts: Account[];
   reading: ReturnType<typeof heroReading>;
   growth: number;
-  heroFigure: number;
-
-  // -- comparison & sensitivity --
-  comparePlan: Plan | undefined;
-  compare: CompareSeries | undefined;
-  spread: FanSeries | undefined;
-  spreadAtEnd: { low: number; high: number } | undefined;
-  showFan: boolean;
-  toggleFan(): void;
-  fan: FanSeries | undefined;
 
   // -- undo/redo --
   undo(): void;
@@ -93,13 +78,11 @@ export interface PlannerContextValue {
   canUndo: boolean;
   canRedo: boolean;
 
-  // -- the instrument: scrub + drag-through-time --
-  scrubYear: number | null;
-  setScrubYear(year: number | null): void;
+  // -- the instrument: the pinned year --
   /**
    * The year pinned by clicking any time chart, app-wide (docs/REDESIGN-V5.md
-   * §4.1). Hover stays local to each chart. `scrubYear` above stays until the
-   * page units migrate off it. Resets to null when the active plan changes.
+   * §4.1). Hover stays local to each chart. Resets to null when the active
+   * plan changes.
    */
   focusYear: number | null;
   setFocusYear(year: number | null): void;
@@ -108,19 +91,12 @@ export interface PlannerContextValue {
   setChartRange(range: ChartRangeKey): void;
   /** Does the plan run out of money, and the spendable-money series (docs/REDESIGN-V5.md §4.2). */
   health: PlanHealth;
-  dragDraft: PlanEvent | null;
-  setDragDraft(event: PlanEvent | null): void;
-  selected: ChartSelection | null;
-  setSelected(selection: ChartSelection | null): void;
-
-  // -- the year window (ledger pages) --
-  columns: number;
-  clampedStart: number;
-  maxStart: number;
-  windowYears: ReturnType<typeof runPlan>['years'];
-  windowLabel: string;
-  pageEarlier(): void;
-  pageLater(): void;
+  /**
+   * Inert shims: the old chart-selection and year-pager state is gone
+   * (V5-REVIEW-1 D1), but `App.tsx` (unit U4's file) still calls both when
+   * the active plan changes. Delete these two lines and those calls together.
+   */
+  setSelected(selection: null): void;
   resetWindow(): void;
 
   // -- events & accounts --
@@ -163,10 +139,6 @@ export function usePlanner(): PlannerContextValue {
 }
 
 export function PlannerProvider({ children }: { children: ReactNode }) {
-  const columns = yearColumnsFor(useBreakpoint());
-  const [winStart, setWinStart] = useState(0);
-  const [selected, setSelected] = useState<ChartSelection | null>(null);
-  const [showFan, setShowFan] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -203,14 +175,12 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const monarch = useMonarch();
   const localMonarch = useLocalMonarch();
 
-  const [scrubYear, setScrubYear] = useState<number | null>(null);
   // Keyed by plan so a pin never carries into another plan: the stored year
   // is only honoured while its plan is the active one, with no effect pass
   // (and no frame showing the old plan's pin).
   const [focus, setFocus] = useState<{ planId: string; year: number | null }>({ planId, year: null });
   const focusYear = focus.planId === planId ? focus.year : null;
   const setFocusYear = (year: number | null) => setFocus({ planId, year });
-  const [dragDraft, setDragDraft] = useState<PlanEvent | null>(null);
 
   const stored = useMemo(() => plans.find((p) => p.id === planId) ?? plans[0], [plans, planId]);
   const visiblePlans = useMemo(() => plans.filter((p) => !p.isWhatIfSnapshot), [plans]);
@@ -255,8 +225,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   });
 
   const plan = useMemo(
-    () => withDraft(withDraft(assumptionsDraft ?? stored, editor.draft), dragDraft),
-    [assumptionsDraft, stored, editor.draft, dragDraft],
+    () => withDraft(assumptionsDraft ?? stored, editor.draft),
+    [assumptionsDraft, stored, editor.draft],
   );
 
   const nominal = useMemo(() => runPlan(plan), [plan]);
@@ -268,45 +238,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         : nominal,
     [nominal, plan.settings.dollarMode, plan.settings.inflationRate],
   );
-
-  const comparePlan = useMemo(
-    () =>
-      plan.settings.compareToPlanId
-        ? plans.find((p) => p.id === plan.settings.compareToPlanId)
-        : undefined,
-    [plans, plan.settings.compareToPlanId],
-  );
-
-  const compare: CompareSeries | undefined = useMemo(() => {
-    if (!comparePlan) return undefined;
-    const raw = runPlan(comparePlan);
-    return {
-      name: comparePlan.name,
-      result:
-        plan.settings.dollarMode === 'todaysDollars'
-          ? deflate(raw, plan.settings.inflationRate)
-          : raw,
-    };
-  }, [comparePlan, plan.settings.dollarMode, plan.settings.inflationRate]);
-
-  const spread: FanSeries | undefined = useMemo(() => {
-    if (headlineReturnRate(plan) === undefined) return undefined;
-
-    const run = (delta: number) => {
-      const raw = runPlan(withReturnShift(plan, delta));
-      return plan.settings.dollarMode === 'todaysDollars'
-        ? deflate(raw, plan.settings.inflationRate)
-        : raw;
-    };
-    return {
-      shift: DEFAULT_RETURN_SHIFT,
-      low: run(-DEFAULT_RETURN_SHIFT),
-      high: run(DEFAULT_RETURN_SHIFT),
-    };
-  }, [plan]);
-
-  const fan = showFan ? spread : undefined;
-  const toggleFan = () => setShowFan((on) => !on);
 
   const onSetRetirementYear = (year: number) => {
     const participantId = stored.participants.find((p) => p.isIncluded)?.id;
@@ -379,33 +310,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     [plan, result, markers, growth, marketReturn],
   );
 
-  const heroFigure =
-    (scrubYear !== null ? result.years.find((y) => y.year === scrubYear)?.netWorth : undefined) ??
-    reading.figure;
-
-  const spreadAtEnd = useMemo(() => {
-    if (!spread) return undefined;
-    const at = (r: typeof spread.low) =>
-      r.years.find((y) => y.year === result.endYear)?.netWorth ??
-      r.years[r.years.length - 1]?.netWorth;
-    const low = at(spread.low);
-    const high = at(spread.high);
-    if (low === undefined || high === undefined) return undefined;
-    if (high - low < Math.max(1000, Math.abs(reading.figure) * 0.02)) return undefined;
-    return { low, high };
-  }, [spread, result.endYear, reading.figure]);
-
-  const maxStart = Math.max(0, result.years.length - columns);
-  const clampedStart = Math.min(winStart, maxStart);
-  const windowYears = result.years.slice(clampedStart, clampedStart + columns);
-  const windowLabel =
-    windowYears.length > 0
-      ? `${windowYears[0].year}–${windowYears[windowYears.length - 1].year}`
-      : '';
-  const pageEarlier = () => setWinStart(Math.max(0, clampedStart - columns));
-  const pageLater = () => setWinStart(Math.min(maxStart, clampedStart + columns));
-  const resetWindow = () => setWinStart(0);
-
   const value: PlannerContextValue = {
     plans,
     visiblePlans,
@@ -436,41 +340,19 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     allAccounts,
     reading,
     growth,
-    heroFigure,
-
-    comparePlan,
-    compare,
-    spread,
-    spreadAtEnd,
-    showFan,
-    toggleFan,
-    fan,
 
     undo,
     redo,
     canUndo,
     canRedo,
 
-    scrubYear,
-    setScrubYear,
     focusYear,
     setFocusYear,
     chartRange,
     setChartRange,
     health,
-    dragDraft,
-    setDragDraft,
-    selected,
-    setSelected,
-
-    columns,
-    clampedStart,
-    maxStart,
-    windowYears,
-    windowLabel,
-    pageEarlier,
-    pageLater,
-    resetWindow,
+    setSelected: noop,
+    resetWindow: noop,
 
     upsertEvent,
     deleteEvent,
@@ -501,7 +383,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 }
 
 /** Real elapsed time from `asOfDate` (or Jan 1st of `startYear` when unset —
-    the same fallback `planFreshness`/`planMetaLine`/`progress.ts` all use) to
+    the same fallback `planFreshness`/`planMetaLine` both use) to
     December 31st of `endYear`, in fractional years — the CAGR clock `growth`
     above uses (docs/MATH.md "Today vs. years[0]", queued for this wave). A
     365.25-day year, matching the leap-year-averaged convention a "years
@@ -515,3 +397,5 @@ function elapsedYearsToHorizon(startYear: number, asOfDate: string | undefined, 
   const endUTC = Date.UTC(endYear, 11, 31);
   return Math.max(0, (endUTC - asOfUTC) / (365.25 * 86_400_000));
 }
+
+function noop() {}

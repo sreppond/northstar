@@ -1,17 +1,13 @@
 /**
- * Pure derivations for the ledger pages (Accounts / Cash Flow / Events —
- * `pages/*.tsx`, `tabs/*.tsx`). Split out of the page components so the
- * StatStrip figures, the "missing account type" rule the header's Add-account
- * menu and the balance sheet's trailing pills both apply, and the little
- * money/tone helpers a delta tag needs, are each written and tested once
- * rather than re-derived per page (docs/REDESIGN-V3.md "Accounts" / "Cash
- * Flow" / "Events").
+ * Pure derivations shared by the ledger tables (`tabs/*.tsx`) and the pages
+ * that sit on them: per-class balances, the "missing account type" rule the
+ * balance sheet's Add pills apply, the one definition of spending / saved /
+ * savings rate, and the stub-year label. Written and tested once rather than
+ * re-derived per page. (The v3 StatStrip figures that used to live here went
+ * with the stat strips in v5, V5-REVIEW-1 D1.)
  */
-import type { Account, AccountClass, OpeningSnapshot, PlanEvent, YearSnapshot } from '@northstar/engine';
-import { ACCOUNT_TYPES, ASSET_CLASSES } from '@northstar/engine';
-import { toneFor } from './presentation';
-import { signedMoney } from './format';
-import { accountClassColor, type DeltaTone, type StackedBarSegment } from './ui';
+import type { Account, AccountClass, YearSnapshot } from '@northstar/engine';
+import type { DeltaTone } from './ui';
 
 /**
  * One account type's balance across a window of years, summed across every
@@ -46,220 +42,6 @@ export function missingAccountClasses(
   });
 }
 
-export interface NetWorthStats {
-  netWorthToday: number;
-  assetsToday: number;
-  liabilitiesToday: number;
-  /** Cash plus taxable investments — the two buckets someone could actually
-      spend without a withdrawal penalty or triggering a tax event. */
-  liquidToday: number;
-  netWorthAtEnd: number;
-}
-
-const LIQUID_CLASSES: AccountClass[] = ['cash', 'taxableInvestment'];
-
-/**
- * Today's balance-sheet headline figures — Accounts' StatStrip.
- *
- * "Today" is `opening` — balances as of `settings.asOfDate` — not
- * `years[0]`, which is the projected CLOSE of the first plan year and can
- * already be well ahead of today by however much that stub year is
- * projected to grow, earn and spend (docs/MATH.md "Today vs. years[0]").
- * `opening` is optional here (not just on `PlanResult`) because this
- * function historically took `years` alone; a caller that has not been
- * updated to also pass `result.opening` yet keeps the old, slightly-wrong
- * `years[0]` reading rather than losing "today" entirely.
- */
-export function netWorthStats(years: YearSnapshot[], opening?: OpeningSnapshot): NetWorthStats {
-  const end = years[years.length - 1];
-
-  if (opening) {
-    const liquidToday = opening.accounts
-      .filter((a) => !a.isLiability && LIQUID_CLASSES.includes(a.accountClass))
-      .reduce((sum, a) => sum + a.balance, 0);
-    return {
-      netWorthToday: opening.netWorth,
-      assetsToday: opening.assets,
-      liabilitiesToday: opening.liabilities,
-      liquidToday,
-      netWorthAtEnd: end?.netWorth ?? 0,
-    };
-  }
-
-  const today = years[0];
-  const liquidToday = today
-    ? today.accounts
-        .filter((a) => !a.isLiability && LIQUID_CLASSES.includes(a.accountClass))
-        .reduce((sum, a) => sum + a.close, 0)
-    : 0;
-  return {
-    netWorthToday: today?.netWorth ?? 0,
-    assetsToday: today?.assets ?? 0,
-    liabilitiesToday: today?.liabilities ?? 0,
-    liquidToday,
-    netWorthAtEnd: end?.netWorth ?? 0,
-  };
-}
-
-/**
- * "Where it sits" — today's asset balances by class, for the account-mix
- * `StackedBar` (docs/REDESIGN-V3.md "Accounts"). Liabilities have no honest
- * place in a composition-of-assets bar; `StackedBar` itself already drops
- * zero/negative segments, so an empty class just doesn't appear.
- *
- * Prefers `opening` (balances as of `settings.asOfDate`) over `years[0]`
- * (the first plan year's projected close) for the same reason
- * `netWorthStats` does — see its doc comment. `opening` is optional so a
- * caller that has not been updated to pass it yet keeps the old reading.
- */
-export function assetMixToday(years: YearSnapshot[], opening?: OpeningSnapshot): StackedBarSegment[] {
-  if (opening) {
-    return ASSET_CLASSES.map((accountClass) => ({
-      key: accountClass,
-      label: ACCOUNT_TYPES[accountClass].label,
-      value: opening.accounts
-        .filter((a) => !a.isLiability && a.accountClass === accountClass)
-        .reduce((sum, a) => sum + a.balance, 0),
-      color: accountClassColor(accountClass),
-    })).filter((s) => s.value >= 1);
-  }
-
-  const today = years[0];
-  if (!today) return [];
-  return ASSET_CLASSES.map((accountClass) => ({
-    key: accountClass,
-    label: ACCOUNT_TYPES[accountClass].label,
-    value: today.accounts
-      .filter((a) => !a.isLiability && a.accountClass === accountClass)
-      .reduce((sum, a) => sum + a.close, 0),
-    color: accountClassColor(accountClass),
-  })).filter((s) => s.value >= 1);
-}
-
-/** One cash-flow row as `lifeChangeRows` groups it — see there. */
-export interface LifeChangeRow {
-  key: string;
-  label: string;
-  sourceEventId?: string;
-  cells: number[];
-  /** The individual lines, when one life change produced more than one. */
-  parts?: { label: string; cells: number[] }[];
-}
-
-/**
- * One row per life change rather than per line (docs/REDESIGN-V4.md §1.5):
- * buying a home produces a down payment, a mortgage payment and carrying
- * costs, and a kid produces upfront, annual and college lines — read as five
- * unrelated rows, the table can't say what the house costs. Lines from the
- * same event collapse into a row named after the event, summed, with the
- * lines themselves kept as `parts` (labelled without the repeated event-name
- * prefix). A life change with one line, and any line with no event (baseline
- * spending, taxes), stays a plain row. Order follows first appearance.
- */
-export function lifeChangeRows(
-  lines: { label: string; cells: number[]; sourceEventId?: string }[],
-  eventOf: (eventId: string) => Pick<PlanEvent, 'name' | 'kind'> | undefined,
-): LifeChangeRow[] {
-  const rows: LifeChangeRow[] = [];
-  const byEvent = new Map<string, { label: string; cells: number[] }[]>();
-
-  for (const line of lines) {
-    const event = line.sourceEventId ? eventOf(line.sourceEventId) : undefined;
-    if (!line.sourceEventId || event === undefined) {
-      rows.push({ key: `line:${line.label}`, label: line.label, cells: line.cells });
-      continue;
-    }
-    let parts = byEvent.get(line.sourceEventId);
-    if (!parts) {
-      parts = [];
-      byEvent.set(line.sourceEventId, parts);
-      rows.push({ key: `event:${line.sourceEventId}`, label: event.name, sourceEventId: line.sourceEventId, cells: [] });
-    }
-    parts.push({ label: partLabel(line.label, event), cells: line.cells });
-  }
-
-  return rows.map((row) => {
-    const parts = row.sourceEventId ? byEvent.get(row.sourceEventId) : undefined;
-    if (!parts) return row;
-    if (parts.length === 1) {
-      // A single line keeps its own, more specific label ("Amazon — signing bonus").
-      const only = lines.find((l) => l.sourceEventId === row.sourceEventId)!;
-      return { ...row, label: only.label, cells: parts[0].cells };
-    }
-    const cells = parts[0].cells.map((_, i) => parts.reduce((sum, p) => sum + p.cells[i], 0));
-    return { ...row, cells, parts };
-  });
-}
-
-/** What an event's own un-suffixed line IS, once it sits under the event's name. */
-const BARE_LINE_LABEL: Partial<Record<PlanEvent['kind'], string>> = {
-  job: 'Salary',
-  newJob: 'Salary',
-  haveAKid: 'Annual cost',
-  annualExpense: 'Annual cost',
-  income: 'Income',
-};
-
-function partLabel(label: string, event: Pick<PlanEvent, 'name' | 'kind'>): string {
-  if (label === event.name) return BARE_LINE_LABEL[event.kind] ?? 'Ongoing';
-  const prefix = `${event.name} — `;
-  const stripped = label.startsWith(prefix) ? label.slice(prefix.length) : label;
-  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
-}
-
-/** One band of `balanceStack` — an asset class's balance, stacked on the ones below it. */
-export interface BalanceLayer {
-  key: AccountClass;
-  label: string;
-  color: string;
-  /** The band's lower edge each year (the running total of every layer below). */
-  lower: number[];
-  /** The band's upper edge each year (`lower` + this class's own balance). */
-  upper: number[];
-}
-
-/**
- * Net worth over time, broken into what it's made of (docs/REDESIGN-V4.md
- * §4.4): every asset class as a stacked band above zero, debt as a single
- * band below it, and net worth as the line through the middle — so the
- * Accounts page shows the whole trajectory before the year-by-year table.
- * Classes that are never non-trivial across the whole span are left out.
- */
-export function balanceStack(years: YearSnapshot[]): {
-  years: number[];
-  layers: BalanceLayer[];
-  debt: number[];
-  netWorth: number[];
-} {
-  const running = years.map(() => 0);
-  const layers: BalanceLayer[] = [];
-
-  for (const accountClass of ASSET_CLASSES) {
-    const own = years.map((y) =>
-      y.accounts
-        .filter((a) => !a.isLiability && a.accountClass === accountClass)
-        .reduce((sum, a) => sum + a.close, 0),
-    );
-    if (own.every((v) => v < 1)) continue;
-    const lower = [...running];
-    own.forEach((v, i) => (running[i] += v));
-    layers.push({
-      key: accountClass,
-      label: ACCOUNT_TYPES[accountClass].label,
-      color: accountClassColor(accountClass),
-      lower,
-      upper: [...running],
-    });
-  }
-
-  return {
-    years: years.map((y) => y.year),
-    layers,
-    debt: years.map((y) => -y.liabilities),
-    netWorth: years.map((y) => y.netWorth),
-  };
-}
-
 /**
  * Contributions paid from a paycheck or an allocation rule this year.
  * `run.ts` pushes these into `expenses` (category `'contribution'`) so the
@@ -267,11 +49,11 @@ export function balanceStack(years: YearSnapshot[]): {
  * into a 401(k) is SAVED, not SPENT: it moves net worth from cash to a
  * retirement account, it doesn't reduce it. The one shared definition
  * (docs/MATH.md "Savings rate and spending", W3#5) that `spendingThisYear`/
- * `savedThisYear`/`savingsRatePercent` below, `reports.ts`, and
- * `dashboard.ts`'s `savingsRateThisYear` all read off instead of each
+ * `savedThisYear`/`savingsRatePercent` below, `reports.ts` and
+ * `cashFlowView.ts` all read off instead of each
  * re-deriving its own (previously divergent) number.
  */
-export function contributionsThisYear(snapshot: Pick<YearSnapshot, 'expenses'>): number {
+function contributionsThisYear(snapshot: Pick<YearSnapshot, 'expenses'>): number {
   return snapshot.expenses
     .filter((e) => e.category === 'contribution')
     .reduce((sum, e) => sum + e.amount, 0);
@@ -279,8 +61,7 @@ export function contributionsThisYear(snapshot: Pick<YearSnapshot, 'expenses'>):
 
 /**
  * Spending — living expenses plus event costs, contributions excluded (see
- * `contributionsThisYear`). Taxes are tracked separately (`totalTaxes` /
- * `CashFlowStats.taxes`), the same way `netCashFlow` has always kept them
+ * `contributionsThisYear`). Taxes are tracked separately (`totalTaxes`), the same way `netCashFlow` has always kept them
  * apart from "expenses," so this doesn't double them into "spending" either.
  */
 export function spendingThisYear(snapshot: Pick<YearSnapshot, 'totalExpenses' | 'expenses'>): number {
@@ -307,70 +88,6 @@ export function savingsRatePercent(
   return (savedThisYear(snapshot) / snapshot.totalIncome) * 100;
 }
 
-export interface CashFlowStats {
-  year: number;
-  income: number;
-  spending: number;
-  taxes: number;
-  saved: number;
-  /** Percent, undefined when there is no income to divide by. */
-  savingsRate: number | undefined;
-  deltaIncome: number | undefined;
-  deltaSpending: number | undefined;
-  deltaTaxes: number | undefined;
-  deltaSaved: number | undefined;
-}
-
-/** The selected year's headline figures — Cash Flow's StatStrip. `previous`
-    is the prior year in the projection, when there is one, for the delta
-    tags; omit it for the first year in the plan. */
-export function cashFlowStats(snapshot: YearSnapshot, previous: YearSnapshot | undefined): CashFlowStats {
-  const saved = savedThisYear(snapshot);
-  return {
-    year: snapshot.year,
-    income: snapshot.totalIncome,
-    spending: spendingThisYear(snapshot),
-    taxes: snapshot.totalTaxes,
-    saved,
-    savingsRate: savingsRatePercent(snapshot),
-    deltaIncome: previous ? snapshot.totalIncome - previous.totalIncome : undefined,
-    deltaSpending: previous ? spendingThisYear(snapshot) - spendingThisYear(previous) : undefined,
-    deltaTaxes: previous ? snapshot.totalTaxes - previous.totalTaxes : undefined,
-    deltaSaved: previous ? saved - savedThisYear(previous) : undefined,
-  };
-}
-
-export interface EventStats {
-  total: number;
-  income: number;
-  cost: number;
-  next: { name: string; yearsAway: number } | undefined;
-}
-
-/**
- * The plan's events, counted the way a human would describe them — Events'
- * StatStrip. `endOfPlan` is always present and isn't really "an event," so it
- * is left out of every count here (and is what makes the EmptyState's "no
- * events besides End of plan" check correct).
- */
-export function eventStats(events: PlanEvent[], todayYear: number): EventStats {
-  const live = events.filter((e) => e.isIncluded && !e.isHidden && e.kind !== 'endOfPlan');
-  // Prefer an event that hasn't started yet — "Next up" was surfacing an
-  // event that already started this year ahead of a genuinely upcoming one,
-  // because both satisfied `startYear >= todayYear` and the earlier start
-  // year sorted first (REVIEW.md S19). Only fall back to "started this
-  // year" when nothing is still ahead.
-  const future = live.filter((e) => e.startYear > todayYear).sort((a, b) => a.startYear - b.startYear)[0];
-  const thisYear = live.filter((e) => e.startYear === todayYear).sort((a, b) => a.startYear - b.startYear)[0];
-  const upcoming = future ?? thisYear;
-  return {
-    total: live.length,
-    income: live.filter((e) => toneFor(e.kind) === 'income').length,
-    cost: live.filter((e) => toneFor(e.kind) === 'cost').length,
-    next: upcoming ? { name: upcoming.name, yearsAway: upcoming.startYear - todayYear } : undefined,
-  };
-}
-
 /** Sign of a change in money -> a `DeltaTag` tone (docs/REDESIGN-V3.md
     "Delta tag": these encode a change in money, not whether that change is
     welcome — a positive delta is always `in`, a negative one always `out`,
@@ -380,21 +97,13 @@ export function deltaTone(delta: number | undefined): DeltaTone {
   return delta > 0 ? 'in' : 'out';
 }
 
-/** A ready-to-render `Stat`/`StatCard` delta prop, or undefined when there's
-    nothing to compare against (no previous year, no horizon spread). */
-export function moneyDelta(delta: number | undefined): { value: string; tone: DeltaTone } | undefined {
-  if (delta === undefined) return undefined;
-  return { value: signedMoney(delta), tone: deltaTone(delta) };
-}
-
 export interface StubYearLabel {
   /** "Sep 25" — the bare date, for a column header's small mono sub-label
-      ("from Sep 25") or a StatStrip sub line's own composition. */
+      ("from Sep 25") or a sub line's own composition. */
   date: string;
   /** "from Sep 25" — a column header's sub-label under "2026". */
   short: string;
-  /** "Sep 25 – Dec 31 · partial year" — the Cash Flow StatStrip/Reports
-      sub line. */
+  /** "Sep 25 – Dec 31 · partial year" — the Cash Flow/Reports sub line. */
   long: string;
 }
 
@@ -442,7 +151,7 @@ export function savingsRateNote(snapshot: YearSnapshot): string | undefined {
   // `savedThisYear`, not raw `netCashFlow` (W3#5): a year whose cash flow
   // alone is negative can still be a POSITIVE savings year once paycheck
   // contributions are credited back in, so this must agree with the same
-  // "saved" `cashFlowStats`/`savingsRatePercent` show, not a looser reading.
+  // "saved" `savingsRatePercent` shows, not a looser reading.
   if (savedThisYear(snapshot) >= 0) return undefined;
   // A contribution is never the "culprit" named here — it isn't spending,
   // so blaming it for a negative savings year would contradict the fix

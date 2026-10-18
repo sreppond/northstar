@@ -1,7 +1,7 @@
 /**
  * Pure derivations for the Retirement lens (docs/REDESIGN-V3.md
  * "Retirement"), pulled out of `RetirementForecastView.tsx` for the same
- * reason `chartMath.ts` is kept out of `NetWorthChart.tsx`: this repo's test
+ * reason `chartMath.ts` is a plain module: this repo's test
  * runner only collects `src/**\/*.test.ts` (vitest.config.ts), so a `.tsx`
  * component can't easily be unit tested here, a plain module can.
  */

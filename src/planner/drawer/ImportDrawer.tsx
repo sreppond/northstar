@@ -8,7 +8,7 @@ import {
   previewImport,
 } from '@northstar/engine';
 import { asOfDateLabel, money } from '../format';
-import { newProgressId, type ProgressPoint } from '../progress';
+import { newProgressId, type ProgressPoint } from '../store/planStore';
 import { Toggle } from './fields';
 
 /**

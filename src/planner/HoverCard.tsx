@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Detail } from './detail';
 
@@ -38,19 +38,18 @@ export function HoverCard({
   id,
 }: {
   /** The structured title/sections shape an event, account or plan card
-      renders. Omit this and pass `content` instead for freeform copy (see
-      `ExplainHint` below) — a caller passing neither renders an empty card,
+      renders. Omit this and pass `content` instead for freeform copy — a caller passing neither renders an empty card,
       which no current caller does. */
   detail?: Detail;
   /** Freeform popover content, taking priority over `detail` when both are
-      given (no caller currently passes both). Used by `ExplainHint`, where
-      an explainer is one or two plain sentences rather than a field list. */
+      given (no caller currently passes both). For an explainer that is one or
+      two plain sentences rather than a field list. */
   content?: ReactNode;
   children: ReactNode;
   side?: HoverSide;
   disabled?: boolean;
   /** Sets the popover's own DOM `id` so a trigger element can point
-      `aria-describedby` at it (`ExplainHint`'s accessible link). Every
+      `aria-describedby` at it. Every
       existing caller omits this and gets no id, unchanged. */
   id?: string;
 }) {
@@ -63,9 +62,8 @@ export function HoverCard({
   };
   const close = () => setRect(null);
 
-  // Esc closes an open card regardless of how it got focus/hover — mainly
-  // for `ExplainHint`'s keyboard-focus popovers (docs/ROADMAP-10.md C3), but
-  // harmless for every other caller too: dismissing an event/account card
+  // Esc closes an open card regardless of how it got focus/hover — keyboard-focus popovers
+  // need it (docs/ROADMAP-10.md C3), and dismissing an event/account card
   // early with Esc was never a loss.
   useEffect(() => {
     if (!rect) return;
@@ -150,39 +148,5 @@ function Card({
         </>
       ))}
     </div>
-  );
-}
-
-/**
- * The small "i" affordance next to a stat's label that reveals its
- * explainer on hover or keyboard focus (docs/ROADMAP-10.md C3): what the
- * figure is, how it's computed, and which date it's as of, in one or two
- * plain sentences. Built on `HoverCard` itself (freeform `content`, not the
- * structured `Detail` an event/account card uses), so it gets the same
- * portal positioning, side-flip and Esc-to-close for free rather than a
- * second popover implementation.
- *
- * `aria-describedby` links the trigger button to the popover's own id
- * (`useId`) rather than depending on any particular DOM adjacency — the
- * popover portals to `document.body`, nowhere near this button, so the id
- * link is the only thing connecting them for a screen reader.
- */
-export function ExplainHint({ children, label }: { children: ReactNode; label?: string }) {
-  const id = useId();
-  return (
-    <HoverCard content={children} id={id} side="bottom">
-      <button
-        type="button"
-        className="ns-explain-hint"
-        aria-label={label ? `About ${label}` : 'What this means'}
-        aria-describedby={id}
-        // Some stats/cards this sits inside are themselves a `<button>`
-        // (docs/REVIEW.md M3's pressable Stat) — stopped here so tapping the
-        // explainer never also fires that outer button's own onClick.
-        onClick={(e) => e.stopPropagation()}
-      >
-        i
-      </button>
-    </HoverCard>
   );
 }

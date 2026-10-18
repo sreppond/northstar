@@ -3,9 +3,8 @@ import { useEffect, useState } from 'react';
 /**
  * Layout breakpoints, matched to planner.css.
  *
- * Used where a CSS media query cannot reach — chiefly the number of year
- * columns rendered. Showing fewer columns beats shrinking the type or making
- * someone scroll eight columns on a phone.
+ * Used where a CSS media query cannot reach (chart heights, the sheet's
+ * bottom-vs-side placement).
  */
 export type Breakpoint = 'phone' | 'tablet' | 'desktop';
 
@@ -40,20 +39,4 @@ function read(): Breakpoint {
   if (window.matchMedia(PHONE).matches) return 'phone';
   if (window.matchMedia(TABLET).matches) return 'tablet';
   return 'desktop';
-}
-
-/** Year columns that fit without the type shrinking. Phone is 2, not 3
-    (docs/W3-REVIEW.md "Phone balance sheet"): 3 columns at 390px clipped the
-    third one and squeezed the label column enough to truncate "Taxable
-    investments" down to "Taxa…" — the window label still read "2026–2028"
-    while only two of those three years were actually legible. */
-export function yearColumnsFor(breakpoint: Breakpoint): number {
-  switch (breakpoint) {
-    case 'phone':
-      return 2;
-    case 'tablet':
-      return 5;
-    default:
-      return 8;
-  }
 }

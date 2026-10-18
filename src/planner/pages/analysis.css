@@ -1,12 +1,84 @@
 /*
- * Analysis pages — Progress, Compare, Reports (docs/REDESIGN-V3.md "Target
- * information architecture": the ANALYSIS sidebar group). Existing rules for
- * these three lenses stay in `planner.css`'s progress/compare/reports
- * sections; this file holds patterns genuinely new to the v3 pass — right
- * now, Compare's grid of plan cards and their inline sparkline.
+ * More pages: Scenarios (the old Compare) and Reports. Loaded app-wide from
+ * App.tsx. The chart itself is the kit's (`charts/charts.css`); this file
+ * holds the plan-card grid, the diff lists and Reports' per-year tint.
  */
 
-/* --- Compare: a card per other plan --------------------------------------- */
+/* --- Scenarios: the two-series hero --------------------------------------- */
+
+.ns-scn-hero {
+  min-width: 0;
+}
+/* Reserve the readout's height WITH its secondary row, so the chart doesn't
+   slide when the pointer leaves it. */
+.ns-scn-hero .ns-readout {
+  min-height: 118px;
+}
+
+/* "What's different" / "What it costs": plain columns under the chart. */
+.ns-scn-diff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--rule);
+}
+.ns-scn-diff-col {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.ns-scn-diff-label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+}
+.ns-scn-diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink);
+}
+.ns-scn-diff-outcome {
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .ns-scn-hero .ns-readout {
+    min-height: 156px;
+  }
+}
+
+/* --- Reports --------------------------------------------------------------- */
+
+.ns-rpt-hero {
+  min-width: 0;
+}
+.ns-rpt-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* A year the plan runs short: the row wash is `.ns-col-danger` (planner.css),
+   so the shortfall reads across the row the way it reads down a column on the
+   ledger tables; the year itself takes the danger ink. */
+.ns-rpt-short-year {
+  color: var(--danger);
+  font-weight: 600;
+}
+.ns-datatable tbody tr.ns-col-danger td {
+  background: var(--danger-wash);
+}
+
+/* --- Scenarios: a card per other plan -------------------------------------- */
 
 .ns-compare-grid {
   display: grid;
@@ -14,13 +86,8 @@
   gap: 14px;
 }
 
-/* S9: geometry matched to `ui/StatCard`'s `.ns-ui-statcard` exactly (12px
-   radius, 14px/16px padding, 8px gap) rather than this card's own
-   14px/16px18px — the two sit side by side across the app (Overview's
-   horizon cards use `StatCard` itself) and used to read as two different
-   card systems. Not rendered as an actual `StatCard`: that component has no
-   slot for the sparkline body this card needs (label/badge/value/foot only)
-   — see StatCard.tsx, owned by fix-2's Overview/StatCard pass. */
+/* Geometry matched to the app's other small cards: 12px radius, 14px/16px
+   padding, 8px gap. */
 .ns-compare-card {
   display: flex;
   flex-direction: column;
@@ -80,4 +147,12 @@
   width: 100%;
   height: 36px;
   overflow: visible;
+}
+
+/* The What-If action row wraps instead of squeezing a label onto two lines. */
+.ns-scn .ns-compare-actions {
+  flex-wrap: wrap;
+}
+.ns-scn .ns-compare-actions .ns-btn {
+  white-space: nowrap;
 }

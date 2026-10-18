@@ -1,46 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
-  actualPointYear,
   clampYear,
-  domainStartYear,
   niceAxisTicks,
   packLabelLanes,
   quantiseYear,
-  rubberBandYear,
-  xForYear,
   yearForClientX,
   yearForViewBoxX,
 } from './chartMath';
 
-// Same numbers as NetWorthChart.tsx's own constants, duplicated here rather
-// than imported so this file never has to import a .tsx module.
 const BOUNDS = { plotLeft: 66, plotRight: 1168 };
 const VB_W = 1176;
 const CHART_BOUNDS = { ...BOUNDS, viewBoxWidth: VB_W };
 const START = 2026;
 const END = 2046; // a 20-year plan, the same span the sample plan uses
 
-describe('xForYear / yearForViewBoxX', () => {
+/** The forward mapping, as the chart kit draws it: year -> viewBox x. */
+function xForYear(year: number): number {
+  return BOUNDS.plotLeft + ((year - START) / (END - START)) * (BOUNDS.plotRight - BOUNDS.plotLeft);
+}
+
+describe('yearForViewBoxX', () => {
   it('round-trips a year through x and back', () => {
     for (const year of [START, START + 5, START + 10, END]) {
-      const x = xForYear(year, START, END, BOUNDS);
-      expect(yearForViewBoxX(x, START, END, BOUNDS)).toBeCloseTo(year, 9);
+      expect(yearForViewBoxX(xForYear(year), START, END, BOUNDS)).toBeCloseTo(year, 9);
     }
   });
 
-  it('places the start and end years exactly at the plot edges', () => {
-    expect(xForYear(START, START, END, BOUNDS)).toBe(BOUNDS.plotLeft);
-    expect(xForYear(END, START, END, BOUNDS)).toBe(BOUNDS.plotRight);
-  });
-
-  it('is linear in between', () => {
-    const mid = xForYear(START + 10, START, END, BOUNDS); // halfway through a 20-year span
-    expect(mid).toBeCloseTo((BOUNDS.plotLeft + BOUNDS.plotRight) / 2, 6);
-  });
-
   it('does not divide by zero for a one-year (or zero-span) plan', () => {
-    expect(() => xForYear(START, START, START, BOUNDS)).not.toThrow();
-    expect(Number.isFinite(xForYear(START, START, START, BOUNDS))).toBe(true);
+    expect(Number.isFinite(yearForViewBoxX(BOUNDS.plotLeft, START, START, BOUNDS))).toBe(true);
   });
 });
 
@@ -63,7 +50,7 @@ describe('yearForClientX', () => {
     for (const width of [320, 800, 1176, 2200]) {
       const rect = { left: 40, width };
       for (const year of [START, START + 3, START + 12, END]) {
-        const vbX = xForYear(year, START, END, BOUNDS);
+        const vbX = xForYear(year);
         const clientX = rect.left + (vbX / VB_W) * width;
         expect(yearForClientX(clientX, rect, CHART_BOUNDS, START, END)).toBeCloseTo(year, 6);
       }
@@ -100,41 +87,6 @@ describe('clampYear', () => {
     expect(clampYear(END + 50, START, END)).toBe(END);
     expect(clampYear(START, START, END)).toBe(START);
     expect(clampYear(END, START, END)).toBe(END);
-  });
-});
-
-describe('rubberBandYear', () => {
-  it('is the identity inside the bounds', () => {
-    expect(rubberBandYear(START, START, END)).toBe(START);
-    expect(rubberBandYear(END, START, END)).toBe(END);
-    expect(rubberBandYear(2030, START, END)).toBe(2030);
-  });
-
-  it('gives some but not all of the requested overflow just past a bound', () => {
-    const pulled = rubberBandYear(START - 1, START, END);
-    expect(pulled).toBeLessThan(START); // creeps past the edge...
-    expect(pulled).toBeGreaterThan(START - 1); // ...but resisted, not 1:1
-  });
-
-  it('is monotonic — pulling further always creeps further, never snaps back', () => {
-    const near = rubberBandYear(START - 1, START, END);
-    const far = rubberBandYear(START - 10, START, END);
-    const veryFar = rubberBandYear(START - 1000, START, END);
-    expect(far).toBeLessThan(near);
-    expect(veryFar).toBeLessThan(far);
-  });
-
-  it('approaches but never reaches a bounded asymptote, however hard you pull', () => {
-    const veryFar = rubberBandYear(START - 100_000, START, END);
-    // Never more than a couple of "years" of visible give, no matter how
-    // far past the edge the raw pointer position is.
-    expect(START - veryFar).toBeLessThan(3);
-  });
-
-  it('mirrors above the end bound the same way it resists below the start', () => {
-    const above = rubberBandYear(END + 1, START, END);
-    const below = rubberBandYear(START - 1, START, END);
-    expect(above - END).toBeCloseTo(START - below, 9);
   });
 });
 
@@ -247,32 +199,5 @@ describe('packLabelLanes', () => {
     );
     expect(result[0].lane).toBe(0);
     expect(result[1].lane).toBe(1);
-  });
-});
-
-describe('domainStartYear', () => {
-  it('is the projection start when there are no actuals', () => {
-    expect(domainStartYear([], START)).toBe(START);
-  });
-
-  it('extends back to the earliest actual, never forward past the projection start', () => {
-    expect(domainStartYear([2023.4, 2024.8], START)).toBe(2023.4);
-    expect(domainStartYear([START + 5], START)).toBe(START);
-  });
-});
-
-describe('actualPointYear', () => {
-  it('places a point logged exactly on asOf at startYear, not at its own raw calendar fraction', () => {
-    // The bug this guards: `years[0]` sits at `startYear` on the chart, but
-    // `asOf` (when it falls mid-year) is a larger number — plotting the raw
-    // fraction put "today" to the right of the projection's own start.
-    const asOf = START + 0.73;
-    expect(actualPointYear(asOf, asOf, START)).toBe(START);
-  });
-
-  it('offsets earlier and later points by the same distance from asOf', () => {
-    const asOf = START + 0.73;
-    expect(actualPointYear(asOf - 1, asOf, START)).toBeCloseTo(START - 1, 9);
-    expect(actualPointYear(asOf + 0.5, asOf, START)).toBeCloseTo(START + 0.5, 9);
   });
 });
