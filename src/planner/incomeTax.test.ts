@@ -34,7 +34,11 @@ describe('incomeWithTax invariant: every dollar of tax lands somewhere', () => {
   it('after-tax income matches the Budget page', () => {
     const plan = kitchenSinkPlan();
     for (const snapshot of runPlan(plan).years) {
-      expect(incomeWithTax(snapshot).total.net / 12).toBeCloseTo(budgetView(plan, snapshot).afterTax, 4);
+      // `total.net` is net of the tax on withdrawals too; the Budget (and Cash
+      // Flow) after-tax figure is income tax only, with withdrawal tax its own
+      // line (V5-REVIEW-1 F3).
+      const inc = incomeWithTax(snapshot);
+      expect((inc.total.net + inc.withdrawalTax) / 12).toBeCloseTo(budgetView(plan, snapshot).afterTax, 4);
     }
   });
 });

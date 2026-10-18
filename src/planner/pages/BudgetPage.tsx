@@ -7,14 +7,19 @@ import { money } from '../format';
 import { DonutChart, type DonutSegment } from '../charts';
 import { Page, PageHeader, Segmented } from '../ui';
 import {
+  FROM_SAVINGS_COLOR,
   KIDS_COLOR,
   REMAINDER_LINE_ID,
   SAVED_COLOR,
   SHARED_FIXED_COLOR,
+  WITHDRAWAL_TAX_COLOR,
   adultAges,
   budgetEnvelopes,
   budgetView,
+  envelopeShare,
+  inUnit,
   lineTiming,
+  monthsIn,
   ownerColor,
   setAdultEnvelope,
   setSharedEnvelope,
@@ -27,7 +32,8 @@ import { HouseholdSetup } from '../HouseholdSetup';
 import { ImpactStrip, PreviewActions, impactMetrics, usePreview } from '../ImpactStrip';
 import { PlanCheckBanner } from '../PlanCheckBanner';
 import { KidsSheet } from '../KidsSheet';
-import { BudgetColumns, type ColumnLayer } from '../views/BudgetColumns';
+import { BudgetShare, type ShareLayer } from '../views/BudgetShare';
+import { healthDangerBand } from '../health';
 import { BudgetLineDrawer, newBudgetLine } from '../drawer/BudgetLineDrawer';
 import './household.css';
 import './budget.css';
@@ -70,11 +76,20 @@ function BudgetBody() {
   const years = result.years;
   const today = stored.settings.startYear;
 
-  // One focus year for the whole page (§1 principle 3): the pin if there is
-  // one, else the first full year, as before. There is no stepper.
+  // One focus year for the whole page (§1 principle 3): hovering the by-year
+  // chart previews a month, else the pin, else the first full year. There is
+  // no stepper (V5-REVIEW-1 F17: hover used to be ignored).
   const defaultYear = years.some((y) => y.year === today + 1) ? today + 1 : years[0]?.year;
-  const year = focusYear !== null && years.some((y) => y.year === focusYear) ? focusYear : defaultYear;
+  const pinnedYear = focusYear !== null && years.some((y) => y.year === focusYear) ? focusYear : defaultYear;
+  const [hoverYear, setHoverYear] = useState<number | null>(null);
+  const year = hoverYear !== null && years.some((y) => y.year === hoverYear) ? hoverYear : pinnedYear;
   const snapshot = years.find((y) => y.year === year) ?? years[0];
+  // Typing over an envelope while the pointer drifts across the chart must not
+  // retarget the figure being typed into.
+  const previewYear = (y: number | null) => {
+    if (document.activeElement instanceof HTMLElement && document.activeElement.classList.contains('ns-bgt-fig-input')) return;
+    setHoverYear(y);
+  };
 
   const [unit, setUnit] = useState<Unit>('mo');
   const scale = unit === 'yr' ? 12 : 1;
@@ -159,37 +174,49 @@ function BudgetBody() {
     [preview.draft, preview.draftResult],
   );
   const yearList = useMemo(() => years.map((y) => y.year), [years]);
-  const layers: ColumnLayer[] = useMemo(() => {
-    const all: ColumnLayer[] = [
-      { key: 'shared', label: 'Shared', color: SHARED_FIXED_COLOR, values: envelopeSeries.map((e) => e.shared * scale) },
+  const shares = useMemo(() => envelopeSeries.map(envelopeShare), [envelopeSeries]);
+  const draftShares = useMemo(() => (draftSeries ? draftSeries.map(envelopeShare) : null), [draftSeries]);
+  const layers: ShareLayer[] = useMemo(() => {
+    const all: ShareLayer[] = [
+      { key: 'shared', label: 'Shared', color: SHARED_FIXED_COLOR, values: shares.map((e) => e.shared) },
       ...stored.participants
         .filter((p) => p.isIncluded && p.role !== 'child')
         .map((p) => ({
           key: p.id,
           label: p.name,
           color: ownerColor(stored, p.id),
-          values: envelopeSeries.map((e) => (e.perAdult.find((a) => a.id === p.id)?.monthly ?? 0) * scale),
+          values: shares.map((e) => e.perAdult.find((a) => a.id === p.id)?.share ?? 0),
         })),
-      { key: 'kids', label: 'Kids', color: KIDS_COLOR, values: envelopeSeries.map((e) => e.kids * scale) },
+      { key: 'kids', label: 'Kids', color: KIDS_COLOR, values: shares.map((e) => e.kids) },
+      { key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, values: shares.map((e) => e.withdrawalTax) },
+      { key: 'saved', label: 'Saved', color: SAVED_COLOR, values: shares.map((e) => e.saved) },
     ];
-    return all.filter((l) => l.values.some((v) => v > 0.5));
-  }, [envelopeSeries, stored, scale]);
-  const spent = (e: BudgetEnvelopes) => e.shared + e.perAdult.reduce((a, b) => a + b.monthly, 0) + e.kids;
+    return all.filter((l) => l.key === 'saved' || l.values.some((v) => v > 0.5));
+  }, [shares, stored]);
+  const fromSavingsSeries = useMemo(() => shares.map((e) => e.fromSavings), [shares]);
   const afterTaxSeries = useMemo(() => envelopeSeries.map((e) => e.afterTax * scale), [envelopeSeries, scale]);
-  const draftTotals = useMemo(() => (draftSeries ? draftSeries.map((e) => spent(e) * scale) : undefined), [draftSeries, scale]);
 
-  const danger =
-    health.status === 'short' && health.firstShortYear !== undefined
-      ? { from: health.firstShortYear, shortFor: (y: number) => years.find((s) => s.year === y)?.unfundedShortfall }
-      : undefined;
+  // The band is the plan's own short years (F2); the amount is in this page's
+  // unit (F10), dividing by the months each year really covers.
+  const danger = useMemo(
+    () => inUnit(healthDangerBand(health, result), (y) => (unit === 'yr' ? 1 : monthsIn(stored, y) || 12)),
+    [health, result, unit, stored],
+  );
+  // Short only where the plan is (health.shortYears), never because a number is negative (F3).
+  const yearIsShort = health.shortYears.includes(snapshot.year);
+  const unfundedNow = yearIsShort ? Math.max(0, env.unfunded) : 0;
 
   // --- the donut -------------------------------------------------------------
   const segments: DonutSegment[] = [
     { key: 'shared', label: 'Shared', value: env.shared * scale, color: SHARED_FIXED_COLOR },
     ...adults.map((a) => ({ key: a.id, label: a.name, value: a.monthly * scale, color: ownerColor(stored, a.id) })),
     ...(hasKids ? [{ key: 'kids', label: 'Kids', value: env.kids * scale, color: KIDS_COLOR }] : []),
+    ...(env.withdrawalTax >= 0.5 ? [{ key: 'wtax', label: 'Tax on withdrawals', value: env.withdrawalTax * scale, color: WITHDRAWAL_TAX_COLOR }] : []),
     { key: 'saved', label: 'Saved', value: Math.max(0, env.saved) * scale, color: SAVED_COLOR },
-    { key: 'short', label: 'Short', value: Math.max(0, -env.saved) * scale, color: 'var(--danger)', tone: 'danger' },
+    // A negative remainder is savings paying the bills: orange, not an error.
+    // Only the part the accounts could NOT cover is Short (F3).
+    { key: 'drawn', label: 'From savings', value: Math.max(0, -env.saved - unfundedNow) * scale, color: FROM_SAVINGS_COLOR },
+    { key: 'short', label: 'Short', value: unfundedNow * scale, color: 'var(--danger)', tone: 'danger' },
   ];
 
   const openRow = (row: BudgetRow) => {
@@ -264,7 +291,20 @@ function BudgetBody() {
       popover: <p>Sets {a.name}’s allowance. Applies every year this line runs.</p>,
     })),
     ...(hasKids ? [{ key: 'kids', label: 'Kids', color: KIDS_COLOR, monthly: env.kids, edited: false, opens: () => setKidsOpen(true) } satisfies EnvRowSpec] : []),
-    { key: 'saved', label: 'Saved', color: SAVED_COLOR, monthly: env.saved, edited: Math.abs(env.saved - baseEnv.saved) >= 0.5, derived: true },
+    ...(env.withdrawalTax >= 0.5
+      ? [{ key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, monthly: env.withdrawalTax, edited: false, derived: true } satisfies EnvRowSpec]
+      : []),
+    // What is left. Negative is savings paying the bills ("From savings", orange);
+    // "Short" is only the part the accounts could not cover, and only in a short year (F3).
+    {
+      key: 'saved',
+      label: env.saved < -0.5 ? 'From savings' : 'Saved',
+      color: env.saved < -0.5 ? FROM_SAVINGS_COLOR : SAVED_COLOR,
+      monthly: env.saved,
+      edited: Math.abs(env.saved - baseEnv.saved) >= 0.5,
+      derived: true,
+      short: unfundedNow >= 0.5 ? unfundedNow : undefined,
+    },
   ];
 
   const sectionSpecs: SectionSpec[] = [
@@ -329,8 +369,8 @@ function BudgetBody() {
                   row={row}
                   scale={scale}
                   per={per}
-                  hovered={hoverKey === row.key || (row.key === 'saved' && hoverKey === 'short')}
-                  dimmed={hoverKey !== null && hoverKey !== row.key && !(row.key === 'saved' && hoverKey === 'short')}
+                  hovered={hoverKey === row.key || (row.key === 'saved' && (hoverKey === 'short' || hoverKey === 'drawn'))}
+                  dimmed={hoverKey !== null && hoverKey !== row.key && !(row.key === 'saved' && (hoverKey === 'short' || hoverKey === 'drawn'))}
                   onHover={(k) => setHoverKey(k)}
                 />
               ))}
@@ -355,23 +395,28 @@ function BudgetBody() {
 
         <section aria-labelledby="bgt-years">
           <h2 className="ns-bgt-section-title" id="bgt-years">
-            Budget by year
+            Where each after-tax dollar goes
           </h2>
-          <BudgetColumns
+          <BudgetShare
             years={yearList}
             layers={layers}
+            fromSavings={fromSavingsSeries}
             afterTax={afterTaxSeries}
-            draft={draftTotals}
+            draftSpentShare={draftShares?.map((e) => e.spent)}
+            draftSavedShare={draftShares?.map((e) => e.saved)}
             range={chartRange}
             onRange={setChartRange}
             todayYear={today}
             focusYear={focusYear}
             onFocusYear={setFocusYear}
+            onHoverYear={previewYear}
             shownYear={snapshot.year}
             agesFor={(y) => adultAges(stored, y)}
             danger={danger}
+            perLabel={per}
             height={phone ? 280 : 360}
-            label={`Spending ${per}`}
+            label={`After tax ${per}`}
+            compactRange={phone}
           />
         </section>
 
@@ -526,6 +571,8 @@ interface EnvRowSpec {
   opens?(): void;
   /** Saved: worked out, never edited. */
   derived?: boolean;
+  /** Per month: the unfunded part of a short year. Only then does the row say Short. */
+  short?: number;
   note?: string;
   popover?: ReactNode;
 }
@@ -547,7 +594,8 @@ const sortRows = (s: BudgetSection) =>
  * Click the figure and it becomes an input in place: type then Enter or
  * click away to preview, ↑/↓ nudge by $100, Esc to back out. The popover
  * under it says how far the edit reaches. Kids opens its sheet; Saved is
- * worked out from the rest and shows ✗ Short when it goes negative.
+ * worked out from the rest. It reads "From savings" when negative and says
+ * ✗ Short only in a year the plan is short (V5-REVIEW-1 F3).
  */
 function EnvelopeRow({
   row,
@@ -572,7 +620,7 @@ function EnvelopeRow({
   const startValue = useRef(0);
   const shown = row.monthly * scale;
   const editable = !!row.onChange;
-  const negative = row.derived && row.monthly < -0.5;
+  const drawn = row.derived && row.monthly < -0.5;
 
   const begin = () => {
     startValue.current = row.monthly;
@@ -684,13 +732,14 @@ function EnvelopeRow({
             <ChevronRight size={20} strokeWidth={2.25} className="ns-bgt-chev" aria-hidden />
           </button>
         ) : (
-          <span className={`ns-bgt-fig ns-bgt-fig-static ns-num${negative ? ' ns-bgt-fig-short' : ''}`}>
+          <span className={`ns-bgt-fig ns-bgt-fig-static ns-num${drawn ? ' ns-bgt-fig-drawn' : ''}`}>
             {figure}
           </span>
         )}
-        {negative && (
+        {row.short !== undefined && (
           <span className="ns-bgt-short">
-            <span aria-hidden>✗</span> Short
+            <span aria-hidden>✗</span> Short {exact(row.short * scale)}
+            {per}
           </span>
         )}
         {row.edited && <span className="ns-bgt-edited" role="img" aria-label="Changed, not kept yet" title="Changed, not kept yet" />}

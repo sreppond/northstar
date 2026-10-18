@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { BudgetLine, Plan } from '@northstar/engine';
-import { budgetEnvelopes, budgetView, findRemainderLine, setAdultEnvelope, setSharedEnvelope } from './budgetView';
+import { runPlan } from '@northstar/engine';
+import { budgetEnvelopes, budgetView, envelopeShare, findRemainderLine, inUnit, monthsIn, ownerColor, setAdultEnvelope, setSharedEnvelope } from './budgetView';
+import { yearFlow } from './cashFlowView';
+import { planHealth } from './health';
 import { presentResult } from './impact';
-import { basePlan, event } from './planFixtures';
+import { account, basePlan, event, kitchenSinkPlan, runsDryPlan } from './planFixtures';
 
 function line(over: Partial<BudgetLine> & Pick<BudgetLine, 'id'>): BudgetLine {
   return {
@@ -172,6 +175,104 @@ describe('budgetView stays the source of truth', () => {
     const p = household();
     const view = budgetView(p, snap(p));
     const e = budgetEnvelopes(p, snap(p), view);
-    expect(e.shared + e.perAdult.reduce((a, b) => a + b.monthly, 0) + e.kids + e.saved).toBeCloseTo(e.afterTax, 6);
+    expect(e.shared + e.perAdult.reduce((a, b) => a + b.monthly, 0) + e.kids + e.withdrawalTax + e.saved).toBeCloseTo(e.afterTax, 6);
+  });
+});
+
+/** Retired, no pay, living off a taxable account: a drawdown that pays tax on withdrawals and, much later, runs out. */
+function drawdownPlan(): Plan {
+  return basePlan({
+    settings: { ...basePlan().settings, baselineIncome: 0, baselineExpenses: 110_000, projectionYears: 40, dollarMode: 'futureDollars' },
+    accounts: [
+      account({ id: 'brokerage', accountClass: 'taxableInvestment', initialBalance: 1_400_000, withdrawalTaxRate: 15, taxableWithdrawalPercent: 60 }),
+    ],
+    events: [event({ id: 'end', kind: 'endOfPlan', startYear: 2065, isRequired: true })],
+    rules: [{ accountId: 'brokerage', ruleType: 'withdrawal', order: 1 }],
+  });
+}
+
+// V5-REVIEW-1 F3: Budget and Cash Flow disagreed on a retired year. Budget put
+// the tax on withdrawals inside after-tax income (so it read negative) and then
+// called every negative remainder "Short". One definition now, read two ways.
+describe('Budget reconciles with Cash Flow, year by year', () => {
+  const plans: [string, Plan][] = [
+    ['runs dry', runsDryPlan()],
+    ['kitchen sink', kitchenSinkPlan()],
+    ['retired drawdown', drawdownPlan()],
+  ];
+
+  it.each(plans)('%s: same after tax and same saved, one-time labelled', (_name, plan) => {
+    for (const snapshot of runPlan(plan).years) {
+      const view = budgetView(plan, snapshot);
+      const flow = yearFlow(plan, snapshot);
+      const months = monthsIn(plan, snapshot.year) || 12;
+      expect(view.afterTax * months).toBeCloseTo(flow.afterTax, 4);
+      expect(view.withdrawalTax * months).toBeCloseTo(flow.withdrawalTax, 4);
+      // Budget's saved is the recurring basis; the lump sums it sets apart are
+      // what Cash Flow also takes off.
+      const lumps = view.oneTime.reduce((sum, o) => sum + o.amount, 0);
+      expect(view.saved * months - lumps).toBeCloseTo(flow.saved, 4);
+      expect(view.unfunded * months).toBeCloseTo(flow.unfunded, 4);
+    }
+  });
+
+  it('retired drawdown: negative saved is "from savings", and only health.shortYears are short', () => {
+    const plan = drawdownPlan();
+    const result = runPlan(plan);
+    const health = planHealth(result, plan);
+    let drawdownYears = 0;
+    for (const snapshot of result.years) {
+      const view = budgetView(plan, snapshot);
+      const short = health.shortYears.includes(snapshot.year);
+      // The page paints Short from the unfunded amount, which is positive only in a short year.
+      expect(view.unfunded > 0.5).toBe(short);
+      if (view.saved < -0.5 && !short) {
+        drawdownYears++;
+        // Not a negative paycheck: after tax is income tax only, and the tax on withdrawals stands apart.
+        expect(view.afterTax).toBeGreaterThanOrEqual(-0.5);
+      }
+    }
+    expect(drawdownYears).toBeGreaterThan(10);
+    expect(result.years.some((y) => budgetView(plan, y).withdrawalTax > 100)).toBe(true);
+    expect(health.shortYears.length).toBeGreaterThan(0);
+  });
+
+  it('the by-year shares fill 100% and put savings-funded spending below zero', () => {
+    const plan = drawdownPlan();
+    for (const snapshot of runPlan(plan).years) {
+      const e = budgetEnvelopes(plan, snapshot);
+      const share = envelopeShare(e);
+      const stack = share.shared + share.perAdult.reduce((a, b) => a + b.share, 0) + share.kids + share.withdrawalTax + share.saved;
+      if (e.afterTax + e.shared + e.kids > 1) expect(stack).toBeCloseTo(100, 6);
+      if (e.saved < -0.5) {
+        expect(share.saved).toBe(0);
+        expect(share.fromSavings).toBeGreaterThan(0);
+        expect(share.fromSavings).toBeLessThanOrEqual(100);
+      }
+    }
+  });
+});
+
+describe('inUnit', () => {
+  it('divides a danger band’s amounts by the months each year covers, leaving the years alone', () => {
+    const band = { from: 2030, years: [2030, 2031], shortFor: (y: number) => (y === 2030 ? 1_200 : 2_400) };
+    const monthly = inUnit(band, (y) => (y === 2030 ? 6 : 12))!;
+    expect(monthly.years).toEqual([2030, 2031]);
+    expect(monthly.shortFor!(2030)).toBe(200);
+    expect(monthly.shortFor!(2031)).toBe(200);
+    expect(inUnit(undefined, () => 12)).toBeUndefined();
+  });
+});
+
+describe('ownerColor', () => {
+  it('never hands out the danger-adjacent brick red, and gives four adults four colours', () => {
+    const people = (role: 'adult' | 'child', n: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: `${role}${i}`, name: `${role}${i}`, birthYear: 1990, lifeExpectancy: 95, isIncluded: true, role }));
+    const plan = { participants: [...people('adult', 4), ...people('child', 4)] };
+    const adults = plan.participants.filter((p) => p.role === 'adult').map((p) => ownerColor(plan, p.id));
+    const kids = plan.participants.filter((p) => p.role === 'child').map((p) => ownerColor(plan, p.id));
+    expect(new Set(adults).size).toBe(4);
+    expect(new Set(kids).size).toBe(4);
+    for (const c of [...adults, ...kids]) expect(c).not.toContain('--mix-5');
   });
 });

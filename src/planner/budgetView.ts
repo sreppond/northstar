@@ -11,6 +11,8 @@
  */
 import type { BudgetLine, LineItem, Participant, Plan, YearSnapshot } from '@northstar/engine';
 import { yearFractionRemaining } from '@northstar/engine';
+import type { DangerBand } from './charts/types';
+import { incomeWithTax } from './incomeTax';
 
 export type OwnerKey = 'shared' | string;
 
@@ -43,10 +45,20 @@ export interface BudgetBucket {
 
 export interface BudgetView {
   year: number;
-  /** Income minus taxes, per month — what the household actually has to spend or save. */
+  /**
+   * Income after tax, per month — the SAME number Cash Flow headlines
+   * (`yearFlow().afterTax`): gross minus income tax. Tax paid on money drawn
+   * from accounts is a cost of covering a gap, not a tax on income, so it is
+   * `withdrawalTax` below, not subtracted here (V5-REVIEW-1 F3: it used to be,
+   * which made a retirement year read as negative income).
+   */
   afterTax: number;
   income: number;
   taxes: number;
+  /** Tax paid on withdrawals, per month. Its own line, so a drawdown year is not a "short" one. */
+  withdrawalTax: number;
+  /** The engine's `unfundedShortfall`, per month; 0 unless the year is genuinely short. */
+  unfunded: number;
   sections: BudgetSection[];
   /** Money moved into accounts on purpose (401(k), 529, a home fund), per month. */
   contributions: BudgetRow[];
@@ -55,7 +67,11 @@ export interface BudgetView {
    * not in `sections`; they come out of savings, not the monthly budget.
    */
   oneTime: { key: string; label: string; amount: number; sourceEventId?: string }[];
-  /** After-tax income minus spending, per month — negative when savings are drawn down. */
+  /**
+   * After-tax income minus withdrawal tax minus RECURRING spending, per month:
+   * negative when savings are drawn down. Lump sums are in `oneTime`, so
+   * Cash Flow's saved = this − `oneTime` ÷ months (tested, F3).
+   */
   saved: number;
   /** `saved` ÷ `afterTax`, percent; undefined with nothing coming in. */
   savingsRate?: number;
@@ -64,11 +80,18 @@ export interface BudgetView {
 }
 
 /** Owner hues — categorical data colours (docs/DESIGN-DIRECTION.md "colour is data"). */
-const ADULT_COLORS = ['var(--mix-4)', 'var(--mix-3)'];
-const CHILD_COLORS = ['var(--mix-6)', 'var(--mix-5)', 'var(--mix-2)'];
+// Never --mix-5 (brick red, near the danger hue) or --mix-1 (Shared). More than
+// two adults or children get a lighter tint of the same hues rather than a
+// repeat of someone else's colour (V5-REVIEW-1 F21).
+const tint = (hue: string) => `color-mix(in srgb, ${hue} 55%, var(--surface))`;
+const ADULT_COLORS = ['var(--mix-4)', 'var(--mix-3)', tint('var(--mix-4)'), tint('var(--mix-3)')];
+const CHILD_COLORS = ['var(--mix-6)', 'var(--mix-2)', tint('var(--mix-6)'), tint('var(--mix-2)')];
 export const SHARED_FIXED_COLOR = 'var(--mix-1)';
 export const SHARED_FLEX_COLOR = 'color-mix(in srgb, var(--mix-1) 50%, var(--surface))';
 export const SAVED_COLOR = 'var(--in)';
+/** Drawn from savings is money out, not an error: the orange "out" hue, never the danger red. */
+export const FROM_SAVINGS_COLOR = 'var(--out)';
+export const WITHDRAWAL_TAX_COLOR = 'var(--muted-light)';
 /** One hue for the Kids envelope; each child keeps their own in `ownerColor`. */
 export const KIDS_COLOR = CHILD_COLORS[0];
 
@@ -136,13 +159,17 @@ export function budgetView(plan: Plan, snapshot: YearSnapshot): BudgetView {
     (a, b) => order(a) - order(b) || people.findIndex((p) => p.id === a.owner) - people.findIndex((p) => p.id === b.owner),
   );
 
+  const tax = incomeWithTax(snapshot);
   const income = perMonth(snapshot.totalIncome);
   const taxes = perMonth(snapshot.totalTaxes);
-  const afterTax = income - taxes;
+  const withdrawalTax = perMonth(tax.withdrawalTax);
+  // The same arithmetic as `yearFlow` (cashFlowView.ts), so the two pages
+  // agree to the dollar: income tax comes off income, withdrawal tax does not.
+  const afterTax = perMonth(tax.total.gross - (tax.total.tax - tax.withdrawalTax));
   const spending = sections.reduce((sum, s) => sum + s.monthly, 0);
-  // The monthly picture: what's left after RECURRING spending. A lump sum
-  // this year is shown separately (`oneTime`), drawn from savings.
-  const saved = afterTax - spending;
+  // The monthly picture: what's left after RECURRING spending and the tax on
+  // withdrawals. A lump sum this year is shown separately (`oneTime`).
+  const saved = afterTax - withdrawalTax - spending;
 
   const shared = sectionFor.get('shared');
   const buckets: BudgetBucket[] = [];
@@ -155,13 +182,16 @@ export function budgetView(plan: Plan, snapshot: YearSnapshot): BudgetView {
     if (s.role === 'shared') continue;
     buckets.push({ key: `person:${s.owner}`, label: s.title, monthly: s.monthly, color: ownerColor(plan, s.owner) });
   }
-  buckets.push({ key: 'saved', label: saved >= 0 ? 'Saved' : 'Drawn from savings', monthly: saved, color: SAVED_COLOR });
+  if (withdrawalTax >= 0.5) buckets.push({ key: 'wtax', label: 'Tax on withdrawals', monthly: withdrawalTax, color: WITHDRAWAL_TAX_COLOR });
+  buckets.push({ key: 'saved', label: saved >= 0 ? 'Saved' : 'From savings', monthly: saved, color: saved >= 0 ? SAVED_COLOR : FROM_SAVINGS_COLOR });
 
   return {
     year: snapshot.year,
     afterTax,
     income,
     taxes,
+    withdrawalTax,
+    unfunded: perMonth(snapshot.unfundedShortfall ?? 0),
     sections,
     contributions,
     oneTime,
@@ -189,14 +219,15 @@ function toRow(
 }
 
 /**
- * Monthly spending by owner for every year — the Budget page's life-stage
- * columns. Same arithmetic as `budgetView`, one entry per year.
+ * A danger band in a page's own unit (V5-REVIEW-1 F2/F10): `healthDangerBand`
+ * returns the unfunded shortfall for the whole year, and a /mo view divides
+ * it by the months THAT year covers (the first year is partial, so a flat 12
+ * would understate it). Pass `divisor` as 1 for /yr.
  */
-export function budgetSeries(plan: Plan, years: YearSnapshot[]): { year: number; afterTax: number; byOwner: Map<OwnerKey, number> }[] {
-  return years.map((y) => {
-    const view = budgetView(plan, y);
-    return { year: y.year, afterTax: view.afterTax, byOwner: new Map(view.sections.map((s) => [s.owner, s.monthly])) };
-  });
+export function inUnit(band: DangerBand | undefined, divisor: (year: number) => number): DangerBand | undefined {
+  if (!band) return band;
+  const shortFor = band.shortFor;
+  return { ...band, shortFor: shortFor && ((year) => { const v = shortFor(year); return v === undefined ? v : v / divisor(year); }) };
 }
 
 /**
@@ -259,7 +290,11 @@ export interface BudgetEnvelopes {
   /** Every cost a child owns. Computed from stage lines, never edited here. */
   kids: number;
   afterTax: number;
-  /** After tax minus the envelopes. Derived; negative when savings are drawn down. */
+  /** Tax on withdrawals: shown as its own row in a drawdown year, never folded into after tax. */
+  withdrawalTax: number;
+  /** The engine's unfunded shortfall: the only part of a negative `saved` that is "Short". */
+  unfunded: number;
+  /** After tax minus the envelopes and withdrawal tax. Derived; negative when savings are drawn down. */
   saved: number;
 }
 
@@ -272,7 +307,32 @@ export function budgetEnvelopes(plan: Plan, snapshot: YearSnapshot, view: Budget
       .map((p) => ({ id: p.id, name: p.name, monthly: view.sections.find((s) => s.owner === p.id)?.monthly ?? 0 })),
     kids: total('child'),
     afterTax: view.afterTax,
+    withdrawalTax: view.withdrawalTax,
+    unfunded: view.unfunded,
     saved: view.saved,
+  };
+}
+
+/**
+ * One year as shares of its money, for the Budget-by-year area (F8). The base
+ * is what the year had to cover: after-tax income, or, in a year that spends
+ * more than comes in, the spending itself, so the envelopes always fill 100%
+ * and `fromSavings` is the part of that spending that savings paid for.
+ * Percentages, 0–100; all zero when the year has neither income nor spending.
+ */
+export function envelopeShare(e: BudgetEnvelopes) {
+  const outflow = e.shared + e.perAdult.reduce((sum, a) => sum + a.monthly, 0) + e.kids + e.withdrawalTax;
+  const base = Math.max(e.afterTax, outflow);
+  const pct = (v: number) => (base > 0.5 ? (v / base) * 100 : 0);
+  return {
+    shared: pct(e.shared),
+    perAdult: e.perAdult.map((a) => ({ id: a.id, share: pct(a.monthly) })),
+    kids: pct(e.kids),
+    withdrawalTax: pct(e.withdrawalTax),
+    saved: pct(Math.max(0, e.saved)),
+    fromSavings: pct(Math.max(0, -e.saved)),
+    /** The top of the spending stack: 100 in a drawdown year, less when something is saved. */
+    spent: pct(outflow),
   };
 }
 
