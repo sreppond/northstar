@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BudgetLine, Plan } from '@northstar/engine';
 import { runPlan } from '@northstar/engine';
-import { budgetEnvelopes, budgetView, envelopeShare, findRemainderLine, inUnit, monthsIn, ownerColor, setAdultEnvelope, setSharedEnvelope } from './budgetView';
+import { FROM_SAVINGS_COLOR, SAVED_COLOR, UNFUNDED_COLOR, budgetEnvelopes, budgetView, envelopeShare, findRemainderLine, inUnit, monthsIn, ownerColor, setAdultEnvelope, setSharedEnvelope } from './budgetView';
 import { yearFlow } from './cashFlowView';
 import { planHealth } from './health';
 import { presentResult } from './impact';
@@ -240,17 +240,103 @@ describe('Budget reconciles with Cash Flow, year by year', () => {
     expect(health.shortYears.length).toBeGreaterThan(0);
   });
 
+  // V5-REVIEW-2 N1: in a short year Budget called the unfunded money "From
+  // savings", though savings paid nothing. Three states, never one:
+  // Into savings (set aside), From savings (a real drawdown), Unfunded (the shortfall).
+  it.each(plans)('%s: after tax + from savings + unfunded = spending + into savings + withdrawal tax, in every gap year', (_name, plan) => {
+    let gapYears = 0;
+    let shortYears = 0;
+    for (const snapshot of runPlan(plan).years) {
+      const view = budgetView(plan, snapshot);
+      if (view.oneTime.length > 0) continue; // a lump sum is not in the monthly picture
+      const spending = view.sections.reduce((sum, s) => sum + s.monthly, 0);
+      const outgoings = spending + view.intoSavings + view.withdrawalTax;
+      expect(view.intoSavings).toBeCloseTo(view.contributions.reduce((sum, r) => sum + r.monthly, 0), 6);
+      expect(view.unfundedMonthly).toBe(view.unfunded);
+      expect(view.shortfall).toBe(view.unfundedMonthly >= 0.5);
+      if (view.gap < 0.005) {
+        // A surplus year: nothing is drawn or unfunded.
+        expect(view.afterTax).toBeGreaterThanOrEqual(outgoings - 0.01);
+        expect(view.fromSavings).toBe(0);
+        continue;
+      }
+      gapYears++;
+      if (view.shortfall) shortYears++;
+      expect(view.afterTax + view.fromSavings + view.unfundedMonthly).toBeCloseTo(outgoings, 2);
+      expect(view.fromSavings).toBeGreaterThanOrEqual(0);
+    }
+    if (_name !== 'kitchen sink') expect(gapYears).toBeGreaterThan(0);
+    if (_name === 'runs dry') expect(shortYears).toBeGreaterThan(0);
+  });
+
+  // `snapshot.withdrawals` are GROSS draws: the tax on them is a separate tax
+  // line, and Budget lists it as its own outgoing ("Tax on withdrawals"). So
+  // "from savings" is bounded by the gross draw, not the draw less its tax
+  // (V5-REVIEW-2 N1 asked for the net bound; the gross one is what balances the
+  // identity above, and in a year where the last account empties the two
+  // differ by exactly that tax).
+  it.each(plans)('%s: Budget never says more came from savings than the engine withdrew', (_name, plan) => {
+    for (const snapshot of runPlan(plan).years) {
+      const view = budgetView(plan, snapshot);
+      if (!view.shortfall) continue;
+      const months = monthsIn(plan, snapshot.year) || 12;
+      const withdrawn = snapshot.withdrawals.reduce((sum, w) => sum + w.amount, 0);
+      expect(view.fromSavings * months).toBeLessThanOrEqual(withdrawn + 1);
+    }
+  });
+
+  it('a short year keeps the three states apart: set aside, drawn, unfunded', () => {
+    const plan = runsDryPlan();
+    const short = runPlan(plan).years.filter((y) => (y.unfundedShortfall ?? 0) > 0);
+    expect(short.length).toBeGreaterThan(0);
+    for (const snapshot of short) {
+      const view = budgetView(plan, snapshot);
+      const e = budgetEnvelopes(plan, snapshot, view);
+      const keys = view.buckets.map((b) => b.key);
+      // The old lie: one "From savings" bucket holding the whole negative remainder.
+      expect(keys).not.toContain('saved');
+      expect(keys).toContain('unfunded');
+      expect(view.buckets.find((b) => b.key === 'unfunded')!.monthly).toBeCloseTo(view.unfundedMonthly, 6);
+      if (view.fromSavings >= 0.5) expect(view.buckets.find((b) => b.key === 'from-savings')!.monthly).toBeCloseTo(view.fromSavings, 6);
+      else expect(view.buckets.some((b) => b.key === 'from-savings')).toBe(false);
+      // Unfunded is the shortfall; From savings is only what accounts paid.
+      expect(e.unfunded).toBe(view.unfundedMonthly);
+      expect(e.fromSavings).toBe(view.fromSavings);
+      const share = envelopeShare(e);
+      expect(share.unfunded).toBeGreaterThan(0);
+      expect(share.fromSavings + share.unfunded).toBeLessThanOrEqual(100 + 1e-9);
+    }
+    // Three different identities: no colour is shared by two of the states.
+    expect(new Set([SAVED_COLOR, FROM_SAVINGS_COLOR, UNFUNDED_COLOR]).size).toBe(3);
+  });
+
+  it('a drawdown year that is not short is From savings with no unfunded', () => {
+    const plan = drawdownPlan();
+    const health = planHealth(runPlan(plan), plan);
+    const years = runPlan(plan).years.filter((y) => !health.shortYears.includes(y.year));
+    const view = years.map((y) => budgetView(plan, y)).find((v) => v.gap > 100)!;
+    expect(view).toBeDefined();
+    expect(view.unfundedMonthly).toBe(0);
+    expect(view.shortfall).toBe(false);
+    expect(view.fromSavings).toBeCloseTo(view.gap, 6);
+    expect(view.buckets.map((b) => b.key)).toEqual(expect.arrayContaining(['from-savings']));
+    expect(view.buckets.map((b) => b.key)).not.toContain('unfunded');
+  });
+
   it('the by-year shares fill 100% and put savings-funded spending below zero', () => {
     const plan = drawdownPlan();
     for (const snapshot of runPlan(plan).years) {
       const e = budgetEnvelopes(plan, snapshot);
       const share = envelopeShare(e);
-      const stack = share.shared + share.perAdult.reduce((a, b) => a + b.share, 0) + share.kids + share.withdrawalTax + share.saved;
+      const stack =
+        share.shared + share.perAdult.reduce((a, b) => a + b.share, 0) + share.kids + share.withdrawalTax + share.saved + share.intoSavings;
       if (e.afterTax + e.shared + e.kids > 1) expect(stack).toBeCloseTo(100, 6);
       if (e.saved < -0.5) {
         expect(share.saved).toBe(0);
-        expect(share.fromSavings).toBeGreaterThan(0);
-        expect(share.fromSavings).toBeLessThanOrEqual(100);
+        // The gap is split into what accounts paid and what nothing paid.
+        expect(share.fromSavings + share.unfunded).toBeGreaterThan(0);
+        expect(share.fromSavings + share.unfunded).toBeLessThanOrEqual(100 + 1e-9);
+        if (e.unfunded < 0.5) expect(share.fromSavings).toBeGreaterThan(0);
       }
     }
   });
@@ -268,7 +354,7 @@ describe('inUnit', () => {
 });
 
 describe('ownerColor', () => {
-  it('never hands out the danger-adjacent brick red, and gives four adults four colours', () => {
+  it('never hands out the Shared hue, and gives four adults four colours', () => {
     const people = (role: 'adult' | 'child', n: number) =>
       Array.from({ length: n }, (_, i) => ({ id: `${role}${i}`, name: `${role}${i}`, birthYear: 1990, lifeExpectancy: 95, isIncluded: true, role }));
     const plan = { participants: [...people('adult', 4), ...people('child', 4)] };
@@ -276,6 +362,6 @@ describe('ownerColor', () => {
     const kids = plan.participants.filter((p) => p.role === 'child').map((p) => ownerColor(plan, p.id));
     expect(new Set(adults).size).toBe(4);
     expect(new Set(kids).size).toBe(4);
-    for (const c of [...adults, ...kids]) expect(c).not.toContain('--mix-5');
+    for (const c of [...adults, ...kids]) expect(c).not.toContain('--mix-1');
   });
 });

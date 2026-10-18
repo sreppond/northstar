@@ -14,7 +14,7 @@
  * way. Keep the two in step (the tests compare them).
  */
 import type { LineItem, Plan, YearSnapshot } from '@northstar/engine';
-import { SAVED_COLOR, SHARED_FIXED_COLOR } from './budgetView';
+import { KIDS_COLOR, SAVED_COLOR, SHARED_FIXED_COLOR } from './budgetView';
 
 export type GroupKey = 'home' | 'kids' | 'shared' | 'personal' | 'oneTime' | 'saving';
 
@@ -40,10 +40,10 @@ export interface SpendingGroup {
 /** Display order, and the order groups are returned in. */
 const GROUPS: { key: GroupKey; label: string; color: string }[] = [
   { key: 'home', label: 'Home', color: 'var(--mix-2)' },
-  { key: 'kids', label: 'Kids', color: 'var(--mix-6)' },
+  { key: 'kids', label: 'Kids', color: KIDS_COLOR },
   { key: 'shared', label: 'Shared', color: SHARED_FIXED_COLOR },
-  { key: 'personal', label: 'Personal', color: 'var(--mix-4)' },
-  { key: 'oneTime', label: 'One-time', color: 'var(--mix-3)' },
+  { key: 'personal', label: 'Personal', color: 'var(--mix-5)' },
+  { key: 'oneTime', label: 'One-time', color: 'var(--mix-4)' },
   { key: 'saving', label: 'Saving', color: SAVED_COLOR },
 ];
 

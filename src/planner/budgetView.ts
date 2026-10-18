@@ -59,6 +59,23 @@ export interface BudgetView {
   withdrawalTax: number;
   /** The engine's `unfundedShortfall`, per month; 0 unless the year is genuinely short. */
   unfunded: number;
+  /**
+   * The danger path, three separate states (V5-REVIEW-2 N1). Savings were
+   * called "From savings" in a short year even though they paid nothing, so
+   * the one negative remainder is now split by what actually happened to it:
+   *  - `intoSavings`: money set aside on purpose (the contribution rows), per month;
+   *  - `fromSavings`: a real drawdown, the part of the gap the accounts covered;
+   *  - `unfundedMonthly`: the part nothing covered (the engine's shortfall).
+   * `afterTax + fromSavings + unfundedMonthly = spending + intoSavings +
+   * withdrawalTax` in any gap year with no lump sums (tested).
+   */
+  intoSavings: number;
+  /** What the year's outgoings (spending, set-aside money, tax on withdrawals) exceed after-tax income by; 0 in a surplus year. */
+  gap: number;
+  unfundedMonthly: number;
+  fromSavings: number;
+  /** `unfundedMonthly >= 0.5`: the year is short (the engine could not fund it). */
+  shortfall: boolean;
   sections: BudgetSection[];
   /** Money moved into accounts on purpose (401(k), 529, a home fund), per month. */
   contributions: BudgetRow[];
@@ -80,17 +97,20 @@ export interface BudgetView {
 }
 
 /** Owner hues — categorical data colours (docs/DESIGN-DIRECTION.md "colour is data"). */
-// Never --mix-5 (brick red, near the danger hue) or --mix-1 (Shared). More than
-// two adults or children get a lighter tint of the same hues rather than a
-// repeat of someone else's colour (V5-REVIEW-1 F21).
+// Never --mix-1 (Shared). More than two adults or children get a lighter tint
+// of the same hues rather than a repeat of someone else's colour (V5-REVIEW-1
+// F21). The pairs are the ones V5-REVIEW-2 N4 validated against U7's re-stepped
+// tokens: adults mix-5/mix-4, children mix-3/mix-2.
 const tint = (hue: string) => `color-mix(in srgb, ${hue} 55%, var(--surface))`;
-const ADULT_COLORS = ['var(--mix-4)', 'var(--mix-3)', tint('var(--mix-4)'), tint('var(--mix-3)')];
-const CHILD_COLORS = ['var(--mix-6)', 'var(--mix-2)', tint('var(--mix-6)'), tint('var(--mix-2)')];
+const ADULT_COLORS = ['var(--mix-5)', 'var(--mix-4)', tint('var(--mix-5)'), tint('var(--mix-4)')];
+const CHILD_COLORS = ['var(--mix-3)', 'var(--mix-2)', tint('var(--mix-3)'), tint('var(--mix-2)')];
 export const SHARED_FIXED_COLOR = 'var(--mix-1)';
 export const SHARED_FLEX_COLOR = 'color-mix(in srgb, var(--mix-1) 50%, var(--surface))';
 export const SAVED_COLOR = 'var(--in)';
 /** Drawn from savings is money out, not an error: the orange "out" hue, never the danger red. */
 export const FROM_SAVINGS_COLOR = 'var(--out)';
+/** Money nothing covered (V5-REVIEW-2 N1): the danger red, drawn hatched wherever it is a shape. */
+export const UNFUNDED_COLOR = 'var(--danger)';
 export const WITHDRAWAL_TAX_COLOR = 'var(--muted-light)';
 /** One hue for the Kids envelope; each child keeps their own in `ownerColor`. */
 export const KIDS_COLOR = CHILD_COLORS[0];
@@ -171,6 +191,14 @@ export function budgetView(plan: Plan, snapshot: YearSnapshot): BudgetView {
   // withdrawals. A lump sum this year is shown separately (`oneTime`).
   const saved = afterTax - withdrawalTax - spending;
 
+  // The danger path (V5-REVIEW-2 N1). `saved` above counts only spending, so a
+  // year that still pays its contributions while short read as "from savings"
+  // for money no account ever paid. Split the gap by what really happened.
+  const intoSavings = contributions.reduce((sum, r) => sum + r.monthly, 0);
+  const gap = Math.max(0, spending + intoSavings + withdrawalTax - afterTax);
+  const unfundedMonthly = perMonth(snapshot.unfundedShortfall ?? 0);
+  const fromSavings = Math.max(0, gap - unfundedMonthly);
+
   const shared = sectionFor.get('shared');
   const buckets: BudgetBucket[] = [];
   if (shared) {
@@ -183,7 +211,14 @@ export function budgetView(plan: Plan, snapshot: YearSnapshot): BudgetView {
     buckets.push({ key: `person:${s.owner}`, label: s.title, monthly: s.monthly, color: ownerColor(plan, s.owner) });
   }
   if (withdrawalTax >= 0.5) buckets.push({ key: 'wtax', label: 'Tax on withdrawals', monthly: withdrawalTax, color: WITHDRAWAL_TAX_COLOR });
-  buckets.push({ key: 'saved', label: saved >= 0 ? 'Saved' : 'From savings', monthly: saved, color: saved >= 0 ? SAVED_COLOR : FROM_SAVINGS_COLOR });
+  if (gap >= 0.5) {
+    // A gap year: three separate buckets, never one "From savings" (V5-REVIEW-2 N1).
+    buckets.push({ key: 'into-savings', label: 'Into savings', monthly: intoSavings, color: SAVED_COLOR });
+    buckets.push({ key: 'from-savings', label: 'From savings', monthly: fromSavings, color: FROM_SAVINGS_COLOR });
+    buckets.push({ key: 'unfunded', label: 'Unfunded', monthly: unfundedMonthly, color: UNFUNDED_COLOR });
+  } else {
+    buckets.push({ key: 'saved', label: 'Saved', monthly: saved, color: SAVED_COLOR });
+  }
 
   return {
     year: snapshot.year,
@@ -191,7 +226,12 @@ export function budgetView(plan: Plan, snapshot: YearSnapshot): BudgetView {
     income,
     taxes,
     withdrawalTax,
-    unfunded: perMonth(snapshot.unfundedShortfall ?? 0),
+    unfunded: unfundedMonthly,
+    intoSavings,
+    gap,
+    unfundedMonthly,
+    fromSavings,
+    shortfall: unfundedMonthly >= 0.5,
     sections,
     contributions,
     oneTime,
@@ -292,10 +332,16 @@ export interface BudgetEnvelopes {
   afterTax: number;
   /** Tax on withdrawals: shown as its own row in a drawdown year, never folded into after tax. */
   withdrawalTax: number;
-  /** The engine's unfunded shortfall: the only part of a negative `saved` that is "Short". */
+  /** The engine's unfunded shortfall: the only part of a gap that is "Short". */
   unfunded: number;
-  /** After tax minus the envelopes and withdrawal tax. Derived; negative when savings are drawn down. */
+  /** After tax minus the envelopes and withdrawal tax. Derived; negative when the year overspends. */
   saved: number;
+  /** Money set aside on purpose, per month (`BudgetView.intoSavings`). */
+  intoSavings: number;
+  /** Outgoings beyond after tax, per month; > 0 makes it a gap year (`BudgetView.gap`). */
+  gap: number;
+  /** The part of the gap real accounts paid: a genuine drawdown, never the unfunded part. */
+  fromSavings: number;
 }
 
 export function budgetEnvelopes(plan: Plan, snapshot: YearSnapshot, view: BudgetView = budgetView(plan, snapshot)): BudgetEnvelopes {
@@ -310,28 +356,42 @@ export function budgetEnvelopes(plan: Plan, snapshot: YearSnapshot, view: Budget
     withdrawalTax: view.withdrawalTax,
     unfunded: view.unfunded,
     saved: view.saved,
+    intoSavings: view.intoSavings,
+    gap: view.gap,
+    fromSavings: view.fromSavings,
   };
 }
 
 /**
  * One year as shares of its money, for the Budget-by-year area (F8). The base
- * is what the year had to cover: after-tax income, or, in a year that spends
- * more than comes in, the spending itself, so the envelopes always fill 100%
- * and `fromSavings` is the part of that spending that savings paid for.
- * Percentages, 0–100; all zero when the year has neither income nor spending.
+ * is what the year had to cover: after-tax income, or, in a year whose
+ * spending, set-aside money and withdrawal tax exceed it (a gap year), those
+ * outgoings themselves. The envelopes plus what was set aside (`intoSavings`)
+ * then fill 100%, and the gap hangs BELOW zero in two separate pieces
+ * (V5-REVIEW-2 N1): `fromSavings`, what accounts really paid, and `unfunded`,
+ * what nothing paid. Percentages, 0-100; all zero when the year has neither
+ * income nor spending.
  */
 export function envelopeShare(e: BudgetEnvelopes) {
   const outflow = e.shared + e.perAdult.reduce((sum, a) => sum + a.monthly, 0) + e.kids + e.withdrawalTax;
-  const base = Math.max(e.afterTax, outflow);
+  const base = Math.max(e.afterTax, outflow + e.intoSavings);
   const pct = (v: number) => (base > 0.5 ? (v / base) * 100 : 0);
+  const gapYear = e.gap >= 0.5;
+  const fromSavings = pct(e.fromSavings);
   return {
     shared: pct(e.shared),
     perAdult: e.perAdult.map((a) => ({ id: a.id, share: pct(a.monthly) })),
     kids: pct(e.kids),
     withdrawalTax: pct(e.withdrawalTax),
-    saved: pct(Math.max(0, e.saved)),
-    fromSavings: pct(Math.max(0, -e.saved)),
-    /** The top of the spending stack: 100 in a drawdown year, less when something is saved. */
+    // A surplus year saves what is left over; a gap year sets aside only what
+    // it still paid in on purpose. Never both, so the upper stack is 100%.
+    saved: gapYear ? 0 : pct(Math.max(0, e.saved)),
+    intoSavings: gapYear ? pct(e.intoSavings) : 0,
+    fromSavings,
+    // Capped so a lump-sum year (its shortfall is not in the monthly base)
+    // cannot push the lower half past the axis.
+    unfunded: Math.min(pct(e.unfunded), Math.max(0, 100 - fromSavings)),
+    /** The top of the spending stack: 100 in a gap year, less when something is saved. */
     spent: pct(outflow),
   };
 }
