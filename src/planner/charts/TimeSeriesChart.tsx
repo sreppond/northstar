@@ -12,7 +12,7 @@ import {
   tightCeilingMoney,
   yTicks,
 } from './seriesMath';
-import type { ChartBand, ChartMarker, ChartSeries, DangerBand, ReadoutSpec } from './types';
+import type { ChartBand, ChartMarker, ChartNote, ChartSeries, DangerBand, ReadoutSpec } from './types';
 import { useScrub } from './useScrub';
 import { usePrefersReducedMotion, useReveal, useSpringValues } from './useSpring';
 import './charts.css';
@@ -70,6 +70,8 @@ export interface TimeSeriesChartProps {
   /** Called with `'all'` by the "Runs dry YEAR →" chip when the band is off-window. */
   onRequestRange?(range: RangeKey): void;
   markers?: ChartMarker[];
+  /** Standing labels above data points, always visible (F11). */
+  notes?: ChartNote[];
   /** Labelled background stretches of the x-axis (a child's life stages). */
   bands?: ChartBand[];
   /** A draft preview: a dashed ink line, never a new hue. */
@@ -154,6 +156,7 @@ export function TimeSeriesChart({
   danger,
   onRequestRange,
   markers,
+  notes,
   bands,
   ghost,
   yFormat = axisMoney,
@@ -768,6 +771,22 @@ export function TimeSeriesChart({
               <span aria-hidden="true">✗</span> {dangerLabel} {formatX(dFrom)} →
             </button>
           )}
+          {notes?.map((n) => {
+            if (n.year < x0 - 1e-9 || n.year > x1 + 1e-9) return null;
+            const w = chipWidth(n.text);
+            return (
+              <span
+                key={`note-${n.year}`}
+                className="ns-tsc-chip ns-tsc-chip-note"
+                style={{
+                  left: Math.min(Math.max(xFor(n.year), L + w / 2), R - w / 2),
+                  top: Math.max(2, yFor(n.value) - 24),
+                }}
+              >
+                {n.text}
+              </span>
+            );
+          })}
           {markerLabel && markerLabel.length > 0 && (
             <span
               className="ns-tsc-chip ns-tsc-chip-marker"

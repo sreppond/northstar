@@ -87,6 +87,16 @@ export interface DangerBand {
   shortFor?(year: number): number | undefined;
 }
 
+/** A standing label on one data point: Cash Flow's "↑ $230K" over a one-time
+    lump whose column is capped so it cannot flatten the lines (V5-REVIEW-1
+    F11). It sits just above `value` on the y-axis, so pass the value the mark
+    is DRAWN at (the capped top), not the true amount. */
+export interface ChartNote {
+  year: number;
+  value: number;
+  text: string;
+}
+
 export interface ChartMarker {
   year: number;
   label: string;

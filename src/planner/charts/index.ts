@@ -13,4 +13,4 @@ export { useScrub } from './useScrub';
 export type { ScrubState, UseScrubOptions } from './useScrub';
 export { RANGE_KEYS, availableRanges, effectiveRange, rangeLabel, rangeWindow } from './range';
 export type { RangeKey } from './range';
-export type { ChartBand, ChartMarker, ChartSeries, DangerBand, ReadoutSpec } from './types';
+export type { ChartBand, ChartMarker, ChartNote, ChartSeries, DangerBand, ReadoutSpec } from './types';
