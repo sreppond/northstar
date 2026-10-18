@@ -132,6 +132,11 @@
 .ns-rpt-plot {
   min-width: 0;
 }
+/* The hatch is on every chart; the "Runs dry 2031" chip would repeat seven
+   times, so only the first chart (Net Worth) names it. */
+.ns-rpt-plot:not(:first-child) .ns-tsc-chip-danger:not(.ns-tsc-chip-btn) {
+  display: none;
+}
 .ns-rpt-plot-head {
   display: flex;
   align-items: baseline;
