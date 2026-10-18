@@ -537,10 +537,7 @@
 .ns-btn,
 .ns-btn-ghost,
 .ns-plan-row-select,
-.ns-tab,
 .ns-kind,
-.ns-event-label,
-.ns-event-hit,
 .ns-toggle-row input[type='checkbox'] {
   transform: translate(var(--jx, 0px), var(--jy, 0px)) scale(var(--jsx, 1), var(--jsy, 1));
   transform-origin: center;
@@ -555,8 +552,7 @@
 /* Buoyant on hover. */
 .ns-btn:hover:not(:disabled),
 .ns-plan-row-select:hover,
-.ns-kind:hover,
-.ns-event-label:hover {
+.ns-kind:hover {
   --jy: -1px;
 }
 
@@ -565,36 +561,12 @@
 .ns-btn:active:not(:disabled),
 .ns-btn-ghost:active,
 .ns-plan-row-select:active,
-.ns-tab:active,
-.ns-kind:active,
-.ns-event-label:active,
-.ns-event-hit:active {
+.ns-kind:active {
   --jsx: 1.045;
   --jsy: 0.915;
   --jy: 1px;
   transition-duration: var(--t-press);
   transition-timing-function: var(--ease-soft);
-}
-
-@keyframes ns-plop {
-  0% {
-    opacity: 0;
-    transform: translate(var(--jx, 0px), -14px) scale(0.86, 1.16);
-  }
-  55% {
-    opacity: 1;
-    transform: translate(var(--jx, 0px), 2px) scale(1.12, 0.86);
-  }
-  75% {
-    transform: translate(var(--jx, 0px), 0) scale(0.96, 1.05);
-  }
-  90% {
-    transform: translate(var(--jx, 0px), 0) scale(1.02, 0.98);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(var(--jx, 0px), 0) scale(1, 1);
-  }
 }
 
 /* Confirmation squish — fires when an element *becomes* selected, because the
@@ -1222,6 +1194,7 @@ html.ns-tauri .ns-drag-strip {
   inset: 0;
   z-index: 45;
   background: rgba(18, 48, 76, 0.26);
+  -webkit-backdrop-filter: blur(3px) saturate(0.92);
   backdrop-filter: blur(3px) saturate(0.92);
   animation: ns-fade-in 200ms var(--ease-soft) both;
 }
@@ -1370,12 +1343,6 @@ html.ns-tauri .ns-drag-strip {
   background-color: var(--ink);
 }
 
-.ns-btn-square {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-}
-
 .ns-btn-ghost {
   font: inherit;
   font-size: 13px;
@@ -1441,303 +1408,6 @@ html.ns-tauri .ns-drag-strip {
   width: 100%;
   height: 100%;
   overflow: visible;
-}
-
-/* The projection itself never animates. It gets one soft drop shadow so the
-   line reads as a gel ribbon laid on the card rather than ink printed into
-   it — the only jelly cue applied to data, and a static one. */
-.ns-nw-line {
-  filter: drop-shadow(0 2px 3px rgba(18, 48, 76, 0.16));
-}
-
-.ns-y-tick,
-.ns-x-tick {
-  position: absolute;
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  color: var(--muted-light);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ns-y-tick {
-  transform: translate(-100%, -50%);
-}
-.ns-x-tick {
-  transform: translateX(-50%);
-}
-
-/* Events on the curve (docs/REDESIGN.md §4.1) — a dot at every included
-   event's own year and value, not a detached row above the plot. Hue is the
-   only thing here that encodes data (income adds, cost takes); the ring is
-   always the surface colour, which is what keeps a dot legible sitting on
-   top of the busy line and area fill.
-   HTML, not svg, deliberately: the full-bleed chart's svg is stretched with
-   `preserveAspectRatio="none"` (see `.ns-chart svg` above) so its viewBox
-   fills whatever box the page gives it, and on most viewports that stretch
-   is not uniform between x and y. A 1px leader line barely shows that; an
-   svg circle visibly ovals. Centred with a static margin rather than a
-   transform, matching every other HoverCard-adjacent mark in this file (see
-   `.ns-mark-slot` below) even though this one has no HoverCard of its own —
-   consistency over cleverness. */
-.ns-event-dot-mark {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  margin-top: -4px;
-  border-radius: 50%;
-  border: 2px solid var(--surface);
-  pointer-events: none;
-}
-.ns-event-dot-income {
-  background: var(--in-deep);
-}
-.ns-event-dot-cost {
-  background: var(--out-deep);
-}
-
-/* The TODAY rule's own label (docs/REVIEW.md B1) — only rendered once
-   there's an actual line to its left; the x-axis's plain "Today" tick
-   already carries this meaning when there isn't (see NetWorthChart.tsx). */
-.ns-today-label {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  margin-top: -6px;
-  font-variant-numeric: tabular-nums;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-/* The projection's own start dot and the scrub hover ring (docs/REVIEW.md
-   S4) — HTML circles rather than svg `<circle>`s, which the chart's
-   non-uniform stretch (see `.ns-chart svg` above) would visibly oval. */
-.ns-first-dot {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  margin-left: -4.5px;
-  margin-top: -4.5px;
-  border-radius: 50%;
-  background: var(--data-nw);
-  pointer-events: none;
-}
-.ns-hover-ring {
-  position: absolute;
-  width: 11px;
-  height: 11px;
-  margin-left: -5.5px;
-  margin-top: -5.5px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 2.5px solid var(--accent);
-  pointer-events: none;
-}
-
-/* Drag through time (docs/REDESIGN.md §4.1, design-direction move 5). The
-   dragged event's normal dot is excluded from the pass above while a drag
-   is live (NetWorthChart.tsx's `build()` `excludeEventId`) — these two
-   stand in for it instead, and are never both absent at once. */
-.ns-event-dot-ghost {
-  /* Frozen at the pixel position the drag started from ("ghosts... in its
-     original position"), so it reads as a fixed echo rather than a second
-     thing tracking the reprojecting line. */
-  opacity: 0.3;
-}
-.ns-event-dot-live {
-  /* A grabbed thing gets more tactile presence, not more chrome — bigger
-     and lifted, the same physical read `--jelly-rise`-style depth gives a
-     pressed control elsewhere (docs/REDESIGN.md §5.2), sized by hand here
-     since this mark isn't part of the shared `--jsx`/`--jsy` squash system. */
-  width: 11px;
-  height: 11px;
-  margin-left: -5.5px;
-  margin-top: -5.5px;
-  border-width: 2.5px;
-  box-shadow: 0 2px 6px rgb(var(--sh) / calc(28% * var(--sh-k)));
-}
-
-/* The one-shot "it landed" squish on release (docs/REDESIGN.md §5.4: "the
-   one place bounce is earned") — a temporary class, added by
-   NetWorthChart.tsx for `LANDED_MS` after a drag commits. Reuses `ns-squish`
-   verbatim rather than a bespoke keyframe: its hand-authored stops (32%
-   overshoot, 64% correction, settle by 100%) already read as a damped
-   spring with one overshoot, so this earns the "prefer the existing
-   CSS-variable system" call without inventing a new curve — and it inherits
-   the blanket reduced-motion rule below for free, collapsing to a snap. */
-.ns-event-just-landed {
-  animation: ns-squish var(--t-settle) var(--ease-soft);
-}
-
-/* The thin line from a labelled dot up to its name — still svg, since a line
-   barely one degree off from the non-uniform stretch above is not visible
-   the way a distorted circle is. */
-.ns-event-leader {
-  stroke: var(--border-strong);
-  stroke-width: 1;
-}
-
-/* The TODAY marker (docs/REDESIGN-V3.md "Overview") — a dotted vertical rule
-   at the plan's `asOfDate` year, the one point on this line that is a fact
-   rather than a projection. Quieter than the gridlines it crosses: `--muted`
-   at partial opacity, not `--border` or `--accent`, since this is context
-   for reading the line, not a value in its own right. */
-.ns-today-line {
-  stroke: var(--muted-light);
-  stroke-width: 1;
-  stroke-dasharray: 1.5 4;
-  opacity: 0.7;
-}
-/* The x-axis tick at the TODAY year reads "Today" instead of its year
-   number, bolder than its neighbours — see the comment above where
-   NetWorthChart.tsx renders it. */
-.ns-x-tick-today {
-  color: var(--muted);
-  font-weight: 700;
-}
-
-/* The top few by |Δ net worth at horizon| get a standing name instead of
-   waiting for a hover. Plain ink, not a data hue — a name is wayfinding, not
-   a value; the dot at the leader's other end already carries the colour.
-   Pressable (docs/REDESIGN.md §5.2: tactile depth is kept on the chart's
-   dots), so it joins the shared jelly-interactive rule below rather than
-   the quiet single-shadow treatment cards and chips get.
-   Anchored at the packed left/top corner NetWorthChart.tsx's `build()`
-   already computed, not centred — no margin or transform needed, which
-   keeps it clear of the one rule every HoverCard-wrapping slot in this file
-   follows (see `.ns-mark-slot` below): never put a
-   `transform` on an element that wraps a `HoverCard`. */
-.ns-event-label-slot {
-  position: absolute;
-  pointer-events: auto;
-  z-index: 2;
-}
-/* The ghost/live labels below are plain spans, not HoverCard-wrapping
-   slots — the "never transform a HoverCard anchor" rule these otherwise
-   follow doesn't apply to them, so the live one is free to centre with a
-   transform instead of a precomputed left edge. */
-.ns-event-label-slot-ghost,
-.ns-event-label-slot-live {
-  pointer-events: none;
-}
-.ns-event-label-slot-live {
-  transform: translateX(-50%);
-  z-index: 3;
-}
-.ns-event-label {
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--child-ink);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 10px;
-  white-space: nowrap;
-  cursor: grab;
-  box-shadow: var(--shadow-control);
-  /* Same reasoning as `.ns-event-hit` — a deliberate press on this chip
-     starts a drag at any width, unconditionally. */
-  touch-action: none;
-}
-.ns-event-label:hover {
-  color: var(--ink);
-  border-color: var(--border-strong);
-}
-.ns-event-label[aria-pressed='true'] {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-  animation: ns-squish var(--t-settle) var(--ease-soft);
-}
-.ns-event-dragging {
-  cursor: grabbing;
-}
-/* The real dot/label being dragged stays MOUNTED throughout — it's the
-   element holding pointer capture for the whole gesture, and removing it
-   from the DOM (e.g. via a render-time exclusion) would silently release
-   that capture the instant React unmounts it, orphaning the drag with no
-   element left to receive the eventual pointerup. Opacity only, never
-   `display`/`visibility` — either of those can also affect hit-testing in
-   ways that would break the very capture this is protecting. Its ghost
-   (frozen original position) and live (pointer-following) marks stand in
-   for it visually in the meantime. */
-.ns-event-hide-source {
-  opacity: 0;
-}
-.ns-event-label-ghost {
-  opacity: 0.3;
-}
-.ns-event-label-live {
-  border-color: var(--accent-line);
-  box-shadow: var(--shadow-tooltip);
-}
-
-/* Every other event still gets a hit target exactly on its (invisible)
-   dot, sized for a comfortable tap rather than the visible 8px mark — hover
-   or tap reveals the same detail card a label's dot gets, just without the
-   standing name (docs/REDESIGN.md §4.1: "rest reveal on hover"). Centred
-   with a static margin, the same convention every other HoverCard-wrapping
-   slot in this file uses (see `.ns-mark-slot` below) — a fixed 20px target
-   needs no more than that. */
-.ns-event-hit-slot {
-  position: absolute;
-  margin-left: -10px;
-  margin-top: -10px;
-  pointer-events: auto;
-  z-index: 1;
-}
-.ns-event-hit {
-  display: block;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  cursor: grab;
-  /* Claim horizontal touch gestures unconditionally, at every breakpoint —
-     grabbing a specific small dot is a deliberate gesture, distinct enough
-     from a general swipe that it should start a drag even on a phone. */
-  touch-action: none;
-}
-.ns-event-hit[aria-pressed='true'] {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.ns-selection {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-top: 1px solid var(--rule);
-  padding: 14px 24px;
-  min-height: 38px;
-  background: var(--surface-sub);
-}
-/* A static readout, not a control — no gloss (docs/REDESIGN.md §5.2), and
-   set in the mono data voice like the rest of the chart's small metadata. */
-.ns-ref {
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--accent);
-  background-color: var(--chip);
-  border-radius: 999px;
-  padding: 4px 10px;
-}
-.ns-ref-cost {
-  color: var(--out-deep);
-  background-color: var(--out-tint);
-}
-.ns-selection-label {
-  font-size: 15px;
-  font-weight: 500;
 }
 
 /* --- tables -------------------------------------------------------------- */
@@ -1828,17 +1498,6 @@ html.ns-tauri .ns-drag-strip {
 }
 .ns-row-grandchild > div:first-child {
   padding-left: 58px;
-}
-.ns-group-cell {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  margin-left: -22px;
-}
-.ns-group-cell > .ns-line-cell {
-  min-width: 0;
-  flex: 1;
 }
 .ns-group-toggle {
   flex: none;
@@ -1955,64 +1614,6 @@ html.ns-tauri .ns-drag-strip {
   font-weight: 700;
 }
 
-/* ---- Notable points on the line ------------------------------------------
-   Deliberately few. A dot on every year is decoration; a dot on three of them
-   is a finding. Centred with margins, never a transform. */
-.ns-mark-slot {
-  position: absolute;
-  margin-left: -7px;
-  margin-top: -7px;
-  pointer-events: auto;
-  z-index: 2;
-}
-.ns-mark {
-  display: block;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  cursor: default;
-  background: var(--surface);
-  box-shadow: 0 1px 4px rgba(18, 48, 76, 0.28);
-  transition: transform var(--t-settle) var(--ease-jelly);
-}
-.ns-mark-peak {
-  border: 3px solid var(--ink-deep);
-}
-.ns-mark-trough {
-  border: 3px solid var(--out-strong);
-}
-.ns-mark-shortfall {
-  border: 3px solid var(--danger, #c0392b);
-  animation: ns-mark-pulse 2.4s var(--ease-soft) infinite;
-}
-@keyframes ns-mark-pulse {
-  0%,
-  100% {
-    box-shadow: 0 1px 4px rgba(18, 48, 76, 0.28);
-  }
-  50% {
-    box-shadow:
-      0 1px 4px rgba(18, 48, 76, 0.28),
-      0 0 0 5px rgba(192, 57, 43, 0.16);
-  }
-}
-
-/* Net-worth area: softens when something else takes focus. */
-.ns-nw-area {
-  transition:
-    opacity 220ms var(--ease-soft),
-    stroke-opacity 220ms var(--ease-soft),
-    stroke-width 220ms var(--ease-soft);
-}
-
-/* Cash flow row label + its gear. Mirrors .ns-type-cell on the balance sheet
-   so both tables reveal settings the same way. */
-.ns-line-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
 .ns-line-name {
   min-width: 0;
   white-space: nowrap;
@@ -2120,6 +1721,7 @@ html.ns-tauri .ns-drag-strip {
   position: fixed;
   inset: 0;
   background: rgba(18, 48, 76, 0.26);
+  -webkit-backdrop-filter: blur(3px) saturate(0.92);
   backdrop-filter: blur(3px) saturate(0.92);
   z-index: 40;
   animation: ns-fade-in 240ms var(--ease-soft) both;
@@ -2466,10 +2068,7 @@ html.ns-tauri .ns-drag-strip {
   .ns-btn,
   .ns-btn-ghost,
   .ns-plan-row-select,
-  .ns-tab,
   .ns-kind,
-  .ns-event-label,
-  .ns-event-hit,
   .ns-toggle-row input[type='checkbox'] {
     --jsx: 1 !important;
     --jsy: 1 !important;
@@ -3010,6 +2609,7 @@ html.ns-tauri .ns-drag-strip {
   justify-content: center;
   padding-top: 14vh;
   background: rgba(18, 48, 76, 0.26);
+  -webkit-backdrop-filter: blur(3px) saturate(0.92);
   backdrop-filter: blur(3px) saturate(0.92);
 }
 
@@ -3115,6 +2715,7 @@ html.ns-tauri .ns-drag-strip {
   justify-content: center;
   padding: 16px;
   background: rgba(18, 48, 76, 0.26);
+  -webkit-backdrop-filter: blur(3px) saturate(0.92);
   backdrop-filter: blur(3px) saturate(0.92);
 }
 .ns-shortcut-sheet {
@@ -3179,20 +2780,6 @@ html.ns-tauri .ns-drag-strip {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 2px 7px;
-}
-
-.ns-select {
-  font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  padding: 7px 10px;
-  cursor: pointer;
-}
-.ns-select:hover {
-  background: var(--bg);
 }
 
 .ns-person + .ns-person {
@@ -3335,13 +2922,6 @@ html.ns-tauri .ns-drag-strip {
 .ns-scroll-table[data-fade-start] .ns-row-child:hover > div:first-child {
   background: color-mix(in srgb, var(--tint-row) 70%, var(--surface));
 }
-/* Accounts' "Add" pills span the table's full width; keep them in view rather
-   than letting them scroll away with the years. */
-.ns-scroll-table > .ns-add-row-flush {
-  position: sticky;
-  left: 0;
-}
-
 /* Scroll-edge fades instead of arrows: the side with more content dissolves.
    The label column is excluded from the left fade — it's the anchor, not
    content. Driven by `data-fade-start` / `data-fade-end` (useScrollToYear). */
@@ -3446,17 +3026,9 @@ html.ns-tauri .ns-drag-strip {
     padding-right: 14px;
   }
 
-  .ns-selection {
-    flex-wrap: wrap;
-    padding: 12px 18px;
   }
-}
 
 @media (max-width: 640px) {
-  .ns-select {
-    flex: 1;
-  }
-
   /* A 440px panel on a 390px phone is a panel with a sliver of page behind
      it. Full-bleed is the only honest option. */
   .ns-drawer {
@@ -3744,24 +3316,6 @@ html.ns-tauri .ns-drag-strip {
   font-weight: 600;
   color: var(--ink);
 }
-.ns-sidebar-item-blurb {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.ns-sidebar-section-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 14px 20px 4px;
-}
-.ns-sidebar-section-label:first-of-type {
-  padding-top: 10px;
-}
-
 /* A plan row packs a select-button and a "…" menu trigger side by side,
    overriding the name-over-blurb column layout every other sidebar item
    uses. */
@@ -3821,18 +3375,6 @@ html.ns-tauri .ns-drag-strip {
  * FOCUSED FORECAST VIEWS — Retirement, House, Annuity, SEPP
  * ------------------------------------------------------------------------- */
 
-.ns-view-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 4px;
-}
-.ns-view-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
 .ns-view-sub {
   font-size: 13px;
   color: var(--muted);
@@ -3845,50 +3387,6 @@ html.ns-tauri .ns-drag-strip {
   text-align: center;
   color: var(--muted);
   font-size: 14px;
-}
-
-/* The basis/gain split bar — two segments summing to exactly 100% width, one
-   "two-part magnitude" pattern (docs/BORROW.md-style port of Northstar v2's
-   `.ns-split-bar`). Flex percentages rather than CSS-var scaleX/translateX:
-   v2 used custom properties to avoid flex-reflow jank on an ANIMATED split;
-   ours never animates mid-render, so plain flex-basis is the simpler
-   equivalent with nothing lost. */
-.ns-split-bar {
-  display: flex;
-  height: 28px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--rule);
-}
-.ns-split-bar-basis,
-.ns-split-bar-gain {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--on-inverse);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.ns-split-bar-basis {
-  background: var(--muted-light);
-}
-.ns-split-bar-gain {
-  background: var(--data-nw);
-}
-
-/* Fees and the surrender schedule are independent facts about the same
-   contract — side by side when there's room for both, instead of a long
-   single-column stack. `auto-fit` collapses to one column both on a narrow
-   card and when only one of the two sections is present, so no conditional
-   class is needed for the single-section case. */
-.ns-annuity-split {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 0 40px;
-  align-items: start;
 }
 
 .ns-surrender-list {
@@ -3912,16 +3410,6 @@ html.ns-tauri .ns-drag-strip {
   background: var(--tint-row);
 }
 
-.ns-mini-grid {
-  stroke: var(--rule);
-  stroke-width: 1;
-}
-/* The actual data ceiling, drawn only when it sits >8% above the topmost
-   "nice" gridline (S2) — dashed so it reads as the real top of the data,
-   distinct from the rounded reference lines below it. */
-.ns-mini-grid-ceiling {
-  stroke-dasharray: 3 3;
-}
 .ns-mini-zero {
   stroke: var(--border-strong);
   stroke-width: 1;
@@ -3999,59 +3487,6 @@ html.ns-tauri .ns-drag-strip {
 }
 
 /* --- House lens: one section per home (docs/REDESIGN-V3.md "House") ------- */
-
-.ns-house-card {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-/* Not `:first-child` — `PageHeader` is always the true first child of this
-   card's parent, so that selector never matched (M17): every home got the
-   divider/gap meant only to separate a SECOND home's card from the first. */
-.ns-house-card + .ns-house-card {
-  margin-top: 28px;
-  padding-top: 28px;
-  border-top: 1px solid var(--rule);
-}
-.ns-house-card-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-/* Down-payment readiness as a goal row (docs/REDESIGN-V3.md "House") — a
-   progress bar plus an on-track badge, replacing the funding-progress ring. */
-.ns-goal-readiness {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.ns-goal-readiness-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.ns-goal-readiness-note {
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-/* A stage with nothing to show yet (no goal set, purchase past the horizon)
-   — dashed border matches the sidebar's own "not set up yet" affordance. */
-.ns-goal-empty {
-  margin: 14px 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--surface-sub);
-  border: 1px dashed var(--border-strong);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-}
 
 /* The honest-cost sentence: chrome stays neutral (§5.2), only the reading
    itself carries colour (§5.1) — net-worth blue's "in" / "out" pair reused
@@ -4164,30 +3599,6 @@ html.ns-tauri .ns-drag-strip {
   font-weight: 500;
   color: var(--muted);
   margin-top: 2px;
-}
-
-/* Durability at the year actually set — a fuller alarm treatment than
-   ns-house-cost's neutral-background convention, because REDESIGN.md names
-   this "the one alarm" the lens raises; it earns the tint. */
-.ns-durability {
-  /* Was 18px — every other gap on this page follows a 24px rhythm; this
-     one and `.ns-disclosure`'s top margin below were the two outliers. */
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--surface-sub);
-  border: 1px solid var(--rule);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.55;
-}
-.ns-durability-calm {
-  color: var(--ink);
-}
-.ns-durability-alarm {
-  color: var(--out-deep);
-  background: var(--out-tint);
-  border-color: var(--out-line);
 }
 
 /* --- the SEPP disclosure (docs/REDESIGN.md §3.1: a tool, not a peer lens) - */
@@ -4437,12 +3848,6 @@ html.ns-tauri .ns-drag-strip {
   color: var(--muted);
   white-space: nowrap;
 }
-.ns-datatable-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-}
-
 .ns-plot-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
