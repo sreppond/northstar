@@ -148,3 +148,11 @@
   height: 36px;
   overflow: visible;
 }
+
+/* The What-If action row wraps instead of squeezing a label onto two lines. */
+.ns-scn .ns-compare-actions {
+  flex-wrap: wrap;
+}
+.ns-scn .ns-compare-actions .ns-btn {
+  white-space: nowrap;
+}

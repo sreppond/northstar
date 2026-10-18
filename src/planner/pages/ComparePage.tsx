@@ -157,7 +157,7 @@ export function ComparePage() {
           markers={markers}
           drawKey={comparePlan.id}
           readout={{
-            label: 'Net worth',
+            label: `Net worth · ${activeLabel}`,
             primaryId: 'active',
             agesFor: (year) => agesLabel(plan, result.years.find((y) => y.year === year)),
             actions: <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} />,
