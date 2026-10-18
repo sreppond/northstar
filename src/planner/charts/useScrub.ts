@@ -168,7 +168,12 @@ export function useScrub({
       }
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
       e.preventDefault();
-      const next = keyboardYear(years, pinnedYear ?? hoverYear, e.key);
+      // V5-REVIEW-2 N18: with nothing hovered or pinned the readout shows the
+      // last year, so that is the year the first arrow steps FROM. Starting from
+      // null pinned the default itself (2091) and the first ← looked like a
+      // no-op. Home/End ignore the start year.
+      const from = pinnedYear ?? hoverYear ?? (years.length > 0 ? years[years.length - 1] : null);
+      const next = keyboardYear(years, from, e.key);
       setHover(null);
       if (next !== null) setPin(next);
     },

@@ -55,30 +55,31 @@ export function StackedBar({
 }
 
 /**
- * Account-mix hues for the classification bar: a restrained, desaturated
- * six-color ramp (`--mix-1`..`--mix-6` in planner.css) — not one of the four
- * validated data hues, which encode net worth / in / out / a compared plan,
- * not "which bucket does this account fall into". Any class not in the map
- * (only liabilities, in practice — cash/investment/real-estate/annuity
- * classes are all covered) cycles through the same ramp rather than
- * introducing a seventh color.
+ * Account-mix hues for the classification bar (`--mix-1`..`--mix-6` in
+ * planner.css) — not one of the four validated data hues, which encode net
+ * worth / in / out / a compared plan, not "which bucket does this account fall
+ * into".
+ *
+ * V5-REVIEW-2 N4: assets take the five validated mix hues, one per spendable
+ * class (the old `color-mix` annuity blend failed the validator in dark, so the
+ * annuity gets its own violet). Illiquid assets (real estate, other) are
+ * neutral `--muted`, and liabilities `--muted-light`: they used to borrow
+ * asset hues (mortgage = the taxable green, loan = the tax-deferred gold), so a
+ * debt read as an investment. `--mix-1` (the navy) is left to the budget and
+ * group palettes, which lean on it. Both neutrals exist in all three theme
+ * blocks.
  */
 const ACCOUNT_CLASS_MIX: Record<AccountClass, string> = {
-  cash: 'var(--mix-1)',
+  cash: 'var(--mix-6)',
   taxableInvestment: 'var(--mix-2)',
   taxDeferredInvestment: 'var(--mix-3)',
-  // V5-REVIEW-1 F21: real estate was `--mix-5`, a brick red that read as the
-  // danger hue on the snapshot bars. Only the six mix hues exist (planner.css is
-  // another unit's), and --mix-5 is the one that collides, so the five others
-  // are re-dealt: real estate takes the violet, the Roth the teal, and the
-  // annuity a blue-violet blend that still tells apart from both.
-  taxFreeInvestment: 'var(--mix-6)',
-  realEstate: 'var(--mix-4)',
-  variableAnnuity: 'color-mix(in srgb, var(--mix-1) 55%, var(--mix-4))',
-  otherAsset: 'var(--mix-1)',
-  creditCard: 'var(--mix-5)',
-  loan: 'var(--mix-3)',
-  mortgage: 'var(--mix-2)',
+  variableAnnuity: 'var(--mix-4)',
+  taxFreeInvestment: 'var(--mix-5)',
+  realEstate: 'var(--muted)',
+  otherAsset: 'var(--muted)',
+  creditCard: 'var(--muted-light)',
+  loan: 'var(--muted-light)',
+  mortgage: 'var(--muted-light)',
 };
 
 export function accountClassColor(accountClass: AccountClass): string {

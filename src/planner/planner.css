@@ -146,12 +146,18 @@
      legend as the secondary encoding). Chroma is capped well below the four
      validated data hues (--in/--out/--data-nw/--cmp sit at C .14-.175) so
      this still reads as a quieter, decorative ramp, not a fifth data hue. */
+  /* V5-REVIEW-2 N4: re-stepped again. The S18 set failed the validator (light
+     CVD teal<->violet dE 5.4; dark annuity blend dE 7.3 normal-vision) and
+     --mix-5 was a brick red. Every set (accounts, budget envelopes, groups)
+     now passes validate_palette.js in light and dark; the only WARNs are the
+     sub-3:1 contrast of the gold/pink on white and a 6.9 protan adjacent
+     gold/green in dark, all relieved by the labels beside every mark. */
   --mix-1: #005ba1;
-  --mix-2: #00631e;
-  --mix-3: #bf8c10;
-  --mix-4: #b97ed2;
-  --mix-5: #90332c;
-  --mix-6: #00a5aa;
+  --mix-2: #008300;
+  --mix-3: #eda100;
+  --mix-4: #6250d6;
+  --mix-5: #e87ba4;
+  --mix-6: #0097a7;
 
   /* -- data: money in (slot 2) -- */
   --in: #1baf7a;
@@ -358,11 +364,11 @@
 
     /* See the light :root block above for the S18 re-step rationale. */
     --mix-1: #1469b0;
-    --mix-2: #197934;
-    --mix-3: #be8b0d;
-    --mix-4: #b379cc;
-    --mix-5: #a8443b;
-    --mix-6: #00aaae;
+    --mix-2: #008300;
+    --mix-3: #c98500;
+    --mix-4: #9085e9;
+    --mix-5: #d55181;
+    --mix-6: #0aa3b0;
 
     --in: #199e70;
     --in-tint: #10291f;
@@ -379,9 +385,6 @@
 
     --cmp: #9085e9;
     --chart-lift: #000000;
-  --inverse: #e8eef3;
-  --on-inverse: #0a0f15;
-  --danger-btn: #c23f5f;
     --inverse: #e8eef3;
     --on-inverse: #0a0f15;
     --danger-btn: #c23f5f;
@@ -406,6 +409,10 @@
 }
 
 :root[data-theme='dark'] {
+  /* V5-REVIEW-2 N3: a verbatim copy of the prefers-color-scheme block above.
+     The two had drifted (this one kept the old pastel mix and lacked
+     --inverse/--on-inverse/--danger-btn). tokens.test.ts asserts they stay
+     identical: edit both together. */
   color-scheme: dark;
 
   --bg: #0f1115;
@@ -427,6 +434,9 @@
   --rule-light: #1e2229;
   --pill-border: #3a4048;
 
+  /* A real dark rail here, one step darker than --surface rather than
+     equal to it — the same "genuine chrome, not a reskinned card" reason
+     the old always-dark rail existed, just theme-aware now. */
   --rail-bg: var(--surface-sub);
   --rail-border: var(--border);
   --rail-ink: var(--muted);
@@ -439,12 +449,13 @@
   --data-nw: #3987e5;
   --fan-band: rgba(57, 135, 229, 0.12);
 
-  --mix-1: #7fa1c4;
-  --mix-2: #93b98d;
-  --mix-3: #cbaf70;
-  --mix-4: #ad93bd;
-  --mix-5: #c68f79;
-  --mix-6: #8ab3b3;
+  /* See the light :root block above for the S18 re-step rationale. */
+  --mix-1: #1469b0;
+  --mix-2: #008300;
+  --mix-3: #c98500;
+  --mix-4: #9085e9;
+  --mix-5: #d55181;
+  --mix-6: #0aa3b0;
 
   --in: #199e70;
   --in-tint: #10291f;
@@ -461,6 +472,9 @@
 
   --cmp: #9085e9;
   --chart-lift: #000000;
+  --inverse: #e8eef3;
+  --on-inverse: #0a0f15;
+  --danger-btn: #c23f5f;
   --danger: #e0496c;
   --warn: #d9a441;
 
@@ -475,8 +489,9 @@
   --lit-a: 0.055;
   --lit-k: 0.07;
   --gloss-a: 0.13;
-  --glow-1: #0e1a26;
-  --glow-2: #0d161f;
+  /* See the light :root block above for the S16 neutralisation rationale. */
+  --glow-1: #16181d;
+  --glow-2: #131519;
 }
 
 /* Reduced transparency (skill §14): translucent chrome becomes a solid

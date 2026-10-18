@@ -25,7 +25,10 @@ import type { DangerBand } from './charts/types';
  *  - `sepp`: inside a committed SEPP window; the SEPP pays out as income and
  *    ordinary withdrawals stay off the account.
  *  - `penalty`: the owner is under `penaltyFreeAge`, so a draw would owe the
- *    early-withdrawal penalty and the plan treats it as not spendable.
+ *    early-withdrawal penalty and `isSpendable` treats it as not spendable.
+ *    Excluded from `stranded`: the engine DOES draw these accounts, at a 10%
+ *    penalty (V5-REVIEW-2 N5), so "held back" would be false. The reason stays
+ *    in the type because it gates the spendable figure (§4.2).
  */
 export type StrandedReason = 'never' | 'noRule' | 'sepp' | 'penalty';
 
@@ -184,7 +187,9 @@ function strandedAt(result: PlanResult, gate: ReturnType<typeof spendableGate>, 
     // Accounts an event created (the home) aren't the user's to unlock.
     if (!account) continue;
     const reason = gate.blockReason(account, snapshot.year, snapshot.ages);
-    if (reason) out.push({ accountId: row.accountId, accountClass: row.accountClass, balance: row.close, reason });
+    // V5-REVIEW-2 N5: a penalty-age account is not stranded; the engine drains
+    // it (paying the penalty in its tax) before it lets the plan run dry.
+    if (reason && reason !== 'penalty') out.push({ accountId: row.accountId, accountClass: row.accountClass, balance: row.close, reason });
   }
   return out.sort((a, b) => b.balance - a.balance);
 }

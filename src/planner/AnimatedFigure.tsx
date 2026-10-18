@@ -50,7 +50,10 @@ export function AnimatedFigure({ value, className }: { value: string; className?
           className={fade.on ? 'ns-figure-char ns-figure-char-fade' : 'ns-figure-char'}
           aria-hidden="true"
         >
-          {char === ' ' ? ' ' : char}
+          {/* V5-REVIEW-2 N2: each char is an inline-block span, where a plain
+              space collapses ("Short$10.2K"). Written as the \u00a0 escape so
+              an editor can't turn it back into a regular space. */}
+          {char === ' ' ? '\u00a0' : char}
         </span>
       ))}
     </span>
