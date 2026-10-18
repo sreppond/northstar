@@ -98,7 +98,9 @@
 .ns-bgt-env-value {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 8px;
   justify-self: end;
 }
 
@@ -179,6 +181,26 @@
    part is Short (red, via .ns-bgt-short). F3. */
 .ns-bgt-fig-drawn {
   color: color-mix(in srgb, var(--out) 82%, var(--ink-deep));
+}
+/* The three states of a gap year, kept visibly apart (V5-REVIEW-2 N1): Into
+   savings is the green set-aside hue, From savings the orange above, and
+   Unfunded wears the danger red with a hatched dot, like the hatched slice. */
+.ns-bgt-env-caption {
+  margin-left: 8px;
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  color: var(--muted);
+}
+.ns-bgt-env-dot-hatch {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--dot) 0 2px,
+    color-mix(in srgb, var(--dot) 25%, transparent) 2px 4px
+  );
+}
+.ns-bgt-env-danger .ns-bgt-env-label,
+.ns-bgt-env-danger .ns-bgt-fig-static {
+  color: var(--danger);
 }
 .ns-bgt-short {
   display: inline-flex;
@@ -264,6 +286,27 @@
 /* --- budget by year --------------------------------------------------------- */
 .ns-bgt-cols {
   min-width: 0;
+}
+/* The readout's answer is a phrase ("From savings 64%"), not a bare number:
+   one step down from the kit's hero size keeps it on one line at 390. */
+.ns-bgt-cols .ns-readout-value {
+  font-size: clamp(28px, 4.4vw, 40px);
+}
+/* "Paid from savings" labels the half of the chart below zero (V5-REVIEW-2 N9).
+   The plot's bottom edge is 40px up from the stage (BOTTOM_MARGIN) and its left
+   edge is 56px in (LEFT) in TimeSeriesChart. */
+.ns-bgt-plot {
+  position: relative;
+}
+.ns-bgt-plot-lower {
+  position: absolute;
+  left: 64px;
+  bottom: 46px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+  pointer-events: none;
+  text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface);
 }
 
 /* --- the envelope sections -------------------------------------------------- */

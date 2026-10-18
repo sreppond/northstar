@@ -12,6 +12,7 @@ import {
   REMAINDER_LINE_ID,
   SAVED_COLOR,
   SHARED_FIXED_COLOR,
+  UNFUNDED_COLOR,
   WITHDRAWAL_TAX_COLOR,
   adultAges,
   budgetEnvelopes,
@@ -189,11 +190,16 @@ function BudgetBody() {
         })),
       { key: 'kids', label: 'Kids', color: KIDS_COLOR, values: shares.map((e) => e.kids) },
       { key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, values: shares.map((e) => e.withdrawalTax) },
-      { key: 'saved', label: 'Saved', color: SAVED_COLOR, values: shares.map((e) => e.saved) },
+      // In a gap year this layer is what was still set aside on purpose
+      // ("Into savings"), so the upper stack always reaches 100% (V5-REVIEW-2 N1).
+      { key: 'saved', label: 'Saved', color: SAVED_COLOR, values: shares.map((e) => e.saved + e.intoSavings) },
     ];
     return all.filter((l) => l.key === 'saved' || l.values.some((v) => v > 0.5));
   }, [shares, stored]);
+  const savedSeries = useMemo(() => shares.map((e) => e.saved), [shares]);
+  const intoSavingsSeries = useMemo(() => shares.map((e) => e.intoSavings), [shares]);
   const fromSavingsSeries = useMemo(() => shares.map((e) => e.fromSavings), [shares]);
+  const unfundedSeries = useMemo(() => shares.map((e) => e.unfunded), [shares]);
   const afterTaxSeries = useMemo(() => envelopeSeries.map((e) => e.afterTax * scale), [envelopeSeries, scale]);
 
   // The band is the plan's own short years (F2); the amount is in this page's
@@ -203,8 +209,15 @@ function BudgetBody() {
     [health, result, unit, stored],
   );
   // Short only where the plan is (health.shortYears), never because a number is negative (F3).
-  const yearIsShort = health.shortYears.includes(snapshot.year);
+  // A draft is judged by its own run: the engine reports a shortfall in exactly
+  // the years `health.shortYears` lists, so the two agree for the saved plan.
+  const yearIsShort = health.shortYears.includes(snapshot.year) || (!!preview.draft && (workSnapshot.unfundedShortfall ?? 0) > 0);
   const unfundedNow = yearIsShort ? Math.max(0, env.unfunded) : 0;
+  // A gap year: outgoings (spending, money set aside, tax on withdrawals) beat
+  // after-tax income. Its remainder is three separate things, never one
+  // "From savings" (V5-REVIEW-2 N1): what was set aside, what accounts really
+  // paid, and what nothing paid.
+  const gapYear = env.gap >= 0.5;
 
   // --- the donut -------------------------------------------------------------
   const segments: DonutSegment[] = [
@@ -212,11 +225,13 @@ function BudgetBody() {
     ...adults.map((a) => ({ key: a.id, label: a.name, value: a.monthly * scale, color: ownerColor(stored, a.id) })),
     ...(hasKids ? [{ key: 'kids', label: 'Kids', value: env.kids * scale, color: KIDS_COLOR }] : []),
     ...(env.withdrawalTax >= 0.5 ? [{ key: 'wtax', label: 'Tax on withdrawals', value: env.withdrawalTax * scale, color: WITHDRAWAL_TAX_COLOR }] : []),
-    { key: 'saved', label: 'Saved', value: Math.max(0, env.saved) * scale, color: SAVED_COLOR },
-    // A negative remainder is savings paying the bills: orange, not an error.
-    // Only the part the accounts could NOT cover is Short (F3).
-    { key: 'drawn', label: 'From savings', value: Math.max(0, -env.saved - unfundedNow) * scale, color: FROM_SAVINGS_COLOR },
-    { key: 'short', label: 'Short', value: unfundedNow * scale, color: 'var(--danger)', tone: 'danger' },
+    // A surplus year saves what is left; a gap year sets aside only what it still
+    // pays in, draws on accounts for what they really cover, and shows the rest
+    // as unfunded. The keys stay put so the arcs morph rather than remount.
+    { key: 'saved', label: 'Saved', value: gapYear ? 0 : Math.max(0, env.saved) * scale, color: SAVED_COLOR },
+    { key: 'into', label: 'Into savings', value: gapYear ? env.intoSavings * scale : 0, color: SAVED_COLOR },
+    { key: 'drawn', label: 'From savings', value: gapYear ? env.fromSavings * scale : 0, color: FROM_SAVINGS_COLOR },
+    { key: 'unfunded', label: 'Unfunded', value: unfundedNow * scale, color: UNFUNDED_COLOR, tone: 'danger' },
   ];
 
   const openRow = (row: BudgetRow) => {
@@ -294,17 +309,59 @@ function BudgetBody() {
     ...(env.withdrawalTax >= 0.5
       ? [{ key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, monthly: env.withdrawalTax, edited: false, derived: true } satisfies EnvRowSpec]
       : []),
-    // What is left. Negative is savings paying the bills ("From savings", orange);
-    // "Short" is only the part the accounts could not cover, and only in a short year (F3).
-    {
-      key: 'saved',
-      label: env.saved < -0.5 ? 'From savings' : 'Saved',
-      color: env.saved < -0.5 ? FROM_SAVINGS_COLOR : SAVED_COLOR,
-      monthly: env.saved,
-      edited: Math.abs(env.saved - baseEnv.saved) >= 0.5,
-      derived: true,
-      short: unfundedNow >= 0.5 ? unfundedNow : undefined,
-    },
+    // What is left. A surplus year is "Saved". A gap year is three rows
+    // (V5-REVIEW-2 N1): "Into savings" (money still set aside), "From savings"
+    // (a real drawdown, orange, not an error) and "Unfunded" (the shortfall,
+    // red). "Short" belongs to Unfunded alone, and only in a short year (F3).
+    ...(gapYear
+      ? ([
+          ...(env.intoSavings >= 0.5
+            ? [
+                {
+                  key: 'into',
+                  label: 'Into savings',
+                  caption: 'still paid in',
+                  color: SAVED_COLOR,
+                  monthly: env.intoSavings,
+                  edited: Math.abs(env.intoSavings - baseEnv.intoSavings) >= 0.5,
+                  derived: true,
+                } satisfies EnvRowSpec,
+              ]
+            : []),
+          {
+            key: 'drawn',
+            label: 'From savings',
+            color: FROM_SAVINGS_COLOR,
+            monthly: env.fromSavings,
+            edited: Math.abs(env.fromSavings - baseEnv.fromSavings) >= 0.5,
+            derived: true,
+          } satisfies EnvRowSpec,
+          ...(unfundedNow >= 0.5
+            ? [
+                {
+                  key: 'unfunded',
+                  label: 'Unfunded',
+                  glyph: true,
+                  color: UNFUNDED_COLOR,
+                  danger: true,
+                  monthly: unfundedNow,
+                  edited: false,
+                  derived: true,
+                  short: unfundedNow,
+                } satisfies EnvRowSpec,
+              ]
+            : []),
+        ] as EnvRowSpec[])
+      : [
+          {
+            key: 'saved',
+            label: 'Saved',
+            color: SAVED_COLOR,
+            monthly: env.saved,
+            edited: Math.abs(env.saved - baseEnv.saved) >= 0.5,
+            derived: true,
+          } satisfies EnvRowSpec,
+        ]),
   ];
 
   const sectionSpecs: SectionSpec[] = [
@@ -351,7 +408,11 @@ function BudgetBody() {
             <div className="ns-bgt-donut">
               <DonutChart
                 segments={segments}
-                center={{ value: money(env.afterTax * scale), label: `after tax ${per}` }}
+                center={
+                  unfundedNow >= 0.5
+                    ? { value: `Short\u00A0${money(unfundedNow * scale)}`, label: `${per === '/mo' ? 'a month' : 'a year'} in ${snapshot.year}`, tone: 'danger' }
+                    : { value: money(env.afterTax * scale), label: `after tax ${per}` }
+                }
                 size={phone ? 224 : 280}
                 thickness={phone ? 26 : 30}
                 legend={false}
@@ -369,8 +430,8 @@ function BudgetBody() {
                   row={row}
                   scale={scale}
                   per={per}
-                  hovered={hoverKey === row.key || (row.key === 'saved' && (hoverKey === 'short' || hoverKey === 'drawn'))}
-                  dimmed={hoverKey !== null && hoverKey !== row.key && !(row.key === 'saved' && (hoverKey === 'short' || hoverKey === 'drawn'))}
+                  hovered={hoverKey === row.key}
+                  dimmed={hoverKey !== null && hoverKey !== row.key}
                   onHover={(k) => setHoverKey(k)}
                 />
               ))}
@@ -394,13 +455,17 @@ function BudgetBody() {
         </section>
 
         <section aria-labelledby="bgt-years">
+          {/* The readout names the chart ("Where each dollar goes"); a gap year's base is its outgoings, not after-tax income. */}
           <h2 className="ns-bgt-section-title" id="bgt-years">
-            Where each after-tax dollar goes
+            Year by year
           </h2>
           <BudgetShare
             years={yearList}
             layers={layers}
+            saved={savedSeries}
+            intoSavings={intoSavingsSeries}
             fromSavings={fromSavingsSeries}
+            unfunded={unfundedSeries}
             afterTax={afterTaxSeries}
             draftSpentShare={draftShares?.map((e) => e.spent)}
             draftSavedShare={draftShares?.map((e) => e.saved)}
@@ -415,7 +480,7 @@ function BudgetBody() {
             danger={danger}
             perLabel={per}
             height={phone ? 280 : 360}
-            label={`After tax ${per}`}
+            label="Where each dollar goes"
             compactRange={phone}
           />
         </section>
@@ -569,8 +634,14 @@ interface EnvRowSpec {
   onChange?(monthly: number): void;
   /** Kids: the figure opens a sheet instead. */
   opens?(): void;
-  /** Saved: worked out, never edited. */
+  /** Saved / Into / From / Unfunded: worked out, never edited. */
   derived?: boolean;
+  /** Small muted words after the label ("still paid in"). */
+  caption?: string;
+  /** Leads the label with ✗ and draws the dot hatched: the unfunded row. */
+  glyph?: boolean;
+  /** The danger styling: the row's figure wears the danger red. */
+  danger?: boolean;
   /** Per month: the unfunded part of a short year. Only then does the row say Short. */
   short?: number;
   note?: string;
@@ -620,7 +691,6 @@ function EnvelopeRow({
   const startValue = useRef(0);
   const shown = row.monthly * scale;
   const editable = !!row.onChange;
-  const drawn = row.derived && row.monthly < -0.5;
 
   const begin = () => {
     startValue.current = row.monthly;
@@ -688,7 +758,7 @@ function EnvelopeRow({
     <div
       ref={wrap}
       role="listitem"
-      className={`ns-bgt-env${hovered ? ' ns-bgt-env-on' : ''}${dimmed ? ' ns-bgt-env-dim' : ''}`}
+      className={`ns-bgt-env${hovered ? ' ns-bgt-env-on' : ''}${dimmed ? ' ns-bgt-env-dim' : ''}${row.danger ? ' ns-bgt-env-danger' : ''}`}
       onPointerEnter={() => onHover(row.key)}
       onPointerLeave={() => onHover(null)}
       onFocus={() => onHover(row.key)}
@@ -705,8 +775,16 @@ function EnvelopeRow({
       }}
     >
       <span className="ns-bgt-env-label">
-        <span className="ns-bgt-env-dot" style={{ background: row.color }} aria-hidden />
-        <span className="ns-bgt-env-name">{row.label}</span>
+        <span
+          className={`ns-bgt-env-dot${row.glyph ? ' ns-bgt-env-dot-hatch' : ''}`}
+          style={row.glyph ? { ['--dot' as string]: row.color } : { background: row.color }}
+          aria-hidden
+        />
+        <span className="ns-bgt-env-name">
+          {row.glyph && <span aria-hidden>✗ </span>}
+          {row.label}
+          {row.caption && <span className="ns-bgt-env-caption">{row.caption}</span>}
+        </span>
       </span>
       <span className="ns-bgt-env-value">
         {editing ? (
@@ -732,7 +810,7 @@ function EnvelopeRow({
             <ChevronRight size={20} strokeWidth={2.25} className="ns-bgt-chev" aria-hidden />
           </button>
         ) : (
-          <span className={`ns-bgt-fig ns-bgt-fig-static ns-num${drawn ? ' ns-bgt-fig-drawn' : ''}`}>
+          <span className={`ns-bgt-fig ns-bgt-fig-static ns-num${row.key === 'drawn' ? ' ns-bgt-fig-drawn' : ''}`}>
             {figure}
           </span>
         )}
