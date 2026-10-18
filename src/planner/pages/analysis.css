@@ -1,7 +1,8 @@
 /*
  * More pages: Scenarios (the old Compare) and Reports. Loaded app-wide from
  * App.tsx. The chart itself is the kit's (`charts/charts.css`); this file
- * holds the plan-card grid, the diff lists and Reports' per-year tint.
+ * holds the Scenarios plan list, the diff lists and Reports' per-year tint
+ * and Charts layout.
  */
 
 /* --- Scenarios: the two-series hero --------------------------------------- */
@@ -78,75 +79,186 @@
   background: var(--danger-wash);
 }
 
-/* --- Scenarios: a card per other plan -------------------------------------- */
+/* --- Reports: Charts view -------------------------------------------------
+   Seven small multiples on the page background, read through ONE readout
+   (V5-REVIEW-2 N13). No card around the grid, none around each chart. */
 
-.ns-compare-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 14px;
-}
-
-/* Geometry matched to the app's other small cards: 12px radius, 14px/16px
-   padding, 8px gap. */
-.ns-compare-card {
+.ns-rpt-plots {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 16px;
-  cursor: pointer;
-  transition:
-    border-color 140ms var(--ease-soft),
-    background-color 140ms var(--ease-soft),
-    transform 100ms var(--ease-soft);
+  gap: 14px;
+  min-width: 0;
 }
-.ns-compare-card:hover {
-  background: var(--surface-sub);
-  border-color: var(--border-strong);
+.ns-rpt-plots-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.ns-compare-card:active {
-  transform: scale(0.985);
+.ns-rpt-plots-title {
+  margin: 0;
+  font-size: var(--fs-card);
+  font-weight: 650;
+  letter-spacing: var(--track-title);
+  line-height: 1.2;
+  color: var(--ink-deep);
 }
-
-.ns-compare-card-head {
+/* The year, the ages and the one Short pill. A fixed height so the pill
+   appearing in a short year doesn't nudge the grid under it. */
+.ns-rpt-readout {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-height: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.ns-rpt-readout-year {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink-deep);
+}
+.ns-rpt-readout-ages {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ns-rpt-plot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px 32px;
+}
+.ns-rpt-plot {
+  min-width: 0;
+}
+.ns-rpt-plot-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
+  margin-bottom: 2px;
 }
-.ns-compare-card-name {
-  font-size: 14px;
+.ns-rpt-plot-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.ns-rpt-plot-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+
+/* --- Scenarios: the landing is a title and a list, no cards ----------------
+   Sits on the page background like Budget's sections (V5-REVIEW-2 N12). */
+
+.ns-scn-section {
+  min-width: 0;
+}
+.ns-scn-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 6px;
+}
+.ns-scn-section-title {
+  margin: 0;
+  font-size: var(--fs-card);
+  font-weight: 650;
+  letter-spacing: var(--track-title);
+  line-height: 1.2;
+  color: var(--ink-deep);
+}
+.ns-scn-section-meta {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.ns-scn-none {
+  margin: 8px 0 0;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.ns-scn-plans {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ns-scn-plans > li + li {
+  border-top: 1px solid var(--rule);
+}
+
+/* One plan: name, a 160x40 sparkline, then the figure and what it's read at. */
+.ns-scn-plan {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px minmax(150px, auto);
+  grid-template-areas: 'name spark figure' 'name spark label';
+  align-items: center;
+  column-gap: 24px;
+  row-gap: 2px;
+  padding: 14px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-soft),
+    transform 100ms var(--ease-soft);
+}
+.ns-scn-plan:hover {
+  background: var(--surface-sub);
+}
+.ns-scn-plan:active {
+  transform: scale(0.99);
+}
+.ns-scn-plan-name {
+  grid-area: name;
+  min-width: 0;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink-deep);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ns-compare-card-value {
-  font-size: 21px;
+.ns-scn-spark {
+  grid-area: spark;
+  display: block;
+  overflow: visible;
+}
+.ns-scn-plan-figure {
+  grid-area: figure;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.ns-scn-plan-value {
+  font-size: 18px;
   font-weight: 600;
   color: var(--ink-deep);
 }
-.ns-compare-card-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+.ns-scn-plan-label {
+  grid-area: label;
+  text-align: right;
+  font-size: 12px;
   color: var(--muted);
 }
 
-.ns-compare-sparkline {
-  display: block;
-  width: 100%;
-  height: 36px;
-  overflow: visible;
+@media (max-width: 640px) {
+  .ns-scn-plan {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'name figure' 'spark label';
+    row-gap: 8px;
+  }
+  .ns-scn-plan-label {
+    align-self: end;
+  }
 }
 
 /* The What-If action row wraps instead of squeezing a label onto two lines. */

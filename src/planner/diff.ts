@@ -32,18 +32,21 @@ export interface OutcomeChange {
 const SETTINGS_FIELDS: {
   key: 'baselineIncome' | 'baselineExpenses' | 'inflationRate' | 'incomeTaxRate' | 'projectionYears';
   label: string;
-  unit: 'currency' | 'percent' | 'plain';
+  unit: 'currency' | 'percent' | 'plain' | 'years';
 }[] = [
   { key: 'baselineIncome', label: 'Baseline income', unit: 'currency' },
   { key: 'baselineExpenses', label: 'Baseline expenses', unit: 'currency' },
   { key: 'inflationRate', label: 'Inflation rate', unit: 'percent' },
   { key: 'incomeTaxRate', label: 'Income tax rate', unit: 'percent' },
-  { key: 'projectionYears', label: 'Projection years', unit: 'plain' },
+  // V5-REVIEW-2 N12: "Projection years 66 → 21" read as engine jargon; the
+  // sentence is now "Plan length 66 → 21 years".
+  { key: 'projectionYears', label: 'Plan length', unit: 'years' },
 ];
 
 /** "What's different" — a pure structural diff over two whole `Plan` objects. */
 export function diffPlans(a: Plan, b: Plan): PlanChange[] {
   const changes: PlanChange[] = [];
+  const names = nameLookup(a, b);
 
   for (const f of SETTINGS_FIELDS) {
     const av = a.settings[f.key];
@@ -52,7 +55,7 @@ export function diffPlans(a: Plan, b: Plan): PlanChange[] {
     changes.push({
       kind: 'settings',
       verb: 'changed',
-      sentence: `${f.label} ${formatUnit(av, f.unit)} → ${formatUnit(bv, f.unit)}`,
+      sentence: `${f.label} ${fmtSetting(av, f.unit)} → ${fmtSetting(bv, f.unit)}`,
     });
   }
 
@@ -65,7 +68,7 @@ export function diffPlans(a: Plan, b: Plan): PlanChange[] {
   }
 
   changes.push(...diffAccounts(a.accounts, b.accounts));
-  changes.push(...diffEvents(a.events, b.events));
+  changes.push(...diffEvents(a.events, b.events, names));
 
   if (JSON.stringify(a.rules) !== JSON.stringify(b.rules)) {
     changes.push({ kind: 'rule', verb: 'changed', sentence: 'Priority rules changed' });
@@ -75,20 +78,22 @@ export function diffPlans(a: Plan, b: Plan): PlanChange[] {
 }
 
 /**
- * "What it costs" — the two plans re-run, compared at the ACTIVE plan's
- * horizon, matching how the chart and the hero's "vs «name»" line already
- * clip a longer-running comparison plan (docs/NEXT.md).
+ * "What it costs" — the two plans re-run, compared at the last year both
+ * of them model (the chart clips a longer plan the same way, docs/NEXT.md).
  */
 export function diffOutcomes(active: PlanResult, compare: PlanResult): OutcomeChange[] {
   const out: OutcomeChange[] = [];
 
-  const activeEnd = active.years.at(-1)?.netWorth;
-  const compareAtActiveEnd =
-    compare.years.find((y) => y.year === active.endYear)?.netWorth ?? compare.years.at(-1)?.netWorth;
-  if (activeEnd !== undefined && compareAtActiveEnd !== undefined) {
-    const delta = compareAtActiveEnd - activeEnd;
+  // V5-REVIEW-2 N12: compare net worth at the last year BOTH plans have and
+  // say which year that is. Reading the active plan's last year off a shorter
+  // comparison plan put "+$3.99M at 2091" against a plan that ends in 2086.
+  const lastShared = Math.min(active.years.at(-1)?.year ?? Infinity, compare.years.at(-1)?.year ?? Infinity);
+  const activeAt = active.years.find((y) => y.year === lastShared)?.netWorth;
+  const compareAt = compare.years.find((y) => y.year === lastShared)?.netWorth;
+  if (activeAt !== undefined && compareAt !== undefined) {
+    const delta = compareAt - activeAt;
     if (Math.abs(delta) > 500) {
-      out.push({ label: 'Net worth', sentence: `${signedMoney(delta)} at ${active.endYear}` });
+      out.push({ label: 'Net worth', sentence: `${signedMoney(delta)} at ${lastShared}` });
     }
   }
 
@@ -156,7 +161,7 @@ function diffOneAccount(a: Account, b: Account): PlanChange[] {
   return changes;
 }
 
-function diffEvents(as: PlanEvent[], bs: PlanEvent[]): PlanChange[] {
+function diffEvents(as: PlanEvent[], bs: PlanEvent[], names: Names): PlanChange[] {
   const changes: PlanChange[] = [];
   const bById = new Map(bs.map((e) => [e.id, e]));
   const seen = new Set<string>();
@@ -168,7 +173,7 @@ function diffEvents(as: PlanEvent[], bs: PlanEvent[]): PlanChange[] {
       changes.push({ kind: 'event', verb: 'removed', sentence: `Removes ${a.name} (${a.startYear})` });
       continue;
     }
-    changes.push(...diffOneEvent(a, b));
+    changes.push(...diffOneEvent(a, b, names));
   }
   for (const b of bs) {
     if (!seen.has(b.id)) {
@@ -178,7 +183,7 @@ function diffEvents(as: PlanEvent[], bs: PlanEvent[]): PlanChange[] {
   return changes;
 }
 
-function diffOneEvent(a: PlanEvent, b: PlanEvent): PlanChange[] {
+function diffOneEvent(a: PlanEvent, b: PlanEvent, names: Names): PlanChange[] {
   const changes: PlanChange[] = [];
 
   if (a.startYear !== b.startYear) {
@@ -208,7 +213,7 @@ function diffOneEvent(a: PlanEvent, b: PlanEvent): PlanChange[] {
     changes.push({
       kind: 'event',
       verb: 'changed',
-      sentence: `${a.name} — ${field.label} ${fmtEvent(av, field)} → ${fmtEvent(bv, field)}`,
+      sentence: `${a.name} — ${field.label} ${fmtEvent(av, field, names)} → ${fmtEvent(bv, field, names)}`,
     });
   }
 
@@ -220,9 +225,47 @@ function fmtAccount(raw: unknown, field: AccountFieldSpec): string {
   return formatAccountValue(raw, field);
 }
 
-function fmtEvent(raw: unknown, field: FieldDescriptor): string {
+function fmtEvent(raw: unknown, field: FieldDescriptor, names: Names): string {
   if (raw === undefined || raw === null || raw === '') return '—';
+  // V5-REVIEW-2 N12: a reference field holds an id ("p1"); the diff prints
+  // what the person sees in the app, never the id itself.
+  if (typeof raw === 'string' && /Id$/.test(field.name)) return names.resolve(field.name, raw);
   return formatUnit(raw, field.unit);
+}
+
+function fmtSetting(raw: unknown, unit: 'currency' | 'percent' | 'plain' | 'years'): string {
+  if (unit === 'years') {
+    const n = Number(raw);
+    return Number.isFinite(n) ? `${n} ${n === 1 ? 'year' : 'years'}` : String(raw);
+  }
+  return formatUnit(raw, unit);
+}
+
+interface Names {
+  resolve(fieldName: string, id: string): string;
+}
+
+/**
+ * Id -> display name across BOTH plans (an id may exist on one side only: a
+ * removed or added person), so the diff never has to show a raw id.
+ */
+function nameLookup(a: Plan, b: Plan): Names {
+  const people = new Map<string, string>();
+  const accounts = new Map<string, string>();
+  const events = new Map<string, string>();
+  for (const plan of [a, b]) {
+    for (const p of plan.participants) people.set(p.id, p.name);
+    for (const acc of plan.accounts) accounts.set(acc.id, acc.name);
+    for (const e of plan.events) events.set(e.id, e.name);
+  }
+  return {
+    resolve(fieldName, id) {
+      if (/^participant|owner/i.test(fieldName)) return people.get(id) ?? '(removed)';
+      if (/account/i.test(fieldName)) return accounts.get(id) ?? '(removed)';
+      if (/event/i.test(fieldName)) return events.get(id) ?? '(removed)';
+      return people.get(id) ?? accounts.get(id) ?? events.get(id) ?? '(removed)';
+    },
+  };
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {

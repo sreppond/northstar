@@ -7,11 +7,12 @@ export type RowKind = 'total' | 'group' | 'child' | 'grandchild';
 
 /**
  * A magnitude bar behind one cell (docs/REDESIGN.md §4.1, DESIGN-DIRECTION.md
- * move 6). Reuses the income/cost hue convention `.ns-bar-income`/
- * `.ns-bar-cost` established in EventsTab.tsx's Gantt bars — but this is a
- * different, unrelated component: those bars encode a TIME SPAN on a Gantt
- * row; this encodes a DOLLAR MAGNITUDE behind a data-table row. Same colour
- * language, different mechanism, never conflated.
+ * move 6). Drawn as `.ns-mag-bar` plus a tone (`.ns-mag-bar-income` in
+ * `--in`, `.ns-mag-bar-cost` in `--out`) and a direction (`-pos` / `-neg`
+ * grow from a shared centre on diverging rows, `-single` from the left edge).
+ * It encodes a DOLLAR MAGNITUDE behind a data-table cell, not a time span.
+ * (V5-REVIEW-2 N15: this named `.ns-bar-income`/`.ns-bar-cost`, which no
+ * longer exist.)
  */
 export interface CellMagnitude {
   /** 0..1 — this cell's value relative to the ROW's own max across its

@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { usePlanner } from '../PlannerContext';
+import { AnimatedFigure } from '../AnimatedFigure';
 import { ChartReadout, RangePicker, TimeSeriesChart, type ReadoutItem } from '../charts';
+import { rangeWindow } from '../charts/range';
+import { useThrottledValue } from '../charts/useSpring';
 import { Cell, type CellMagnitude } from '../tabs/DataTable';
 import { money, percent, planMetaLine, tableMoney, tablePercent } from '../format';
 import { stubYearLabel } from '../ledger';
@@ -51,6 +54,14 @@ const PLOT_DEFINITIONS: { key: keyof ExploreRow; label: string; color: string }[
 export function ReportsPage() {
   const { plan, result, stored, health, focusYear, setFocusYear, chartRange, setChartRange } = usePlanner();
   const [tab, setTab] = useState<ReportsTab>('explore');
+  // V5-REVIEW-2 N13: the 7 small multiples are ONE instrument. Whichever one
+  // is hovered reports its year here, and every chart draws its cursor there.
+  const [hoverYear, setHoverYearState] = useState<number | null>(null);
+  const hoverRef = useRef<number | null>(null);
+  const setHoverYear = useCallback((year: number | null) => {
+    hoverRef.current = year;
+    setHoverYearState(year);
+  }, []);
 
   const rows = useMemo(() => buildExploreRows(result), [result]);
   const hasPlan = plan.accounts.length > 0 || plan.events.length > 1;
@@ -59,6 +70,32 @@ export function ReportsPage() {
   const years = useMemo(() => rows.map((r) => r.year), [rows]);
   const danger = useMemo(() => dangerBand(health, result), [health, result]);
   const shortYears = useMemo(() => new Set(health.shortYears), [health.shortYears]);
+
+  // The year every chart and the one readout agree on: hover, else the pin,
+  // else the last year in view (what a lone chart's readout defaults to).
+  const visibleYears = useMemo(() => {
+    const win = rangeWindow(years, result.startYear, chartRange);
+    return years.filter((y) => y >= win.from - 1e-9 && y <= win.to + 1e-9);
+  }, [years, result.startYear, chartRange]);
+  const pinnedYear =
+    focusYear !== null && visibleYears.length
+      ? visibleYears.reduce((best, y) => (Math.abs(y - focusYear) < Math.abs(best - focusYear) ? y : best))
+      : null;
+  const readoutYear = hoverYear ?? pinnedYear ?? visibleYears.at(-1) ?? null;
+  const readoutRow = readoutYear === null ? undefined : rows.find((r) => r.year === readoutYear);
+  // Charts get hover as their pin (see `sharedFocus`): the kit has no
+  // controlled-hover prop, and a pin is drawn as a full-height rule.
+  const sharedFocus = hoverYear ?? focusYear;
+  // A click inside a chart arrives as "unpin" because the chart believes the
+  // hovered year is already pinned; turn it back into pin/unpin of the real pin.
+  const onChartFocus = useCallback(
+    (year: number | null) => {
+      const hovered = hoverRef.current;
+      if (year === null && hovered !== null) setFocusYear(focusYear === hovered ? null : hovered);
+      else setFocusYear(year);
+    },
+    [focusYear, setFocusYear],
+  );
 
   // Scaled per COLUMN, across every row — the Reports equivalent of
   // DataTable's "scaled per row" rule, just transposed: here a column IS
@@ -145,21 +182,20 @@ export function ReportsPage() {
             />
           </section>
 
-          <SectionCard
-            title="Plan by year"
-            actions={
-              <div className="ns-rpt-actions">
-                {tab === 'plots' && <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} />}
-                <Segmented options={TAB_OPTIONS} value={tab} onChange={(v) => setTab(v as ReportsTab)} size="sm" ariaLabel="View" />
-              </div>
-            }
-            flush={tab === 'explore'}
-          >
-            {tab === 'explore' ? (
-              // S5: dropped the 560px inner scroll — a plan's full year range
-              // (~20-60 rows) reads fine as one plain scroll of the page,
-              // and a sticky-inside-a-fixed-height panel hid rows with no
-              // affordance that more existed below the fold.
+          {tab === 'explore' ? (
+            <SectionCard
+              title="Plan by year"
+              actions={
+                <div className="ns-rpt-actions">
+                  <Segmented options={TAB_OPTIONS} value={tab} onChange={(v) => setTab(v as ReportsTab)} size="sm" ariaLabel="View" />
+                </div>
+              }
+              flush
+            >
+              {/* S5: dropped the 560px inner scroll — a plan's full year range
+                  (~20-60 rows) reads fine as one plain scroll of the page,
+                  and a sticky-inside-a-fixed-height panel hid rows with no
+                  affordance that more existed below the fold. */}
               <div className="ns-table-scroll">
                 <table className="ns-datatable">
                   <thead>
@@ -175,14 +211,19 @@ export function ReportsPage() {
                         {EXPLORE_COLUMNS.map((col) => {
                           if (col.key === 'year')
                             return (
-                              <td key={col.key} className={shortYears.has(row.year) ? 'ns-rpt-short-year' : undefined}>
+                              <td
+                                key={col.key}
+                                className={shortYears.has(row.year) ? 'ns-rpt-short-year' : undefined}
+                                // V5-REVIEW-2 N13: the stub note lives in a tooltip, so the
+                                // column reads as bare years.
+                                title={row.year === stubYear && stub ? `${row.year} ${stub.short}` : undefined}
+                              >
                                 {shortYears.has(row.year) && (
                                   <span className="ns-year-short" role="img" aria-label="Plan runs short this year">
                                     ✗
                                   </span>
                                 )}
                                 {row.year}
-                                {row.year === stubYear && stub && <div className="ns-table-year-sub">{stub.short}</div>}
                               </td>
                             );
                           const value = row[col.key] as number;
@@ -205,12 +246,39 @@ export function ReportsPage() {
                   </tbody>
                 </table>
               </div>
-            ) : (
-              <div className="ns-plot-grid">
+            </SectionCard>
+          ) : (
+            <section className="ns-rpt-plots" aria-labelledby="rpt-plots-title">
+              <div className="ns-rpt-plots-head">
+                <h2 className="ns-rpt-plots-title" id="rpt-plots-title">
+                  Plan by year
+                </h2>
+                <div className="ns-rpt-actions">
+                  {tab === 'plots' && <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={result.startYear} />}
+                  <Segmented options={TAB_OPTIONS} value={tab} onChange={(v) => setTab(v as ReportsTab)} size="sm" ariaLabel="View" />
+                </div>
+              </div>
+
+              <PlotReadout
+                year={readoutRow?.year}
+                ages={readoutRow ? agesLabel(plan, result.years.find((y) => y.year === readoutRow.year)) : undefined}
+                short={readoutRow ? shortYears.has(readoutRow.year) : false}
+                shortAmount={readoutRow ? danger?.shortFor?.(readoutRow.year) : undefined}
+              />
+
+              <div className="ns-rpt-plot-grid">
                 {PLOT_DEFINITIONS.map((p) => {
                   const percentFormat = p.key === 'contributionRatePercent';
+                  const at = readoutRow ? (readoutRow[p.key] as number) : undefined;
                   return (
-                    <div className="ns-plot-card" key={p.key}>
+                    <div className="ns-rpt-plot" key={p.key}>
+                      <div className="ns-rpt-plot-head">
+                        <span className="ns-rpt-plot-label">{p.label}</span>
+                        <AnimatedFigure
+                          className="ns-rpt-plot-value ns-num"
+                          value={at === undefined ? '–' : percentFormat ? `${at.toFixed(1)}%` : money(at)}
+                        />
+                      </div>
                       <TimeSeriesChart
                         years={years}
                         series={[
@@ -225,28 +293,60 @@ export function ReportsPage() {
                         range={chartRange}
                         todayYear={result.startYear}
                         height={190}
-                        focusYear={focusYear}
-                        onFocusYear={setFocusYear}
+                        focusYear={sharedFocus}
+                        onFocusYear={onChartFocus}
+                        onHoverYear={setHoverYear}
                         danger={danger}
                         onRequestRange={setChartRange}
                         yFormat={percentFormat ? (v) => `${Math.round(v)}%` : undefined}
-                        readout={{
-                          label: p.label,
-                          size: 'compact',
-                          format: percentFormat ? (v) => `${v.toFixed(1)}%` : undefined,
-                          agesFor: (year) => agesLabel(plan, result.years.find((y) => y.year === year)),
-                        }}
+                        readout={false}
                         ariaLabel={`${p.label} by year`}
                       />
                     </div>
                   );
                 })}
               </div>
-            )}
-          </SectionCard>
+            </section>
+          )}
         </>
       )}
     </Page>
+  );
+}
+
+/** The single readout for all seven charts: the year, the adults' ages, and
+    one Short pill when that year is short. Each chart's own card then carries
+    only its label and value. */
+function PlotReadout({
+  year,
+  ages,
+  short,
+  shortAmount,
+}: {
+  year: number | undefined;
+  ages: string | undefined;
+  short: boolean;
+  shortAmount: number | undefined;
+}) {
+  const amount = short && shortAmount !== undefined && shortAmount > 0 ? money(shortAmount) : undefined;
+  // One announcement per settled year, not one per scrubbed frame.
+  const spoken = useThrottledValue(
+    year === undefined ? '' : `${year}${ages ? `, ${ages}` : ''}${short ? `. Short ${amount ? `${amount} a year` : ''}` : ''}`.trim(),
+    700,
+  );
+  return (
+    <div className="ns-rpt-readout">
+      <span className="ns-rpt-readout-year">{year ?? '–'}</span>
+      {ages && <span className="ns-rpt-readout-ages">{ages}</span>}
+      {short && (
+        <span className="ns-readout-short">
+          <span aria-hidden="true">✗</span> Short{amount ? ` ${amount}/yr` : ''}
+        </span>
+      )}
+      <span className="ns-ch-sr" aria-live="polite" aria-atomic="true">
+        {spoken}
+      </span>
+    </div>
   );
 }
 

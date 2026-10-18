@@ -148,6 +148,55 @@ describe('diffPlans — events', () => {
   });
 });
 
+describe('diffPlans — no ids leak (V5-REVIEW-2 N12)', () => {
+  const job = {
+    id: 'e1',
+    kind: 'newJob' as const,
+    name: 'Amazon',
+    startYear: 2026,
+    isIncluded: true,
+  };
+
+  it('prints a person by name, never by id', () => {
+    const people = [
+      { id: 'p1', name: 'Spencer', birthYear: 1990, lifeExpectancy: 90, isIncluded: true },
+      { id: 'p2', name: 'Sarah', birthYear: 1990, lifeExpectancy: 90, isIncluded: true },
+    ];
+    const a = plan({ participants: people, events: [{ ...job, config: { participantId: 'p1' } }] });
+    const b = plan({ participants: people, events: [{ ...job, config: { participantId: 'p2' } }] });
+    const sentence = diffPlans(a, b).map((c) => c.sentence).join('\n');
+    expect(sentence).toContain('Spencer → Sarah');
+    expect(sentence).not.toMatch(/\bp[12]\b/);
+  });
+
+  it('resolves a person who exists on one side only, and a cleared one reads as a dash', () => {
+    const a = plan({ events: [{ ...job, config: { participantId: 'p1' } }] });
+    const b = plan({ participants: [], events: [{ ...job, config: {} }] });
+    const sentence = diffPlans(a, b).map((c) => c.sentence).join('\n');
+    expect(sentence).toContain('A → —');
+    expect(sentence).not.toContain('p1');
+  });
+
+  it('names a linked account instead of printing its id', () => {
+    const cash = { ...newAccountOfType('cash'), id: 'acct-9', name: 'Checking' };
+    const a = plan({ accounts: [cash], events: [{ ...job, config: { contributionAccountId: 'acct-9' } }] });
+    const b = plan({ accounts: [cash], events: [{ ...job, config: {} }] });
+    const sentence = diffPlans(a, b).map((c) => c.sentence).join('\n');
+    expect(sentence).toContain('Checking → —');
+    expect(sentence).not.toContain('acct-9');
+  });
+
+  it('says "Plan length", in years', () => {
+    const a = plan({ settings: { projectionYears: 66 } as never });
+    const b = plan({ settings: { projectionYears: 21 } as never });
+    expect(diffPlans(a, b)).toContainEqual({
+      kind: 'settings',
+      verb: 'changed',
+      sentence: 'Plan length 66 years → 21 years',
+    });
+  });
+});
+
 describe('diffPlans — rules', () => {
   it('reports a change to the priority rules as one line', () => {
     const a = plan({ rules: [{ accountId: 'b', ruleType: 'allocation', order: 1 }] });
@@ -180,6 +229,23 @@ describe('diffOutcomes', () => {
     const netWorthChange = changes.find((c) => c.label === 'Net worth');
     // docs/ROADMAP-10.md C2 (one number language): no trailing ".0".
     expect(netWorthChange?.sentence).toContain('+$60K');
+  });
+
+  it('compares at the last year both plans model and names that year', () => {
+    const long = plan({
+      settings: { projectionYears: 6, baselineIncome: 100_000, baselineExpenses: 40_000 } as never,
+      accounts: [{ ...newAccountOfType('cash'), id: 'c', name: 'Cash' }],
+    });
+    const short = plan({
+      settings: { projectionYears: 3, baselineIncome: 100_000, baselineExpenses: 20_000 } as never,
+      accounts: [{ ...newAccountOfType('cash'), id: 'c', name: 'Cash' }],
+    });
+    const rLong = runPlan(long);
+    const rShort = runPlan(short);
+    const sharedYear = Math.min(rLong.years.at(-1)!.year, rShort.years.at(-1)!.year);
+    const change = diffOutcomes(rLong, rShort).find((c) => c.label === 'Net worth');
+    expect(change?.sentence).toContain(`at ${sharedYear}`);
+    expect(change?.sentence).not.toContain(`at ${rLong.years.at(-1)!.year}`);
   });
 
   it('reports a first-shortfall-year change, including "never"', () => {
