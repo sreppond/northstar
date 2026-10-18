@@ -1,16 +1,26 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { PiggyBank } from 'lucide-react';
+import type { PlanEvent } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
 import { CashFlowTab } from '../tabs/CashFlowTab';
-import { ChartReadout, RangePicker, TimeSeriesChart, type ChartSeries } from '../charts';
+import { ChartReadout, RangePicker, TimeSeriesChart, rangeWindow, type ChartNote, type ChartSeries } from '../charts';
 import { Waterfall, type WaterfallBar } from '../charts/Waterfall';
 import { cashFlowTree, monthsInYear, waterfallBars, type FlowKey } from '../cashFlowView';
 import { stubYearLabel } from '../ledger';
+import { healthDangerBand } from '../health';
+import { inUnit } from '../budgetView';
+import { useBreakpoint } from '../useBreakpoint';
 import { money } from '../format';
 import { EmptyState, Page, PageHeader, Segmented } from '../ui';
 import './cash-flow.css';
 
 type Unit = 'mo' | 'yr';
+
+/** One-time lumps are columns from the baseline; the tallest may reach this share of the tallest line in view. */
+const LUMP_CAP_SHARE = 0.8;
+/** A lump this small next to the cap is not worth a standing label. */
+const LUMP_LABEL_MIN_SHARE = 0.2;
+const LUMP_COLOR = 'color-mix(in srgb, var(--mix-3) 72%, var(--surface))';
 
 /**
  * Cash Flow (docs/REDESIGN-V5.md §5.2): after-tax income against spending as
@@ -38,6 +48,7 @@ export function CashFlowPage() {
     health,
   } = usePlanner();
 
+  const phone = useBreakpoint() === 'phone';
   const [unit, setUnit] = useState<Unit>('mo');
   const [hoverYear, setHoverYear] = useState<number | null>(null);
   const [hot, setHot] = useState<FlowKey | null>(null);
@@ -50,21 +61,56 @@ export function CashFlowPage() {
   const perColumn = useMemo(() => (unit === 'mo' ? months : years.map(() => 1)), [unit, months, years]);
 
   // --- the hero chart ----------------------------------------------------------
-  // Spending includes tax paid on withdrawals: it is money out the door, and it
-  // makes the gap between the two lines exactly what the readout calls Saved.
+  // The lines plot RECURRING spending, including tax paid on withdrawals: it is
+  // money out the door, and it makes the gap between the two lines what the
+  // readout calls Saved, less any one-time lump. A lump (a down payment) is a
+  // column from the baseline instead, capped so it cannot set the y-domain and
+  // flatten sixty years of living costs into the bottom third (V5-REVIEW-1
+  // F11). The readout, waterfall and table still count it.
+  const incomeLine = useMemo(() => tree.flows.map((f, i) => f.afterTax / perColumn[i]), [tree.flows, perColumn]);
+  const recurringLine = useMemo(
+    () => tree.flows.map((f, i) => (f.spent - f.lumps + f.withdrawalTax) / perColumn[i]),
+    [tree.flows, perColumn],
+  );
+  const lumpValues = useMemo(() => tree.flows.map((f, i) => f.lumps / perColumn[i]), [tree.flows, perColumn]);
+  // The cap follows the visible window: a 5Y view of retirement has lower lines
+  // than the whole plan, and a cap taken from the whole plan would crush them.
+  const lumpCap = useMemo(() => {
+    const win = rangeWindow(years, startYear, chartRange);
+    let top = 0;
+    years.forEach((y, i) => {
+      if (y >= win.from && y <= win.to) top = Math.max(top, incomeLine[i], recurringLine[i]);
+    });
+    return top * LUMP_CAP_SHARE;
+  }, [years, startYear, chartRange, incomeLine, recurringLine]);
   const series = useMemo<ChartSeries[]>(() => {
-    const income = tree.flows.map((f, i) => f.afterTax / perColumn[i]);
-    const spending = tree.flows.map((f, i) => (f.spent + f.withdrawalTax) / perColumn[i]);
-    const top = income.map((v, i) => Math.max(v, spending[i]));
-    return [
+    const top = incomeLine.map((v, i) => Math.max(v, recurringLine[i]));
+    const list: ChartSeries[] = [
       // The wash between the lines: two areas that each fill from one line to the
       // higher of the two, so exactly one of them has height in any year.
-      { id: 'saving', label: 'Saving', color: 'var(--in)', kind: 'area', values: top, fillTo: spending, fillOpacity: 0.2, lineWidth: 0, activeDot: false },
-      { id: 'drawing', label: 'Drawing down', color: 'var(--out)', kind: 'area', values: top, fillTo: income, fillOpacity: 0.22, lineWidth: 0, activeDot: false },
-      { id: 'income', label: 'After tax', color: 'var(--in)', values: income },
-      { id: 'spending', label: 'Spending', color: 'var(--out)', values: spending },
+      { id: 'saving', label: 'Saving', color: 'var(--in)', kind: 'area', values: top, fillTo: recurringLine, fillOpacity: 0.2, lineWidth: 0, activeDot: false },
+      { id: 'drawing', label: 'Drawing down', color: 'var(--out)', kind: 'area', values: top, fillTo: incomeLine, fillOpacity: 0.22, lineWidth: 0, activeDot: false },
     ];
-  }, [tree.flows, perColumn]);
+    if (lumpCap > 0 && lumpValues.some((v) => v > 0.5)) {
+      list.push({ id: 'lumps', label: 'One-time', color: LUMP_COLOR, kind: 'column', values: lumpValues.map((v) => Math.min(v, lumpCap)) });
+    }
+    list.push(
+      { id: 'income', label: 'After tax', color: 'var(--in)', values: incomeLine },
+      { id: 'spending', label: 'Spending', color: 'var(--out)', values: recurringLine },
+    );
+    return list;
+  }, [incomeLine, recurringLine, lumpValues, lumpCap]);
+  const notes = useMemo<ChartNote[]>(
+    () =>
+      lumpCap <= 0
+        ? []
+        : years.flatMap((year, i) =>
+            lumpValues[i] >= lumpCap * LUMP_LABEL_MIN_SHARE
+              ? [{ year, value: Math.min(lumpValues[i], lumpCap), text: `${lumpValues[i] > lumpCap ? '↑ ' : ''}${money(tree.flows[i].lumps)}` }]
+              : [],
+          ),
+    [years, lumpValues, lumpCap, tree.flows],
+  );
 
   // --- which year -------------------------------------------------------------
   const defaultYear = useMemo(
@@ -85,16 +131,12 @@ export function CashFlowPage() {
     return parts.length ? parts.join(' · ') : undefined;
   };
 
-  const danger =
-    health.status === 'short' && health.firstShortYear !== undefined
-      ? {
-          from: health.firstShortYear,
-          shortFor: (y: number) => {
-            const i = years.indexOf(y);
-            return i >= 0 ? (tree.unfunded?.[i] ?? 0) / perColumn[i] : undefined;
-          },
-        }
-      : undefined;
+  // The band is the plan's short years only (F2), amounts in this page's unit
+  // (each year's own divisor, so the partial first year reads right in /mo).
+  const danger = useMemo(
+    () => inUnit(healthDangerBand(health, result), (y) => perColumn[years.indexOf(y)] ?? 1),
+    [health, result, perColumn, years],
+  );
 
   const bars = useMemo<WaterfallBar[]>(() => {
     if (!flow) return [];
@@ -107,6 +149,14 @@ export function CashFlowPage() {
       segments: b.segments?.map((s) => ({ ...s, from: s.from * k, to: s.to * k })),
     }));
   }, [flow, per]);
+
+  // The table is memoised (F28), so it must not see a new function every time
+  // a hover step re-renders this page.
+  const latest = useRef({ focus: setFocusYear, edit: editor.edit, assumptions: () => setAssumptionsDraft(structuredClone(stored)) });
+  latest.current = { focus: setFocusYear, edit: editor.edit, assumptions: () => setAssumptionsDraft(structuredClone(stored)) };
+  const onTableFocus = useCallback((year: number | null) => latest.current.focus(year), []);
+  const onTableEdit = useCallback((event: PlanEvent) => latest.current.edit(event), []);
+  const onTableAssumptions = useCallback(() => latest.current.assumptions(), []);
 
   if (!flow || years.length === 0) {
     return (
@@ -128,7 +178,7 @@ export function CashFlowPage() {
         title="Cash flow"
         actions={
           <div className="ns-cf-controls">
-            <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={startYear} />
+            <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={startYear} compact={phone} />
             <Segmented
               size="sm"
               ariaLabel="Show per month or per year"
@@ -152,24 +202,27 @@ export function CashFlowPage() {
           ages={agesFor(activeYear)}
           secondary={[
             { id: 'spent', label: 'Spent', color: 'var(--out)', value: money((flow.spent + flow.withdrawalTax) / per) },
+            ...(flow.lumps > 0.5 ? [{ id: 'lumps', label: 'One-time', color: LUMP_COLOR, value: money(flow.lumps) }] : []),
             savedNow >= 0
               ? { id: 'saved', label: 'Saved', color: 'var(--in)', value: money(savedNow) }
               : { id: 'saved', label: 'Drawn down', color: 'var(--out)', value: money(-savedNow) },
           ]}
           short={isShort}
           shortAmount={isShort && flow.unfunded > 0 ? money(flow.unfunded / per) : undefined}
+          shortUnit={`/${unit}`}
         />
         <TimeSeriesChart
           years={years}
           series={series}
           range={chartRange}
           todayYear={startYear}
-          height={420}
+          height={phone ? 280 : 420}
           focusYear={focusYear}
           onFocusYear={setFocusYear}
           onHoverYear={setHoverYear}
           readout={false}
           danger={danger}
+          notes={notes}
           onRequestRange={setChartRange}
           ariaLabel={`After-tax income and spending ${unitWord}, ${years[0]} to ${years[years.length - 1]}`}
         />
@@ -199,12 +252,12 @@ export function CashFlowPage() {
             events={plan.events}
             perColumn={perColumn}
             focusYear={pinned}
-            onFocusYear={setFocusYear}
+            onFocusYear={onTableFocus}
             dangerYears={health.shortYears}
             hot={hot}
             onHot={setHot}
-            onEdit={(event) => editor.edit(event)}
-            onEditAssumptions={() => setAssumptionsDraft(structuredClone(stored))}
+            onEdit={onTableEdit}
+            onEditAssumptions={onTableAssumptions}
             startYear={startYear}
             asOfDate={asOfDate}
           />

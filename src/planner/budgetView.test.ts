@@ -212,6 +212,9 @@ describe('Budget reconciles with Cash Flow, year by year', () => {
       // what Cash Flow also takes off.
       const lumps = view.oneTime.reduce((sum, o) => sum + o.amount, 0);
       expect(view.saved * months - lumps).toBeCloseTo(flow.saved, 4);
+      // The hero chart's lumps are exactly the lines Budget calls one-time.
+      expect(flow.lumps).toBeCloseTo(lumps, 4);
+      expect(flow.lumps).toBeLessThanOrEqual(flow.spent + 1e-6);
       expect(view.unfunded * months).toBeCloseTo(flow.unfunded, 4);
     }
   });

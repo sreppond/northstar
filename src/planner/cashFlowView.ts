@@ -57,11 +57,21 @@ export interface YearFlow {
   spent: number;
   /** The `saving` group: contributions routed into accounts on purpose. */
   savedOnPurpose: number;
+  /**
+   * Lump sums inside `spent` (a down payment, arrival costs, annuity charges):
+   * the same lines Budget sets apart as `oneTime`. The hero chart draws
+   * `spent - lumps` as a line and these as capped columns, so one lump cannot
+   * flatten sixty years of living costs (V5-REVIEW-1 F11).
+   */
+  lumps: number;
   /** After tax, less withdrawal tax and spending. Negative is a draw-down. */
   saved: number;
   /** `snapshot.unfundedShortfall`, 0 when the year is funded. */
   unfunded: number;
 }
+
+/** budgetView.ts's `oneTime` rule: a lump sum, or an annuity surrender charge. */
+const isLump = (item: LineItem) => !!item.oneTime || item.category === 'annuityCharge';
 
 export function yearFlow(plan: Plan, snapshot: YearSnapshot): YearFlow {
   const inc = incomeWithTax(snapshot);
@@ -81,6 +91,7 @@ export function yearFlow(plan: Plan, snapshot: YearSnapshot): YearFlow {
     groups,
     spent,
     savedOnPurpose: all.find((g) => g.key === 'saving')?.total ?? 0,
+    lumps: snapshot.expenses.filter(isLump).reduce((sum, e) => sum + e.amount, 0),
     saved: afterTax - inc.withdrawalTax - spent,
     unfunded: snapshot.unfundedShortfall ?? 0,
   };
