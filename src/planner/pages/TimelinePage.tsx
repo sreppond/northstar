@@ -30,7 +30,6 @@ import {
   chipLeft,
   chipWidth,
   columnLeft,
-  eventDetail,
   packChips,
   verticalYears,
   yearFromDragDelta,
@@ -103,6 +102,9 @@ export function TimelinePage() {
     return band ? dangerRuns(band, endYear) : [];
   }, [health, result, endYear]);
   const dryYears = useMemo(() => dry.map((r) => r.from), [dry]);
+  // V5-REVIEW-2 N14: where a short run ends and the plan recovers, the first
+  // funded year after it. A run that reaches the last year has no recovery.
+  const recoverYears = useMemo(() => dry.map((r) => r.to + 1).filter((y) => y <= endYear), [dry, endYear]);
 
   const open = (event: PlanEvent) => editor.edit(stored.events.find((e) => e.id === event.id) ?? event);
   const move = (id: string, year: number) => {
@@ -137,6 +139,7 @@ export function TimelinePage() {
           lanes={lanes}
           todayYear={startYear}
           dryYears={dryYears}
+          recoverYears={recoverYears}
           focusYear={focusYear}
           onPin={pin}
           agesFor={agesFor}
@@ -149,6 +152,7 @@ export function TimelinePage() {
           startYear={startYear}
           endYear={endYear}
           dry={dry}
+          recoverYears={recoverYears}
           focusYear={focusYear}
           onPin={pin}
           agesFor={agesFor}
@@ -197,7 +201,7 @@ function chipsFor(lane: Lane, firstYear: number): Chip[] {
       key: le.event.id,
       year: le.event.startYear,
       name: le.event.name,
-      detail: eventDetail(le.event),
+      detail: le.detail,
       tone: le.tone,
       shape: le.shape,
       excluded: le.excluded,
@@ -228,6 +232,7 @@ function LifeLanes({
   startYear,
   endYear,
   dry,
+  recoverYears,
   focusYear,
   onPin,
   agesFor,
@@ -239,6 +244,8 @@ function LifeLanes({
   startYear: number;
   endYear: number;
   dry: { from: number; to: number }[];
+  /** First funded year after each short run ("Back on track"). */
+  recoverYears: number[];
   focusYear: number | null;
   onPin(year: number): void;
   agesFor(year: number): string;
@@ -425,6 +432,7 @@ function LifeLanes({
                 >
                   {y === startYear && <span className="tl-today-tag">Today</span>}
                   {dry.some((r) => r.from === y) && <span className="tl-dry-tag">Runs dry</span>}
+                  {recoverYears.includes(y) && <span className="tl-recover-tag">Back on track</span>}
                   <span className="tl-year-num">{y}</span>
                 </button>
               ))}
@@ -697,6 +705,7 @@ function VerticalTimeline({
   lanes,
   todayYear,
   dryYears,
+  recoverYears,
   focusYear,
   onPin,
   agesFor,
@@ -706,6 +715,7 @@ function VerticalTimeline({
   lanes: Lane[];
   todayYear: number;
   dryYears: number[];
+  recoverYears: number[];
   focusYear: number | null;
   onPin(year: number): void;
   agesFor(year: number): string;
@@ -714,8 +724,8 @@ function VerticalTimeline({
 }) {
   const { plan } = usePlanner();
   const rows = useMemo(
-    () => verticalYears(lanes, todayYear, dryYears),
-    [lanes, todayYear, dryYears],
+    () => verticalYears(lanes, todayYear, [...dryYears, ...recoverYears]),
+    [lanes, todayYear, dryYears, recoverYears],
   );
   const people = lanes.filter((l) => l.person);
 
@@ -747,6 +757,7 @@ function VerticalTimeline({
               <span className="tlv-y">{row.year}</span>
               {row.year === todayYear && <span className="tlv-today">Today</span>}
               {dryYears.includes(row.year) && <span className="tlv-dry">Runs dry</span>}
+              {recoverYears.includes(row.year) && <span className="tlv-recover">Back on track</span>}
               <span className="tlv-ages">{agesFor(row.year)}</span>
             </button>
             {row.groups.length > 0 && (

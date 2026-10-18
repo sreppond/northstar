@@ -18,6 +18,7 @@
  */
 import type { LineItem, Plan, PlanResult } from '@northstar/engine';
 import { accountClassColor } from './ui';
+import { planHealth } from './health';
 
 export interface SourceSeries {
   key: string;
@@ -107,16 +108,38 @@ const INVESTABLE_CLASSES = new Set(['cash', 'taxableInvestment', 'taxDeferredInv
  * draw on, which is how a plan runs dry with a 401(k) full. Both parallel
  * `result.years`, and they sum to the total.
  */
-export function investableSplit(result: PlanResult, spendable: number[]): { canSpend: number[]; locked: number[] } {
+export function investableSplit(
+  result: PlanResult,
+  spendable: number[],
+  /** `spendableIgnoringPenalty`: lets the split name the money that is only gated by the 10% penalty. */
+  spendableNoPenalty?: number[],
+): { canSpend: number[]; penalty: number[]; locked: number[] } {
   const canSpend: number[] = [];
+  const penalty: number[] = [];
   const locked: number[] = [];
   result.years.forEach((y, i) => {
     const total = y.accounts
       .filter((a) => !a.isLiability && INVESTABLE_CLASSES.has(a.accountClass))
       .reduce((sum, a) => sum + Math.max(0, a.close), 0);
     const free = Math.min(total, spendable[i] ?? 0);
+    // V5-REVIEW-2 N5: money held back ONLY by the early-withdrawal penalty is
+    // not locked. The engine will draw it (paying the 10%), so it gets a band of
+    // its own instead of reading as "Locked" next to a plan that spends it.
+    const freeIfPenaltyPaid = Math.min(total, spendableNoPenalty?.[i] ?? spendable[i] ?? 0);
+    const withPenalty = Math.max(0, freeIfPenaltyPaid - free);
     canSpend.push(free);
-    locked.push(total - free);
+    penalty.push(withPenalty);
+    locked.push(total - free - withPenalty);
   });
-  return { canSpend, locked };
+  return { canSpend, penalty, locked };
+}
+
+/**
+ * `PlanHealth.spendable` with the early-withdrawal penalty gate switched off:
+ * the same rule set (`health.ts`), run on a copy of the plan whose accounts owe
+ * no penalty, so this never drifts from what "spendable" means elsewhere. The
+ * gap between the two is the "With 10% penalty" band.
+ */
+export function spendableIgnoringPenalty(plan: Plan, result: PlanResult): number[] {
+  return planHealth(result, { ...plan, accounts: plan.accounts.map((a) => ({ ...a, penaltyRate: 0 })) }).spendable;
 }

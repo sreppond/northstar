@@ -12,6 +12,8 @@ import { resolveAnchor } from '@northstar/engine';
 import { careerSegments, type CareerSegment } from './caregiving';
 import { clampYear, packLabelLanes, quantiseYear } from './chartMath';
 import { money } from './format';
+import { toDisplay } from './homeView';
+import { shownPrice } from './priceCurve';
 import { toneFor, type EventTone } from './presentation';
 
 /** One year's column width (§5.4: "64px / year"). */
@@ -55,6 +57,8 @@ export interface LaneEvent {
   draggable: boolean;
   /** Whose is it? Shown as a small "Who?" on the label (§5.4). */
   needsOwner: boolean;
+  /** The short figure beside the name, in the plan's display dollars (`eventDetail`). */
+  detail: string;
 }
 
 export interface StageSegment {
@@ -152,6 +156,7 @@ export function buildLanes(plan: Plan, startYear: number, endYear: number): Lane
       excluded,
       draggable: tone !== 'end' && !excluded,
       needsOwner,
+      detail: eventDetail(event, plan),
     });
   }
   return lanes;
@@ -248,21 +253,31 @@ function measure(text: string): number {
   return measureCtx ? measureCtx.measureText(text).width : text.length * 6.7;
 }
 
-/** The short figure that rides beside a name: a price or an amount. */
-export function eventDetail(event: PlanEvent): string {
+/**
+ * The short figure that rides beside a name: a price or an amount.
+ *
+ * V5-REVIEW-2 N7: config amounts are NOMINAL dollars in the event's own year.
+ * Every other page prints today's dollars when the plan is set that way, so
+ * Timeline used to say "$1.15M" for the home Home calls "$1.02M". The figure is
+ * deflated to the event's year exactly as Home does (`shownPrice`, which is
+ * `toDisplay(plan, price, purchaseYear)`).
+ */
+export function eventDetail(event: PlanEvent, plan: Pick<Plan, 'settings'>): string {
   const c = (event.config ?? {}) as Record<string, number | undefined>;
+  const shown = (nominal: number) => money(toDisplay(plan, nominal, event.startYear));
   switch (event.kind) {
     case 'buyAHome':
-      return c.price ? money(c.price) : '';
+      // The very helper Home's slider and price curve read.
+      return c.price ? money(shownPrice(plan, c.price, event.startYear)) : '';
     case 'windfall':
     case 'otherExpense':
-      return c.amount ? money(c.amount) : '';
+      return c.amount ? shown(c.amount) : '';
     case 'job':
     case 'newJob':
-      return c.salary ? `${money(c.salary)}/yr` : '';
+      return c.salary ? `${shown(c.salary)}/yr` : '';
     case 'income':
     case 'annualExpense':
-      return c.amount ? `${money(c.amount)}/yr` : '';
+      return c.amount ? `${shown(c.amount)}/yr` : '';
     default:
       return '';
   }
@@ -346,7 +361,7 @@ export function verticalYears(lanes: Lane[], todayYear: number, alsoYears: numbe
     }
     if (lane.birthYear !== undefined) add(lane.birthYear, lane, { type: 'birth', key: `b-${lane.id}`, label: 'Born', detail: '' });
     for (const ev of lane.events) {
-      add(ev.event.startYear, lane, { type: 'event', key: `e-${ev.event.id}`, label: ev.event.name, detail: eventDetail(ev.event), event: ev });
+      add(ev.event.startYear, lane, { type: 'event', key: `e-${ev.event.id}`, label: ev.event.name, detail: ev.detail, event: ev });
     }
   }
   for (const y of [todayYear, ...alsoYears]) if (!byYear.has(y)) byYear.set(y, new Map());

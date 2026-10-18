@@ -122,6 +122,16 @@
   color: var(--danger);
   white-space: nowrap;
 }
+.tl-recover-tag,
+.tlv-recover {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  /* The green in text weight: --in itself is too pale for 10px type on the light page (V5-REVIEW-2 N14). */
+  color: var(--in-deep);
+  white-space: nowrap;
+}
 .tl-today-tag {
   font-size: 10.5px;
   font-weight: 650;

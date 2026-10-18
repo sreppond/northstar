@@ -6,7 +6,7 @@ import { RangePicker, TimeSeriesChart } from '../charts';
 import { clampYear, extendPlanHorizon, planForRetirementPreview } from '../retirement';
 import { planHealth } from '../health';
 import { agesLineFor, dangerBandFor, useHeroHeight } from '../decisionKit';
-import { investableSplit, retirementSources } from '../retirementSources';
+import { investableSplit, retirementSources, spendableIgnoringPenalty } from '../retirementSources';
 import '../pages/decisions.css';
 
 /**
@@ -221,7 +221,10 @@ function RetirementReady({
   // previewed (or the extended horizon) can change where the money runs out.
   const health = useMemo(() => planHealth(result, plan), [result, plan]);
   const danger = useMemo(() => dangerBandFor(health, result), [health, result]);
-  const split = useMemo(() => investableSplit(result, health.spendable), [result, health.spendable]);
+  const split = useMemo(
+    () => investableSplit(result, health.spendable, spendableIgnoringPenalty(plan, result)),
+    [plan, result, health.spendable],
+  );
   const agesFor = useMemo(() => agesLineFor(plan, result), [plan, result]);
   const beyond = isExtended ? { bandFrom: originalEndYear, bandLabel: 'Beyond horizon' } : {};
 
@@ -245,7 +248,7 @@ function RetirementReady({
           markers={[{ year: retirementEvent.startYear, label: 'Retire', tone: 'neutral' }]}
           {...beyond}
           readout={{
-            label: 'What pays for each year',
+            label: 'What pays for each year · per year',
             agesFor,
             actions: <RangePicker value={chartRange} onChange={setChartRange} years={years} openingYear={plan.settings.startYear} />,
           }}
@@ -259,12 +262,14 @@ function RetirementReady({
         </div>
         {/* Not net worth's line again (V5-REVIEW-1 F8): the same money split by
             whether the plan can actually draw on it. "Locked" is a withdrawal
-            rule that says never, an account still under the early-withdrawal
-            age, or a committed SEPP. */}
+            rule that says never, no priority rule, or a committed SEPP; money
+            held back only by the early-withdrawal age is "With 10% penalty",
+            which the engine does draw (V5-REVIEW-2 N5). */}
         <TimeSeriesChart
           years={years}
           series={[
             { id: 'canSpend', label: 'Can spend now', color: 'var(--data-nw)', values: split.canSpend, kind: 'area' },
+            { id: 'penalty', label: 'With 10% penalty', color: 'var(--data-nw)', values: split.penalty, kind: 'area', fillOpacity: 0.45 },
             { id: 'locked', label: 'Locked', color: 'var(--muted-light)', values: split.locked, kind: 'area' },
           ]}
           stacked

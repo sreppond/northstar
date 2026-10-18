@@ -19,12 +19,14 @@ export function SeppBars({
   options,
   selectedYear,
   onSelect,
+  onHoverYear,
   height,
   actions,
 }: {
   options: { startYear: number; age: number; annualPayment: number; lockedUntil?: number }[];
   selectedYear: number;
   onSelect(year: number): void;
+  onHoverYear?(year: number | null): void;
   height: number;
   /** The account and method controls, top right of the readout. */
   actions?: ReactNode;
@@ -37,6 +39,7 @@ export function SeppBars({
       years={options.map((o) => o.startYear)}
       series={[{ id: 'sepp', label: 'Largest SEPP', color: 'var(--data-nw)', kind: 'column', values: options.map((o) => o.annualPayment) }]}
       height={height}
+      onHoverYear={onHoverYear}
       focusYear={selectedYear}
       // Clicking the selected year again would unpin it; a start year is
       // always chosen, so only a real year counts.

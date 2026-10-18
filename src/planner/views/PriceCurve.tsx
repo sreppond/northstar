@@ -2,7 +2,8 @@ import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { axisMoney, money } from '../format';
 import { ZONE_LABEL, type Zone } from '../homeView';
 import { ChartReadout, useScrub, type ReadoutItem } from '../charts';
-import { linePath, nearestIndex, pickXTicks } from '../charts/seriesMath';
+import { linePath, nearestIndex } from '../charts/seriesMath';
+import { niceAxisTicks } from '../chartMath';
 import '../pages/decisions.css';
 
 /** One price on the curve, already in the units the user reads. */
@@ -117,7 +118,14 @@ export function PriceCurve({
   const d = linePath(xs, ys);
   // Tighter dots when the points crowd (a phone).
   const dotR = (R - L) / data.length < 10 ? 2.4 : 3.5;
-  const xTickIdx = pickXTicks(data.map((p, i) => ({ x: xs[i], label: axisMoney(p.price) })), R - L, 56);
+  // V5-REVIEW-2 N21: round prices on the price domain, as many as fit; the old
+  // picker forced the last grid price and crowded "$1.1M … $1.3M $1.4M". No
+  // tick is forced at the end, and the ceiling tick `niceAxisTicks` adds when
+  // it is not a round number is dropped.
+  const rawTicks = niceAxisTicks(x1, Math.max(3, Math.min(8, Math.floor((R - L) / 88)))).map((t) => t.value);
+  const tickStep = rawTicks[1] ?? x1;
+  const xTicks = rawTicks.filter((v) => v >= x0 - 1e-6 && Math.abs(v / tickStep - Math.round(v / tickStep)) < 1e-6);
+
   const yTicks = [0, COMFORTABLE, STRETCH, ...(ceiling >= 60 ? [60] : [])].filter((v) => v <= ceiling);
 
   const secondary: ReadoutItem[] = [
@@ -200,17 +208,14 @@ export function PriceCurve({
             Housing cost ÷ take-home
           </text>
 
-          {xTickIdx.map((i) => (
-            <text
-              key={data[i].price}
-              x={xs[i]}
-              y={B + 20}
-              textAnchor={i === 0 ? 'start' : i === data.length - 1 ? 'end' : 'middle'}
-              className="ns-mini-axis"
-            >
-              {axisMoney(data[i].price)}
-            </text>
-          ))}
+          {xTicks.map((v) => {
+            const x = xFor(v);
+            return (
+              <text key={v} x={x} y={B + 20} textAnchor={x + 22 > width ? 'end' : x - 22 < L - 8 ? 'start' : 'middle'} className="ns-mini-axis">
+                {axisMoney(v)}
+              </text>
+            );
+          })}
 
           <g className="ns-dec-reveal" key={`${year}`}>
             <path d={d} className="ns-pc-glow" filter={`url(#${uid}glow)`} />
