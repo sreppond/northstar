@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Plan } from '@northstar/engine';
+import type { Plan, PlanResult } from '@northstar/engine';
 import { deflate, runPlan } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
 import { RangePicker, TimeSeriesChart, type ChartSeries } from '../charts';
@@ -8,6 +8,7 @@ import { money, planMetaLine, signedMoney } from '../format';
 import { useBreakpoint } from '../useBreakpoint';
 import { DeltaTag, Page, PageHeader } from '../ui';
 import { agesLabel, dangerBand, eventMarkers } from './netWorthData';
+import { planRowReading } from '../planRowReading';
 
 /**
  * Scenarios (docs/REDESIGN-V5.md §5.6; Q1: kept, retitled from "Compare").
@@ -59,7 +60,6 @@ export function ComparePage() {
 
   const isWhatIf = Boolean(comparePlan?.isWhatIfSnapshot);
   const otherPlans = visiblePlans.filter((p) => p.id !== stored.id);
-  const activeNetWorthAtHorizon = result.years.at(-1)?.netWorth ?? 0;
 
   // A What-If has a direction: the snapshot is the "before", the live plan the
   // "after". Plan-vs-plan has none, so the active plan leads.
@@ -125,8 +125,9 @@ export function ComparePage() {
                 <li key={p.id}>
                   <PlanRow
                     plan={p}
-                    activeEndYear={result.endYear}
-                    activeNetWorthAtHorizon={activeNetWorthAtHorizon}
+                    activeResult={result}
+                    dollarMode={dollarMode}
+                    inflationRate={inflationRate}
                     onClick={() => updateSettings(stored.id, { compareToPlanId: p.id })}
                   />
                 </li>
@@ -253,39 +254,38 @@ const MAX_DIFF_ROWS = 6;
 
 function PlanRow({
   plan,
-  activeEndYear,
-  activeNetWorthAtHorizon,
+  activeResult,
+  dollarMode,
+  inflationRate,
   onClick,
 }: {
   plan: Plan;
-  activeEndYear: number;
-  activeNetWorthAtHorizon: number;
+  /** The active plan's result, already in its own dollar mode. */
+  activeResult: PlanResult;
+  dollarMode: Plan['settings']['dollarMode'];
+  inflationRate: number;
   onClick(): void;
 }) {
-  const otherResult = useMemo(() => runPlan(plan), [plan]);
-  const years = otherResult.years;
-  // S14: the sparkline used to run the other plan's FULL 61-year length
-  // while the headline value reads at the ACTIVE plan's horizon — a row whose
-  // line and number told two different stories. Clip both to the same
-  // active-horizon window (falling back to everything this plan modeled,
-  // if it's shorter than the active horizon).
-  const clippedYears = years.filter((y) => y.year <= activeEndYear);
-  const windowed = clippedYears.length > 0 ? clippedYears : years;
-  const atActiveHorizon = windowed.at(-1)?.netWorth ?? 0;
-  const delta = atActiveHorizon - activeNetWorthAtHorizon;
-  // A plan that ends before the active one is read at its own last year, and
-  // the label says so instead of naming a year it doesn't have.
-  const readYear = windowed.at(-1)?.year ?? activeEndYear;
+  const otherResult = useMemo(() => {
+    const raw = runPlan(plan);
+    // V5-REVIEW-3 M1: show the other plan in the ACTIVE plan's dollar mode and
+    // inflation, as the opened comparison does; its own mode is irrelevant here.
+    return dollarMode === 'todaysDollars' ? deflate(raw, inflationRate) : raw;
+  }, [plan, dollarMode, inflationRate]);
+  // One year for both plans (the last they share), so the value, the delta, the
+  // sparkline and the label all describe the same moment.
+  const reading = planRowReading(activeResult, otherResult);
+  const delta = reading?.delta ?? 0;
 
   return (
     <button type="button" className="ns-scn-plan" onClick={onClick}>
       <span className="ns-scn-plan-name">{plan.name}</span>
-      <Sparkline values={windowed.map((y) => y.netWorth)} />
+      <Sparkline values={reading?.values ?? []} />
       <span className="ns-scn-plan-figure">
-        <span className="ns-scn-plan-value ns-num">{money(atActiveHorizon)}</span>
-        <DeltaTag value={signedMoney(delta)} tone={delta >= 0 ? 'in' : 'out'} />
+        <span className="ns-scn-plan-value ns-num">{money(reading?.value ?? 0)}</span>
+        {reading && <DeltaTag value={signedMoney(delta)} tone={delta >= 0 ? 'in' : 'out'} />}
       </span>
-      <span className="ns-scn-plan-label">Net worth in {readYear}</span>
+      <span className="ns-scn-plan-label">{reading ? `Net worth in ${reading.year}` : 'No overlapping years'}</span>
     </button>
   );
 }

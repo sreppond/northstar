@@ -164,7 +164,7 @@ export function AffordabilityMap({
           className="ns-tsc-svg ns-amap-svg"
           style={{ width: '100%', height, ...bind.style }}
           role="img"
-          aria-label={`Affordability by purchase year. Trying ${selected.year} at ${money(nicePrice(selected.price))}. Arrow keys step through the years; a click tries that year and price.`}
+          aria-label={`Affordability by purchase year. Trying ${selected.year} at ${money(selected.price)}. Arrow keys step through the years; a click tries that year and price.`}
           tabIndex={bind.tabIndex}
           onPointerDown={(e) => {
             trackY(e);
@@ -239,7 +239,8 @@ export function AffordabilityMap({
                 textAnchor={sel.x > width - 150 ? 'end' : 'start'}
                 className="ns-amap-label"
               >
-                {money(nicePrice(selected.price))} · {selected.year}
+                {/* V5-REVIEW-3 M3: `selected.price` is already HousePage's `shownPrice`; rounding it with nicePrice made this read $1.01M beside the slider's $1.02M. */}
+                {money(selected.price)} · {selected.year}
               </text>
             </g>
           )}

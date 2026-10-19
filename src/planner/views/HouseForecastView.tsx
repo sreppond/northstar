@@ -5,7 +5,8 @@ import { money } from '../format';
 import { Badge } from '../ui';
 import { RangePicker, TimeSeriesChart } from '../charts';
 import { usePlanner } from '../PlannerContext';
-import { agesLineFor, dangerBandFor } from '../decisionKit';
+import { agesLineFor } from '../decisionKit';
+import { monthlyDangerBand } from '../pages/netWorthData';
 import '../pages/decisions.css';
 
 /**
@@ -68,7 +69,8 @@ function HouseCard({
   const ownedIndex = value.findIndex((v) => v > 0);
   const hasStarted = ownedIndex !== -1;
   const agesFor = useMemo(() => agesLineFor(plan, result), [plan, result]);
-  const danger = useMemo(() => dangerBandFor(health, result), [health, result]);
+  // V5-REVIEW-3 m4: Home's figures are per month, so the "Short" pill is too (same band NetWorthPage uses).
+  const danger = useMemo(() => monthlyDangerBand(health, plan, result), [health, plan, result]);
 
   return (
     <div className="ns-dec-section">
@@ -92,7 +94,7 @@ function HouseCard({
           onFocusYear={setFocusYear}
           danger={danger}
           onRequestRange={setChartRange}
-          readout={{ label: 'Equity', primaryId: 'equity', size: 'compact', agesFor }}
+          readout={{ label: 'Equity', primaryId: 'equity', size: 'compact', agesFor, shortUnit: '/mo' }}
           ariaLabel={`${event.name}: value, mortgage and equity over time`}
         />
       ) : (
