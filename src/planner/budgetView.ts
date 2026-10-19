@@ -213,7 +213,7 @@ export function budgetView(plan: Plan, snapshot: YearSnapshot): BudgetView {
   if (withdrawalTax >= 0.5) buckets.push({ key: 'wtax', label: 'Tax on withdrawals', monthly: withdrawalTax, color: WITHDRAWAL_TAX_COLOR });
   if (gap >= 0.5) {
     // A gap year: three separate buckets, never one "From savings" (V5-REVIEW-2 N1).
-    buckets.push({ key: 'into-savings', label: 'Into savings', monthly: intoSavings, color: SAVED_COLOR });
+    buckets.push({ key: 'into-savings', label: 'Saved on purpose', monthly: intoSavings, color: SAVED_COLOR });
     buckets.push({ key: 'from-savings', label: 'From savings', monthly: fromSavings, color: FROM_SAVINGS_COLOR });
     buckets.push({ key: 'unfunded', label: 'Unfunded', monthly: unfundedMonthly, color: UNFUNDED_COLOR });
   } else {

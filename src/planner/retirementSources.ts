@@ -40,7 +40,9 @@ const BUCKETS: { key: Bucket; label: string; color: string }[] = [
   { key: 'pay', label: 'Pay & other income', color: 'var(--in)' },
   { key: 'socialSecurity', label: 'Social Security', color: 'var(--data-nw)' },
   { key: 'sepp', label: 'SEPP', color: 'var(--cmp)' },
-  { key: 'rmd', label: 'Required distributions', color: 'var(--mix-6)' },
+  // V5-REVIEW-3 m1: RMDs come out of tax-deferred money, so a tint of its gold
+  // (--mix-3). `--mix-6` is Cash's account hue and shares this legend.
+  { key: 'rmd', label: 'Required distributions', color: 'color-mix(in srgb, var(--mix-3) 55%, var(--surface))' },
 ];
 
 export function retirementSources(plan: Pick<Plan, 'events' | 'accounts'>, result: PlanResult): RetirementSources {

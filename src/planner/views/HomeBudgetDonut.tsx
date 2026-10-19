@@ -4,7 +4,7 @@ import { DonutChart, type DonutSegment } from '../charts';
 import { Segmented, Sheet } from '../ui';
 import { money } from '../format';
 import { monthsIn } from '../budgetView';
-import { spendingGroups, type GroupKey } from '../spendingGroups';
+import { GROUP_COLOR, spendingGroups, type GroupKey } from '../spendingGroups';
 import type { OwnCost } from '../homeView';
 import '../pages/decisions.css';
 
@@ -12,13 +12,15 @@ import '../pages/decisions.css';
     remounting: a group with nothing in a state is a 0 slice, not a missing one
     (docs/REDESIGN-V5.md §3.5). */
 const KEYS: GroupKey[] = ['home', 'kids', 'shared', 'personal', 'oneTime'];
+// Colours come from the shared group map so Home and Budget agree
+// (V5-REVIEW-3 m2).
 const FALLBACK: Record<GroupKey, { label: string; color: string }> = {
-  home: { label: 'Home', color: 'var(--mix-2)' },
-  kids: { label: 'Kids', color: 'var(--mix-6)' },
-  shared: { label: 'Shared', color: 'var(--mix-1)' },
-  personal: { label: 'Personal', color: 'var(--mix-4)' },
-  oneTime: { label: 'One-time', color: 'var(--mix-3)' },
-  saving: { label: 'Saving', color: 'var(--in)' },
+  home: { label: 'Home', color: GROUP_COLOR.home },
+  kids: { label: 'Kids', color: GROUP_COLOR.kids },
+  shared: { label: 'Shared', color: GROUP_COLOR.shared },
+  personal: { label: 'Personal', color: GROUP_COLOR.personal },
+  oneTime: { label: 'One-time', color: GROUP_COLOR.oneTime },
+  saving: { label: 'Saving', color: GROUP_COLOR.saving },
 };
 const OWN_COLORS = ['var(--mix-1)', 'var(--mix-3)', 'var(--mix-6)', 'var(--mix-4)', 'var(--mix-5)', 'var(--mix-2)'];
 

@@ -37,14 +37,27 @@ export interface SpendingGroup {
   parts: SpendingPart[];
 }
 
+/**
+ * One colour per group. Home's donut reads this too (V5-REVIEW-3 m2), so
+ * Kids is the same gold on Home and Budget.
+ */
+export const GROUP_COLOR: Record<GroupKey, string> = {
+  home: 'var(--mix-2)',
+  kids: KIDS_COLOR,
+  shared: SHARED_FIXED_COLOR,
+  personal: 'var(--mix-5)',
+  oneTime: 'var(--mix-4)',
+  saving: SAVED_COLOR,
+};
+
 /** Display order, and the order groups are returned in. */
 const GROUPS: { key: GroupKey; label: string; color: string }[] = [
-  { key: 'home', label: 'Home', color: 'var(--mix-2)' },
-  { key: 'kids', label: 'Kids', color: KIDS_COLOR },
-  { key: 'shared', label: 'Shared', color: SHARED_FIXED_COLOR },
-  { key: 'personal', label: 'Personal', color: 'var(--mix-5)' },
-  { key: 'oneTime', label: 'One-time', color: 'var(--mix-4)' },
-  { key: 'saving', label: 'Saving', color: SAVED_COLOR },
+  { key: 'home', label: 'Home', color: GROUP_COLOR.home },
+  { key: 'kids', label: 'Kids', color: GROUP_COLOR.kids },
+  { key: 'shared', label: 'Shared', color: GROUP_COLOR.shared },
+  { key: 'personal', label: 'Personal', color: GROUP_COLOR.personal },
+  { key: 'oneTime', label: 'One-time', color: GROUP_COLOR.oneTime },
+  { key: 'saving', label: 'Saving', color: GROUP_COLOR.saving },
 ];
 
 /**

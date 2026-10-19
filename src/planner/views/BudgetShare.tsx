@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { ChartReadout, RangePicker, TimeSeriesChart, type ChartSeries, type DangerBand, type ReadoutItem, type RangeKey } from '../charts';
+import { ChartReadout, RangePicker, TimeSeriesChart, rangeWindow, type ChartSeries, type DangerBand, type ReadoutItem, type RangeKey } from '../charts';
 import { money } from '../format';
 import { FROM_SAVINGS_COLOR, UNFUNDED_COLOR } from '../budgetView';
 
@@ -12,7 +12,7 @@ export interface ShareLayer {
 }
 
 const pct = (v: number) => `${Math.round(v)}%`;
-/** Axis labels are sizes, not signs: below zero is "paid from savings", labelled in the plot (V5-REVIEW-2 N9). */
+/** Axis labels are sizes, not signs: below zero is "from savings" or unfunded, labelled in the plot (V5-REVIEW-2 N9). */
 const axisPct = (v: number) => (Math.abs(v) < 0.5 ? '0' : pct(Math.abs(v)));
 
 /**
@@ -100,6 +100,16 @@ export function BudgetShare({
 
   const hasFromSavings = fromSavings.some((v) => v > 0.5);
   const hasUnfunded = unfunded.some((v) => v > 0.5);
+  // V5-REVIEW-3 m3: the half below zero holds From savings and/or Unfunded, so
+  // name only what is actually drawn ("Paid from savings" was wrong over money
+  // nothing paid).
+  // The label follows the visible window, so it never names money that is not
+  // on screen.
+  const win = rangeWindow(years, todayYear, range);
+  const inWin = (v: number, idx: number) => v > 0.5 && years[idx] >= win.from && years[idx] <= win.to;
+  const winFrom = fromSavings.some(inWin);
+  const winUnfunded = unfunded.some(inWin);
+  const lowerLabel = winFrom && winUnfunded ? 'From savings · Unfunded' : winUnfunded ? 'Unfunded' : 'From savings';
   const series = useMemo<ChartSeries[]>(
     () => [
       ...layers.map((l): ChartSeries => ({ id: l.key, label: l.label, color: l.color, values: l.values, kind: 'area' })),
@@ -114,7 +124,8 @@ export function BudgetShare({
               values: fromSavings.map((v) => -v),
               fillTo: fromSavings.map(() => 0),
               fillOpacity: 0.85,
-              lineWidth: 1.5,
+              // No stroke: it would run along 0 through every surplus year.
+              lineWidth: 0,
               activeDot: false,
             } satisfies ChartSeries,
           ]
@@ -133,8 +144,12 @@ export function BudgetShare({
               overlay: true,
               values: unfunded.map((v, i) => -((fromSavings[i] ?? 0) + v)),
               fillTo: fromSavings.map((v) => -v),
-              fillOpacity: 0.16,
-              lineWidth: 1.5,
+              // V5-REVIEW-3 m3: a stronger fill than the backdrop hatch, and no
+              // stroke at all. A stroke runs along 0 through every surplus year
+              // (the series is 0 there), reading as a danger line where nothing
+              // is wrong; the red area's own edge is enough.
+              fillOpacity: 0.4,
+              lineWidth: 0,
               activeDot: false,
             } satisfies ChartSeries,
           ]
@@ -160,7 +175,7 @@ export function BudgetShare({
             // Plain Saved is the headline answer, so it is not repeated here.
             .filter((l) => (l.values[i] ?? 0) >= 0.5 && !(l.key === 'saved' && into < 0.5))
             // In a gap year the Saved layer is what was still set aside on purpose.
-            .map((l) => ({ id: l.key, label: l.key === 'saved' && into >= 0.5 ? 'Into savings' : l.label, color: l.color, value: pct(l.values[i]) })),
+            .map((l) => ({ id: l.key, label: l.key === 'saved' && into >= 0.5 ? 'Saved on purpose' : l.label, color: l.color, value: pct(l.values[i]) })),
           ...(drawn >= 0.5 ? [{ id: 'from-savings', label: 'From savings', color: FROM_SAVINGS_COLOR, value: pct(drawn) }] : []),
           ...(unpaid >= 0.5 ? [{ id: 'unfunded', label: '✗ Unfunded', color: UNFUNDED_COLOR, value: pct(unpaid) }] : []),
           ...(draftSavedShare ? [{ id: 'draft', label: 'Saved, with your change', color: 'var(--ink)', value: pct(draftSavedShare[i] ?? 0), dashed: true }] : []),
@@ -213,11 +228,11 @@ export function BudgetShare({
         danger={danger}
         yFormat={axisPct}
         readout={false}
-        ariaLabel={`Where each dollar goes, by year: ${layers.map((l) => l.label).join(', ')}. Below zero: paid from savings or unfunded.`}
+        ariaLabel={`Where each dollar goes, by year: ${layers.map((l) => l.label).join(', ')}. Below zero: ${lowerLabel.toLowerCase().replace(' · ', ' or ')}.`}
       />
-      {(hasFromSavings || hasUnfunded) && (
+      {(winFrom || winUnfunded) && (
         <span className="ns-bgt-plot-lower" aria-hidden="true">
-          Paid from savings ↓
+          {lowerLabel} ↓
         </span>
       )}
       </div>
