@@ -162,3 +162,18 @@ Each ends somewhere shippable.
 - **Not changing the typeface.** DM Sans is already a considered choice. It
   gains a mono companion for figures and labels, which is where an instrument's
   voice lives.
+
+## v5 amendments (Oct 2026)
+
+Superseding the typeface and motion notes above; the full spec is
+[`REDESIGN-V5.md`](./REDESIGN-V5.md).
+
+- **Type.** The system font (SF) replaces IBM Plex (and DM Sans). It uses size-specific tracking and leading: large type tightens, small caps-style labels open up. Figures use tabular numerals.
+- **Motion.** Springs are critically damped and interruptible: a re-target carries velocity instead of hard-cutting (`charts/spring.ts`). Press feedback fires on pointer-down, not on release. Under reduced motion, movement becomes a short cross-fade.
+- **Chart kit conventions.**
+  - The readout (value and year) sits above the chart.
+  - Hover scrubs; click pins, drawn as a `--pin` vertical line; the keyboard works too (arrows, Home, Esc).
+  - The focus year and the range (1Y to 40Y, All) are shared across the page, so every chart and donut follows one cursor.
+  - Danger bands only cover the short years (`health.shortYears`), never the stretch after a recovery.
+- **Palette.** The categorical sets (accounts, groups) now pass the dataviz validator in light and dark. Liabilities and real estate are neutral so they don't reuse asset hues.
+- **Dark theme.** One dark token block, used for both the OS preference and the in-app toggle, and guarded by `src/planner/tokens.test.ts` so the two cannot drift.

@@ -242,7 +242,7 @@ describe('Budget reconciles with Cash Flow, year by year', () => {
 
   // V5-REVIEW-2 N1: in a short year Budget called the unfunded money "From
   // savings", though savings paid nothing. Three states, never one:
-  // Into savings (set aside), From savings (a real drawdown), Unfunded (the shortfall).
+  // Saved on purpose (set aside), From savings (a real drawdown), Unfunded (the shortfall).
   it.each(plans)('%s: after tax + from savings + unfunded = spending + into savings + withdrawal tax, in every gap year', (_name, plan) => {
     let gapYears = 0;
     let shortYears = 0;

@@ -1028,3 +1028,29 @@ merges.
 - **Dev routes.** A1 adds `/dev/charts` and A3 adds `/dev/ui`. Both are
   one-line route additions to `App.tsx`, and the orchestrator resolves the
   conflict when merging.
+
+**Oct 16–17, 2026: Phases A–C built.**
+
+- **A (kit, engine, motion):** A1 chart kit, A2 plan health, spending groups, income tax and focus-year/range state, A3 motion, Sheet, Alert, dismissals and system type + tokens.
+- **B:** B1 shell, IA, plan health, dismissible alerts.
+- **C:** C0 `ScrollTable`, C1 Net Worth headline page + account sheet, C2 Cash Flow, C3 Budget, C4 Timeline, C5 Decisions.
+
+**Oct 18–19, 2026: review rounds and fix units.** Opus reviewed the branch three times (`docs/reviews/V5-REVIEW-1.md`, `-2.md`, `-3.md`).
+
+| Round | Score | What it found |
+|---|---|---|
+| 1 (Oct 18) | 7.3 | The readout figure was invisible mid-scrub; false "Short" and "Pays every bill" on the danger path; rail scrolled away; chart audit half done. |
+| 2 (Oct 18) | 8.9 | Budget's "From savings" wrong in short years; "Short$10.2K" space collapse; a second stale dark theme; account palette failed the validator; Home showed three prices. |
+| 3 (Oct 18) | 9.6 | Three wrong money figures (Scenarios row delta, Annuity basis split in future years, Home map marker price) plus colour and label consistency. |
+
+Fix units: **U1–U5** (round 1: scrub legibility, per-run danger band, shell, sheets, one after-tax definition, home year, alert), **U6–U10** (round 2: Budget danger path, dark parity and palette, phone alert and Review, Home/Timeline/Annuity, Scenarios and Reports), **U11** (money truth: Scenarios row, annuity basis, map marker, /mo pill), **U12** (shared group colours, RMD hue, honest share-chart labels), and **D1** (Scenarios on the chart kit, dead code and per-edit extra simulations removed).
+
+**Oct 19, 2026: final label pass.** "Into savings" renamed "Saved on purpose" everywhere user-visible (the Budget donut bucket and share-layer label), closing m3.
+
+**Requirements shipped.** All of R1–R20 shipped. Round 3 scores: R1 9.5, R2 10, R3 9.5, R4 10, R5 9.5, R6 9.5, R7 9.5, R8 10, R9 10, R10 9.5, R11 9, R12 10, R13 9.5, R14 10, R15 9.5, R16 10, R17 9.5, R18 9.5, R19 9.5, R20 10 (mean 9.68). The round-3 deductions were M1–M3 and m1–m4, which U11 and U12 fixed.
+
+**Deliberate deviations from the plan**
+
+- **Hand-rolled FLIP instead of `layoutId`.** The row-to-sheet morph (`drawer/rowMorph.ts`, `AccountSheetHead.tsx`) uses a measured FLIP on springs; no `motion` dependency was added.
+- **Compare kept as "Scenarios".** R9 removed comparisons from the pages; the saved-plan comparison stays as a plain Scenarios list built on the chart kit.
+- **Family merged into Timeline.** Events and Family are one person-lane Timeline (C4); Kids are edited from there.

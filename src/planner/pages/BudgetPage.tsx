@@ -191,7 +191,7 @@ function BudgetBody() {
       { key: 'kids', label: 'Kids', color: KIDS_COLOR, values: shares.map((e) => e.kids) },
       { key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, values: shares.map((e) => e.withdrawalTax) },
       // In a gap year this layer is what was still set aside on purpose
-      // ("Into savings"), so the upper stack always reaches 100% (V5-REVIEW-2 N1).
+      // ("Saved on purpose"), so the upper stack always reaches 100% (V5-REVIEW-2 N1).
       { key: 'saved', label: 'Saved', color: SAVED_COLOR, values: shares.map((e) => e.saved + e.intoSavings) },
     ];
     return all.filter((l) => l.key === 'saved' || l.values.some((v) => v > 0.5));
@@ -229,7 +229,7 @@ function BudgetBody() {
     // pays in, draws on accounts for what they really cover, and shows the rest
     // as unfunded. The keys stay put so the arcs morph rather than remount.
     { key: 'saved', label: 'Saved', value: gapYear ? 0 : Math.max(0, env.saved) * scale, color: SAVED_COLOR },
-    { key: 'into', label: 'Into savings', value: gapYear ? env.intoSavings * scale : 0, color: SAVED_COLOR },
+    { key: 'into', label: 'Saved on purpose', value: gapYear ? env.intoSavings * scale : 0, color: SAVED_COLOR },
     { key: 'drawn', label: 'From savings', value: gapYear ? env.fromSavings * scale : 0, color: FROM_SAVINGS_COLOR },
     { key: 'unfunded', label: 'Unfunded', value: unfundedNow * scale, color: UNFUNDED_COLOR, tone: 'danger' },
   ];
@@ -310,7 +310,7 @@ function BudgetBody() {
       ? [{ key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, monthly: env.withdrawalTax, edited: false, derived: true } satisfies EnvRowSpec]
       : []),
     // What is left. A surplus year is "Saved". A gap year is three rows
-    // (V5-REVIEW-2 N1): "Into savings" (money still set aside), "From savings"
+    // (V5-REVIEW-2 N1): "Saved on purpose" (money still set aside), "From savings"
     // (a real drawdown, orange, not an error) and "Unfunded" (the shortfall,
     // red). "Short" belongs to Unfunded alone, and only in a short year (F3).
     ...(gapYear
@@ -319,7 +319,7 @@ function BudgetBody() {
             ? [
                 {
                   key: 'into',
-                  label: 'Into savings',
+                  label: 'Saved on purpose',
                   caption: 'still paid in',
                   color: SAVED_COLOR,
                   monthly: env.intoSavings,
