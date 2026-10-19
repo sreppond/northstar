@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { deflate, presentValue } from '../src/inflation.js';
 import { runPlan } from '../src/run.js';
 import { yearFractionRemaining } from '../src/partialYear.js';
-import { plan } from './fixtures.js';
+import { asset, plan, rule } from './fixtures.js';
 
 describe('Golden: presentValue deflates the stub year by its own fraction', () => {
   it('with no stub (fraction 1, the default), startYear itself is a full year removed from "today"', () => {
@@ -119,6 +119,43 @@ describe('Golden: deflate() uses the FLOW deflator for income/expenses/etc. (W3#
     // deflator, this one does NOT default to "startYear is a full year
     // ahead"; a flow was never a stub-year-relative snapshot to begin with.
     expect(deflated.years[0].totalIncome).toBeCloseTo(100_000, 6);
+  });
+});
+
+describe('Golden: deflate() carries the cost basis with the balance (V5-REVIEW-3 M2)', () => {
+  it('nonTaxableBaseRemaining is a stock: basis/close stays the nominal ratio in every year', () => {
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 6, baselineExpenses: 15_000, inflationRate: 3 } as never,
+        accounts: [
+          asset({
+            id: 'annuity',
+            name: 'Variable annuity',
+            accountClass: 'taxDeferredInvestment',
+            initialBalance: 300_000,
+            growthRateMethod: 'fixed',
+            growthRate: 5,
+            nonTaxableBase: 100_000,
+            withdrawalTaxRate: 24,
+            penaltyRate: 0,
+            withdrawalTiming: 'always',
+          }),
+        ],
+        rules: [rule('annuity', 'withdrawal', 1)],
+      }),
+    );
+    const deflated = deflate(result, 3);
+    result.years.forEach((y, k) => {
+      const raw = y.accounts[0];
+      const real = deflated.years[k].accounts[0];
+      expect(raw.nonTaxableBaseRemaining).toBeDefined();
+      expect(real.nonTaxableBaseRemaining).toBeDefined();
+      expect(real.nonTaxableBaseRemaining! / real.close).toBeCloseTo(raw.nonTaxableBaseRemaining! / raw.close, 9);
+    });
+    // And it is genuinely smaller in a later year, not merely proportional by accident.
+    expect(deflated.years[5].accounts[0].nonTaxableBaseRemaining!).toBeLessThan(
+      result.years[5].accounts[0].nonTaxableBaseRemaining!,
+    );
   });
 });
 

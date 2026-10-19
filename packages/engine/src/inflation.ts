@@ -98,6 +98,14 @@ export function deflate(result: PlanResult, inflationRate: number): PlanResult {
           interest: a.interest / flowF,
           principal: a.principal / flowF,
           close: a.close / balanceF,
+          // V5-REVIEW-3 M2: the remaining cost basis is a STOCK like `close`, so it takes
+          // the balance deflator. Left nominal it was divided into a deflated balance and
+          // skewed the Annuity basis/gain split in every future year.
+          ...(a.nonTaxableBaseRemaining !== undefined
+            ? { nonTaxableBaseRemaining: a.nonTaxableBaseRemaining / balanceF }
+            : {}),
+          // The fee drag is a FLOW already netted out of `growth`, so it takes `growth`'s deflator.
+          ...(a.annuityFeesDeducted !== undefined ? { annuityFeesDeducted: a.annuityFeesDeducted / flowF } : {}),
         })),
         assets: snapshot.assets / balanceF,
         liabilities: snapshot.liabilities / balanceF,
