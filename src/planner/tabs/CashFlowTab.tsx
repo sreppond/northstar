@@ -7,7 +7,7 @@ import { eventDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { GearIcon } from '../icons';
 import { savingsRateNote, savingsRatePercent, stubYearLabel } from '../ledger';
-import type { CashFlowTree, FlowKey, FlowNode } from '../cashFlowView';
+import type { FlowKey, FlowNode, FlowRows } from '../cashFlowView';
 
 /**
  * Cash Flow's year-by-year table (docs/REDESIGN-V5.md §5.2): every year in a
@@ -26,9 +26,14 @@ import type { CashFlowTree, FlowKey, FlowNode } from '../cashFlowView';
  *
  * Rows are tagged `data-cf-row` on their label so the page can hover-link a
  * row to its waterfall bar without `DataTable` knowing about either.
+ *
+ * The month view (`columnHeads`) is the same table with twelve columns of
+ * monthly figures: no savings-rate row, and no year headers to scroll to.
  */
 export const CashFlowTab = memo(function CashFlowTab({
   tree,
+  years,
+  columnHeads,
   snapshots,
   events,
   perColumn,
@@ -42,9 +47,13 @@ export const CashFlowTab = memo(function CashFlowTab({
   startYear,
   asOfDate,
 }: {
-  tree: CashFlowTree;
-  /** The same years `tree` was built from, for the savings-rate cells. */
-  snapshots: YearSnapshot[];
+  tree: FlowRows;
+  /** One key per column: the years, or 0–11 for months. */
+  years: number[];
+  /** Month headings in place of year headings. */
+  columnHeads?: { label: ReactNode; muted?: boolean }[];
+  /** The years `tree` was built from, for the savings-rate cells. Omit in the month view. */
+  snapshots?: YearSnapshot[];
   events: PlanEvent[];
   /** What each column's figures are divided by: months in the year for /mo, else 1. */
   perColumn: number[];
@@ -187,17 +196,19 @@ export const CashFlowTab = memo(function CashFlowTab({
     values: tree.saved,
     bar: { direction: 'diverging', signed: true },
   });
-  rows.push({
-    key: 'rate',
-    kind: 'child',
-    label: 'Savings rate',
-    cells: snapshots.map((s) => {
-      const rate = savingsRatePercent(s);
-      return rate === undefined ? ZERO_DASH : percent(rate, 0);
-    }),
-    // A negative rate reads as an error out of context; this names its cause.
-    cellTitles: snapshots.map((s) => savingsRateNote(s)),
-  });
+  if (snapshots) {
+    rows.push({
+      key: 'rate',
+      kind: 'child',
+      label: 'Savings rate',
+      cells: snapshots.map((s) => {
+        const rate = savingsRatePercent(s);
+        return rate === undefined ? ZERO_DASH : percent(rate, 0);
+      }),
+      // A negative rate reads as an error out of context; this names its cause.
+      cellTitles: snapshots.map((s) => savingsRateNote(s)),
+    });
+  }
 
   const hotRow = (e: PointerEvent<HTMLDivElement>) => {
     const grid = (e.target as HTMLElement).closest('.ns-grid');
@@ -210,7 +221,7 @@ export const CashFlowTab = memo(function CashFlowTab({
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (startYear === undefined) return;
-    for (const y of tree.years) {
+    for (const y of years) {
       const note = stubYearLabel(y, startYear, asOfDate)?.short;
       const head = root.current?.querySelector<HTMLElement>(`.ns-row-head [data-year="${y}"]`);
       if (head) {
@@ -218,13 +229,14 @@ export const CashFlowTab = memo(function CashFlowTab({
         else head.removeAttribute('title');
       }
     }
-  }, [tree.years, startYear, asOfDate]);
+  }, [years, startYear, asOfDate]);
 
   return (
     <div ref={root} className="ns-cf-table" data-hot={hot ?? undefined} onPointerOver={hotRow} onPointerLeave={() => onHot(null)}>
       <DataTable
         caption=""
-        years={tree.years}
+        years={years}
+        columnHeads={columnHeads}
         rows={rows}
         focusYear={focusYear}
         onFocusYear={onFocusYear}

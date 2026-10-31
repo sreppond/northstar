@@ -59,6 +59,71 @@
   overflow: hidden;
 }
 
+/* The table's header: its title, then the view controls on the right. */
+.ns-cf-tablehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}
+.ns-cf-tablecontrols {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-left: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+.ns-cf-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ns-cf-step {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-deep);
+  cursor: pointer;
+}
+.ns-cf-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ns-cf-stepyear {
+  min-width: 44px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-deep);
+}
+.ns-cf-foot {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+/* A month before the as-of date: its heading says so, in the quiet ink. */
+.ns-cf-table .ns-col-muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+/* "before today" sits on a line of its own rather than wrapping word by word. */
+.ns-cf-table .ns-col-note {
+  display: block;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* --- the table ------------------------------------------------------------- */
 
 /* V5-REVIEW-2 N5: "Required distributions · Tax-deferred investments" is the

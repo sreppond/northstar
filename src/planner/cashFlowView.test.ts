@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { runPlan } from '@northstar/engine';
 import type { Plan } from '@northstar/engine';
-import { cashFlowTree, monthsInYear, waterfallBars, yearFlow, type FlowNode } from './cashFlowView';
+import {
+  cashFlowTree,
+  monthlyColumns,
+  monthsInYear,
+  waterfallBars,
+  yearFlow,
+  type CashFlowTree,
+  type FlowNode,
+  type FlowRows,
+} from './cashFlowView';
 import { toHouseholdModel } from './household';
 import { healthyPlan, kitchenSinkPlan, runsDryPlan } from './planFixtures';
 import { savedThisYear, spendingThisYear } from './ledger';
@@ -153,5 +162,98 @@ describe('monthsInYear', () => {
     // Sep 25 -> Dec 31 is 98 of 365 days.
     expect(monthsInYear(2026, 2026, '2026-09-25')).toBeCloseTo((12 * 98) / 365, 6);
     expect(monthsInYear(2026, 2026, '2026-07-02')).toBeCloseTo((12 * 183) / 365, 6);
+  });
+});
+
+describe('monthlyColumns', () => {
+  const asOf = (plan: Plan, date: string): Plan => ({ ...plan, settings: { ...plan.settings, asOfDate: date } });
+  // The plan's first year, with the as-of date partway through it.
+  const firstYear = (plan: Plan) => asOf(plan, `${plan.settings.startYear}-10-30`);
+  const cases: [string, Plan][] = [
+    ...plans,
+    ...plans.map(([name, plan]): [string, Plan] => [`${name}, as of Oct 30`, firstYear(plan)]),
+  ];
+
+  const flatten = (n: FlowNode): FlowNode[] => [n, ...(n.children ?? []).flatMap(flatten)];
+  const rowsOf = (t: FlowRows) =>
+    [t.income, t.spending, ...(t.saving ? [t.saving] : []), ...(t.withdrawals ? [t.withdrawals] : [])].flatMap(flatten);
+  const isOneTime = (key: string) => key === 'spend:oneTime' || key.startsWith('spend:oneTime:');
+
+  /** Every year of a plan, with its tree and the plan that built it. */
+  function eachYear(plan: Plan, check: (tree: CashFlowTree, yi: number) => void) {
+    const tree = cashFlowTree(plan, runPlan(plan).years);
+    tree.years.forEach((_, yi) => check(tree, yi));
+  }
+
+  it.each(cases)('each row’s twelve months sum to its year value (%s)', (_name, plan) => {
+    eachYear(plan, (tree, yi) => {
+      const m = monthlyColumns(tree, yi, plan);
+      expect(m.months).toHaveLength(12);
+      const yearRows = rowsOf(tree);
+      const monthRows = rowsOf(m);
+      expect(monthRows.map((r) => r.key)).toEqual(yearRows.map((r) => r.key));
+      yearRows.forEach((row, ri) => {
+        expect(monthRows[ri].values).toHaveLength(12);
+        expect(Math.abs(sum(monthRows[ri].values) - row.values[yi])).toBeLessThan(0.01);
+      });
+      expect(Math.abs(sum(m.saved) - tree.saved[yi])).toBeLessThan(0.01);
+      if (tree.unfunded) expect(Math.abs(sum(m.unfunded!) - tree.unfunded[yi])).toBeLessThan(0.01);
+    });
+  });
+
+  it.each(cases)('saved is income less investment tax less spending, month by month (%s)', (_name, plan) => {
+    eachYear(plan, (tree, yi) => {
+      const m = monthlyColumns(tree, yi, plan);
+      const wtax = m.withdrawals?.children?.find((c) => c.key === 'wd:tax')?.values ?? new Array<number>(12).fill(0);
+      for (let i = 0; i < 12; i++) {
+        expect(m.saved[i]).toBeCloseTo(m.income.values[i] - wtax[i] - m.spending.values[i], 6);
+      }
+    });
+  });
+
+  it.each(cases)('uncovered months are zero in every row (%s)', (_name, plan) => {
+    eachYear(plan, (tree, yi) => {
+      const m = monthlyColumns(tree, yi, plan);
+      const uncovered = m.months.flatMap((mo, i) => (mo.covered ? [] : [i]));
+      for (const row of rowsOf(m)) for (const i of uncovered) expect(row.values[i]).toBe(0);
+      for (const i of uncovered) expect(m.saved[i]).toBe(0);
+    });
+  });
+
+  it.each(cases)('one-time items sit only in the lump month (%s)', (_name, plan) => {
+    eachYear(plan, (tree, yi) => {
+      const m = monthlyColumns(tree, yi, plan);
+      for (const row of rowsOf(m).filter((r) => isOneTime(r.key))) {
+        row.values.forEach((v, i) => {
+          if (i !== m.lumpMonth) expect(v).toBe(0);
+        });
+      }
+    });
+  });
+
+  it('a full year covers January to December, with one-time items in January', () => {
+    const plan = kitchenSinkPlan();
+    const tree = cashFlowTree(plan, runPlan(plan).years);
+    // A year with a one-time lump, or the January check proves nothing.
+    const yi = tree.spending.children!.find((c) => c.key === 'spend:oneTime')!.values.findIndex((v) => v > 0);
+    expect(yi).toBeGreaterThan(-1);
+    const m = monthlyColumns(tree, yi, plan);
+    expect(m.months.map((mo) => mo.label)).toEqual(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+    expect(m.months.every((mo) => mo.covered)).toBe(true);
+    expect(m.lumpMonth).toBe(0);
+    for (const v of m.income.values) expect(v).toBeCloseTo(tree.income.values[yi] / 12, 6);
+    expect(m.spending.children!.find((c) => c.key === 'spend:oneTime')!.values[0]).toBeCloseTo(tree.spending.children!.find((c) => c.key === 'spend:oneTime')!.values[yi], 6);
+  });
+
+  it('a partial first year starts at the as-of month and splits that month by the days left in it', () => {
+    const plan = firstYear(kitchenSinkPlan());
+    const tree = cashFlowTree(plan, runPlan(plan).years);
+    const m = monthlyColumns(tree, 0, plan);
+    expect(m.months.map((mo) => mo.covered)).toEqual([...Array(9).fill(false), true, true, true]);
+    expect(m.lumpMonth).toBe(9);
+    // 2 of October's 31 days, then all of November and December.
+    expect(m.income.values[10] / m.income.values[9]).toBeCloseTo(31 / 2, 6);
+    expect(m.income.values[11] / m.income.values[10]).toBeCloseTo(1, 6);
+    expect(sum(m.income.values)).toBeCloseTo(tree.income.values[0], 2);
   });
 });
