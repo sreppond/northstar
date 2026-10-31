@@ -176,7 +176,12 @@ B2 needs the account fields, and B3 needs A2's relabelled tax bucket in
 
 ## Status
 
-- [ ] Wave A: A1 · A2 · A3 · A4 · A5
+- [x] Wave A: A1 · A2 · A3 · A4 · A5 (merged; lint, all three workspaces' tests, vite build and cargo check green)
+  - A1: accepted as built; arithmetic re-checked by hand. Its `raises`/`overrides` fields show up as `custom` in `describeSchema`, so `schemaForm.test.ts` now lists them: B1's `IncomeScheduleEditor` must render both.
+  - A2: accepted. Closing an active account adds no gain to tax (growth is 0 once closed; earlier gains were taxed as they arose); SEPP tax reads `withdrawalTaxRate` by design. Both written up in MATH.md.
+  - A3: accepted as built.
+  - A4: fixed. The first projected year now uses `result.opening` as the prior close (`classFlowSteps`/`accountFlowRows` take `opening`). The class name is a real button beside the chevron and gear instead of a `role=button` row wrapping them. Phone: the chevron overlays the indent and the hidden gear is dropped, so names keep their width.
+  - A5: cherry-picked (it was based on old main). Fixed the test's TZ restore, which set the string "undefined".
 - [ ] Wave B: B1 · B2 · B3
 - [ ] Manager review and push
 - [ ] Tauri build installed to /Applications
