@@ -52,10 +52,10 @@ gets a **Years | Months** segmented toggle in the table header.
 
 The engine models money by year, so Months is a faithful *split* of the year,
 not new data:
-- Recurring rows (every node except the One-time group and its children) are split evenly across the months the year covers. That's 12 for a full year. For the partial first year, only the months from the as-of month onward have values; earlier months show the zero dash and the header reads "before today". The divisor is `monthsInYear()`, not 12.
+- Recurring rows (every node except the One-time group and its children) are split across the months the year covers, weighted by how much of each month the year covers. A full year splits into twelve equal months. For the partial first year, only the months from the as-of month onward have values (the as-of month counts only its remaining days, so the twelve values sum exactly to the year); earlier months show the zero dash and the header reads "before today".
 - One-time items (the One-time group and its children) land whole in the first covered month: January, or the as-of month in the first year.
 - Withdrawals and Unfunded are split evenly, like recurring rows.
-- A one-line footnote under the table: "Northstar plans by year. Months split each year evenly; one-time items show in {Month}."
+- A one-line footnote under the table: "Northstar plans by year. Months split each year by the days it covers; one-time items show in {Month}."
 
 Put this in a pure function, `monthlyColumns(tree, yearIndex, plan)`, in
 `cashFlowView.ts`. It returns the same node shape with 12 values. Test that:

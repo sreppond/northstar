@@ -361,7 +361,7 @@ export function CashFlowPage() {
         </div>
         {view === 'months' && monthly && (
           <p className="ns-cf-foot">
-            Northstar plans by year. Months split each year evenly; one-time items show in {MONTH_NAMES[monthly.lumpMonth]}.
+            Northstar plans by year. Months split each year by the days it covers; one-time items show in {MONTH_NAMES[monthly.lumpMonth]}.
           </p>
         )}
       </section>
