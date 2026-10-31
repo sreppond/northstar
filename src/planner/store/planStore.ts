@@ -46,6 +46,13 @@ export const PROGRESS_STORAGE_KEY = 'northstar:progress:v1';
 const UNDO_LIMIT = 50;
 
 /**
+ * A budget line whose name says it is housing (docs/V6-PLAN.md R4). Shared by
+ * the load migration below and the budget line drawer's inference, so the two
+ * agree on what counts. "Rental car" must not match, hence the word boundary.
+ */
+export const HOUSING_LINE_NAME = /\b(rent|mortgage|hoa|renters?['’]?s? insurance)\b/i;
+
+/**
  * Server sync.
  *
  * localStorage stays the primary write on every change: it is synchronous, it
@@ -565,12 +572,12 @@ function loadPlans(): Plan[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Plan[];
     if (!Array.isArray(parsed) || parsed.length === 0 || !parsed.every(isPlanShape)) {
-      return structuredClone(SAMPLE_PLANS).map(withAsOfDate);
+      return structuredClone(SAMPLE_PLANS).map(migrateOnLoad);
     }
-    return parsed.map(withAsOfDate);
+    return parsed.map(migrateOnLoad);
   } catch {
     // Corrupt or unavailable storage should never blank the app.
-    return structuredClone(SAMPLE_PLANS).map(withAsOfDate);
+    return structuredClone(SAMPLE_PLANS).map(migrateOnLoad);
   }
 }
 
@@ -580,6 +587,29 @@ function loadPlans(): Plan[] {
 function withAsOfDate(plan: Plan): Plan {
   if (plan.settings.asOfDate) return plan;
   return { ...plan, settings: { ...plan.settings, asOfDate: todayISO() } };
+}
+
+/**
+ * Rent filed as "other" lands under Shared on Cash Flow instead of Home, since
+ * Home is `category === 'housing'`. Moves a budget line from "other" to
+ * "housing" when its name is housing (`HOUSING_LINE_NAME`). Lines filed under
+ * any other category stay put. Idempotent, and it returns the same plan object
+ * when nothing moves, so it is safe to run on every load.
+ */
+export function fileHousingLines(plan: Plan): Plan {
+  if (!plan.budget) return plan;
+  let moved = false;
+  const budget = plan.budget.map((line) => {
+    if (line.category !== 'other' || !HOUSING_LINE_NAME.test(line.name)) return line;
+    moved = true;
+    return { ...line, category: 'housing' as const };
+  });
+  return moved ? { ...plan, budget } : plan;
+}
+
+/** The migrations every plan read from local storage goes through on load. Each is idempotent. */
+function migrateOnLoad(plan: Plan): Plan {
+  return fileHousingLines(withAsOfDate(plan));
 }
 
 // A plan saved by an older build can be missing a field the engine now
@@ -652,8 +682,10 @@ function persist(plans: Plan[]) {
 }
 
 /** Replace everything from the server, without disturbing undo history. */
-export function hydrateFromServer(plans: Plan[]): void {
-  if (plans.length === 0) return;
+export function hydrateFromServer(stored: Plan[]): void {
+  if (stored.length === 0) return;
+  // Server copies can be filed under the old category too; the same fix as on load.
+  const plans = stored.map(fileHousingLines);
   persist(plans);
   usePlanStore.setState({ plans, activeId: plans[0].id, past: [], future: [] });
 }

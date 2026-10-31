@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { Anchor, BudgetCategory, BudgetLine, Plan } from '@northstar/engine';
 import { Sheet } from '../ui';
+import { HOUSING_LINE_NAME } from '../store/planStore';
 import { Choice, Field, NumberInput } from './fields';
 
 export const CATEGORY_LABELS: Record<BudgetCategory, string> = {
-  housing: 'Housing',
+  housing: 'Home',
   food: 'Food',
   utilities: 'Utilities',
   transport: 'Transport',
@@ -63,12 +64,22 @@ export function BudgetLineDrawer({
 }) {
   const [draft, setDraft] = useState(line);
   const [confirming, setConfirming] = useState(false);
+  // Until the user picks a category, a new line's name decides it (rent → Home).
+  const [categoryTouched, setCategoryTouched] = useState(false);
   useEffect(() => {
     setDraft(line);
     setConfirming(false);
+    setCategoryTouched(false);
   }, [line, open]);
 
   const set = (patch: Partial<BudgetLine>) => setDraft((d) => ({ ...d, ...patch }));
+  const setName = (name: string) => {
+    if (isNew && !categoryTouched) {
+      set({ name, category: HOUSING_LINE_NAME.test(name) ? 'housing' : line.category });
+    } else {
+      set({ name });
+    }
+  };
   const people = plan.participants.filter((p) => p.isIncluded);
   const savingAccounts = plan.accounts.filter((a) => a.isIncluded && !a.isLiability && !a.isSynthetic);
   const invalid = !draft.name.trim() || draft.amount <= 0 || (draft.kind === 'saving' && !draft.accountId);
@@ -103,7 +114,7 @@ export function BudgetLineDrawer({
     >
       <div className="ns-bgt-form">
         <Field label="Name">
-          <input className="ns-input" value={draft.name} autoFocus={isNew} onChange={(e) => set({ name: e.target.value })} />
+          <input className="ns-input" value={draft.name} autoFocus={isNew} onChange={(e) => setName(e.target.value)} />
         </Field>
 
         <Field label="Whose">
@@ -167,7 +178,14 @@ export function BudgetLineDrawer({
         {draft.kind !== 'saving' && (
           <div className="ns-field-pair">
             <Field label="Category">
-              <select className="ns-input" value={draft.category} onChange={(e) => set({ category: e.target.value as BudgetCategory })}>
+              <select
+                className="ns-input"
+                value={draft.category}
+                onChange={(e) => {
+                  setCategoryTouched(true);
+                  set({ category: e.target.value as BudgetCategory });
+                }}
+              >
                 {(Object.keys(CATEGORY_LABELS) as BudgetCategory[]).map((c) => (
                   <option key={c} value={c}>
                     {CATEGORY_LABELS[c]}

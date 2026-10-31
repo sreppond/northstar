@@ -87,7 +87,7 @@ export function rentAfterPurchaseCheck(plan: Plan): PlanCheck | null {
     return {
       id: 'rent-after-purchase',
       message: `${joinNames(openHousing.map((l) => l.name))} keeps going after ${home.name} (${home.startYear}), so the forecast pays for housing twice.`,
-      action: { kind: 'fix', label: `End it in ${home.startYear}`, fixed, toast: `Housing now ends when you buy in ${home.startYear}` },
+      action: { kind: 'fix', label: `End it in ${home.startYear}`, fixed, toast: `Home now ends when you buy in ${home.startYear}` },
     };
   }
 
