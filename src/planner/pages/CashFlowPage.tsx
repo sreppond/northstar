@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, PiggyBank } from 'lucide-react';
 import type { PlanEvent } from '@northstar/engine';
 import { usePlanner } from '../PlannerContext';
@@ -150,13 +150,27 @@ export function CashFlowPage() {
           m.label
         ) : (
           <>
-            {m.label} · <span className="ns-col-note">before today</span>
+            {m.label}
+            <span className="ns-col-note">before today</span>
           </>
         ),
         muted: !m.covered,
       })),
     [monthly],
   );
+  // The first year's covered months are the last few columns: scroll them
+  // into view instead of landing on a screen of "before today".
+  const tableCard = useRef<HTMLDivElement>(null);
+  const firstMonth = monthly?.lumpMonth;
+  useLayoutEffect(() => {
+    if (firstMonth === undefined) return;
+    const scroller = tableCard.current?.querySelector<HTMLElement>('.ns-table-scroll');
+    const head = scroller?.querySelector<HTMLElement>('.ns-row-head');
+    const cell = head?.children[firstMonth + 1] as HTMLElement | undefined;
+    const label = head?.firstElementChild as HTMLElement | undefined;
+    if (!scroller || !cell || !label) return;
+    scroller.scrollLeft = firstMonth === 0 ? 0 : cell.offsetLeft - label.offsetWidth;
+  }, [firstMonth, tableYear]);
   const stepYear = (delta: number) => {
     const next = years[tableIdx + delta];
     if (next !== undefined) setFocusYear(next);
@@ -325,7 +339,7 @@ export function CashFlowPage() {
             />
           </div>
         </div>
-        <div className="ns-cf-tablecard">
+        <div className="ns-cf-tablecard" ref={tableCard}>
           {view === 'years' || !monthly ? (
             <CashFlowTab
               tree={tree}
