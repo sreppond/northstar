@@ -1,8 +1,26 @@
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import type { Account } from '@northstar/engine';
 import { ACCOUNT_TYPES, visibleFields } from '@northstar/engine';
-import { AccountField } from './fields';
+import { Segmented } from '../ui';
+import { AccountField, Field, NumberInput } from './fields';
+import {
+  effectiveShortTermRate,
+  setShortTermRate,
+  setTreatment,
+  type GainsTaxTreatment,
+} from './gainsTaxField';
 import { takeAccountFocus } from './sheetFocus';
+
+const GAINS_TAX_OPTIONS = [
+  { value: 'longTerm', label: 'Long-term — taxed when you sell' },
+  { value: 'activeTrading', label: 'Active trading — taxed every year' },
+];
+
+const GAINS_TAX_EXPLAINER =
+  "Active trading realizes gains every year. They're taxed as ordinary income and paid the following spring, so withdrawals later owe nothing more. Long-term defers the tax until you sell.";
+
+/** Withdrawal-tax fields that stop applying under active trading. Kept visible, not deleted. */
+const WITHDRAWAL_TAX_KEYS = ['taxableWithdrawalPercent', 'withdrawalTaxRate'];
 
 /**
  * The per-account-type form body, extracted from the old `AccountDrawer`
@@ -21,15 +39,21 @@ export function AccountForm({
   synthetic,
   planStartYear,
   planEndYear,
+  incomeTaxRate,
   onChange,
 }: {
   draft: Account;
   synthetic: Account[];
   planStartYear: number;
   planEndYear: number;
+  /** The plan's income tax rate, percent: the placeholder for an account's short-term rate. */
+  incomeTaxRate?: number;
   onChange(next: Account): void;
 }) {
   const spec = ACCOUNT_TYPES[draft.accountClass];
+  const taxable = draft.accountClass === 'taxableInvestment';
+  const treatment: GainsTaxTreatment = draft.gainsTaxTreatment ?? 'longTerm';
+  const activeTrading = taxable && treatment === 'activeTrading';
 
   const set = (key: keyof Account, value: unknown) => {
     const next = { ...draft, [key]: value };
@@ -76,16 +100,61 @@ export function AccountForm({
 
   return (
     <div className="ns-account-form" ref={formRef}>
-      {visibleFields(spec, draft).map((field) => (
-        <div key={String(field.key)} data-field={String(field.key)} className="ns-account-field">
-          <AccountField
-            field={field}
-            value={draft[field.key]}
-            planYears={{ startYear: planStartYear, endYear: planEndYear }}
-            onChange={(v) => set(field.key, v)}
-          />
-        </div>
-      ))}
+      {visibleFields(spec, draft).map((field) => {
+        const key = String(field.key);
+        const muted = activeTrading && WITHDRAWAL_TAX_KEYS.includes(key);
+        return (
+          <Fragment key={key}>
+            {taxable && field.key === 'taxableWithdrawalPercent' && (
+              <div data-field="gainsTaxTreatment" className="ns-account-field ns-account-gains">
+                <div className="ns-field">
+                  <span className="ns-field-label">Gains tax</span>
+                  <Segmented
+                    ariaLabel="Gains tax"
+                    options={GAINS_TAX_OPTIONS}
+                    value={treatment}
+                    onChange={(v) => onChange(setTreatment(draft, v as GainsTaxTreatment))}
+                  />
+                  <span className="ns-field-hint">{GAINS_TAX_EXPLAINER}</span>
+                </div>
+                {activeTrading && (
+                  <div data-field="shortTermGainsRate">
+                    <Field label="Short-term rate">
+                      <NumberInput
+                        value={draft.shortTermGainsRate}
+                        unit="percent"
+                        step={0.1}
+                        min={0}
+                        max={100}
+                        placeholder={
+                          incomeTaxRate === undefined
+                            ? 'Your income tax rate'
+                            : `${effectiveShortTermRate(draft, { incomeTaxRate })}% (your income tax rate)`
+                        }
+                        onChange={(v) => onChange(setShortTermRate(draft, v ?? ''))}
+                      />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            )}
+            <div
+              data-field={key}
+              className={muted ? 'ns-account-field ns-account-field-muted' : 'ns-account-field'}
+            >
+              <AccountField
+                field={field}
+                value={draft[field.key]}
+                planYears={{ startYear: planStartYear, endYear: planEndYear }}
+                onChange={(v) => set(field.key, v)}
+              />
+            </div>
+            {muted && field.key === 'withdrawalTaxRate' && (
+              <p className="ns-drawer-hint ns-account-muted-note">Not used with active trading</p>
+            )}
+          </Fragment>
+        );
+      })}
 
       {synthetic.length > 0 && (
         <div className="ns-readonly-note">

@@ -758,6 +758,18 @@
 .ns-account-field {
   border-radius: 12px;
 }
+.ns-account-gains {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* Withdrawal-tax fields under active trading: still editable, just quieter. */
+.ns-account-field-muted {
+  opacity: 0.5;
+}
+.ns-account-muted-note {
+  margin: -6px 0 0;
+}
 .ns-field-flash {
   animation: ns-field-flash 400ms var(--ease-damped) both;
 }
