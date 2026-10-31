@@ -12,6 +12,8 @@ import { money } from '../format';
 import { describeSchema } from './schemaForm';
 import { ConfigField, Field } from './fields';
 import { CompStepsEditor, RsuVestingEditor, WorkPhasesEditor } from './JobSchedules';
+import { IncomeScheduleEditor } from './IncomeScheduleEditor';
+import type { ScheduleConfig } from './incomeSchedule';
 import './sheetForm.css';
 
 /**
@@ -272,6 +274,17 @@ function EventDrawerBody({
                     onChange={(next) => setConfig('phases', next)}
                   />
                 </>
+              )}
+
+              {/* An income line's raises and exact-year overrides (v6 R3). The
+                  generic form skips both: they are arrays of objects. */}
+              {draft.kind === 'income' && (
+                <IncomeScheduleEditor
+                  config={config as ScheduleConfig}
+                  startYear={draft.startYear}
+                  endYear={typeof config.endYear === 'number' ? config.endYear : planEndYear}
+                  onChange={(next) => onChange({ ...draft, config: next })}
+                />
               )}
 
               {/* The one form the schema cannot generate: a row per income line
