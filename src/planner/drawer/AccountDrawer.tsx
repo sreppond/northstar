@@ -29,6 +29,7 @@ interface Props {
   synthetic: Account[];
   planStartYear: number;
   planEndYear: number;
+  incomeTaxRate?: number;
   onChange(next: Account): void;
   onSave(): void;
   onCancel(): void;
@@ -48,6 +49,7 @@ export function AccountDrawer({
   synthetic,
   planStartYear,
   planEndYear,
+  incomeTaxRate,
   onChange,
   onSave,
   onCancel,
@@ -113,6 +115,7 @@ export function AccountDrawer({
             synthetic={synthetic}
             planStartYear={planStartYear}
             planEndYear={planEndYear}
+            incomeTaxRate={incomeTaxRate}
             onChange={onChange}
           />
         )}
@@ -220,6 +223,7 @@ function AccountSheetBody({ draft, open }: { draft: Account; open: boolean }) {
       synthetic={readOnly ? synthetic.filter((a) => a.id === draft.id) : []}
       planStartYear={stored.settings.startYear}
       planEndYear={result.endYear}
+      incomeTaxRate={stored.settings.incomeTaxRate}
       onChange={setAccountDraft}
       onSave={() => upsertAccount(stored.id, draft)}
       onCancel={() => setAccountDraft(null)}
