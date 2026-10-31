@@ -137,6 +137,20 @@ export interface Account {
   /** Age at which `penaltyRate` stops applying. */
   penaltyFreeAge?: number;
 
+  /**
+   * How a taxable account's realized gains are taxed. Unset means 'longTerm':
+   * gains are taxed when sold, through the withdrawal tax. 'activeTrading'
+   * taxes each year's gain as ordinary income at the short-term rate, paid
+   * the following year, so later withdrawals owe no further gains tax. Only
+   * meaningful for `accountClass: 'taxableInvestment'` (run.ts step 10b).
+   */
+  gainsTaxTreatment?: 'longTerm' | 'activeTrading';
+  /**
+   * Percent. The short-term rate an 'activeTrading' account's gains are taxed
+   * at. Unset: `settings.incomeTaxRate`.
+   */
+  shortTermGainsRate?: number;
+
   // --- annuity contract features (opt-in; see annuity.ts) -----------------
   /**
    * A flat, fixed-dollar rider or contract-administration charge deducted

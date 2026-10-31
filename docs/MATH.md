@@ -608,3 +608,61 @@ balance itself now is.
 now, instead of treating its return value as a bare `Plan`.
 
 **Test:** `src/planner/rollover.test.ts`.
+
+---
+
+## Taxable gains: long-term vs active trading
+
+**Long-term (the default).** Gains are taxed when sold, through the
+withdrawal tax: `withdrawalTaxRate × taxableWithdrawalPercent`, as in
+"Capital-gains basis on taxable withdrawals" above. No annual tax.
+
+**Active trading** (`gainsTaxTreatment: 'activeTrading'` on a
+`taxableInvestment` account). Each year's realized gain is taxed as ordinary
+income at the short-term rate, and the tax is paid the following year.
+
+Let `G_y` be the account's growth for year `y`, net of fees, as recorded in
+that year's account row (the stub year included). Let `carry` be a per-account
+loss carryforward that starts at 0, and `r` be `shortTermGainsRate ??
+settings.incomeTaxRate`, in percent.
+
+```
+if G < 0:   carry ← carry − G            taxable = 0
+if G ≥ 0:   taxable = max(0, G − carry)
+            carry   ← max(0, carry − G)
+T_y = taxable × r / 100                  owed in year y+1
+```
+
+- **Payment.** `T_y` is a tax line `Tax on {y} trading gains — {account}`,
+  category `gainsTax`, pushed into year `y+1`'s `taxes`. It is included in
+  `totalTaxes` and paid through the same cash-flow and withdrawal waterfall as
+  any other tax.
+- **Compounding is unchanged.** The tax comes out of cash flow, not out of the
+  account, so the balance compounds on its full value.
+- **Withdrawals carry no further gains tax.** Each gain was taxed as it arose,
+  so an active account's effective withdrawal rate is 0 (`tax.ts`
+  `effectiveWithdrawalRate` and `effectiveGainRate`).
+- **Final year.** Gains in the last plan year fall due after the horizon and
+  are not paid. If `T ≥ $1`, the plan adds a warning:
+  `{account}: $T of tax on {endYear} trading gains falls due after the plan ends.`
+
+**Worked check** ($100K at 10% a year, full years, `r = 30%`, no carry):
+
+| Year | Open | Growth G | Taxable | Tax paid this year | Close |
+|---|---|---|---|---|---|
+| 2026 | 100,000 | 10,000 | 10,000 | 0 (owed in 2027: 3,000) | 110,000 |
+| 2027 | 110,000 | 11,000 | 11,000 | 3,000 (from 2026's gain) | 121,000 |
+
+The 2027 close is 121,000, not 118,000: the 3,000 is paid from cash flow, not
+taken out of the account.
+
+**Loss carryforward check** (−20% then +30%, `r = 30%`):
+
+- 2026: `G = −20,000`, so `carry = 20,000` and nothing is taxable.
+- 2027: `G = +24,000`, `taxable = max(0, 24,000 − 20,000) = 4,000`,
+  `carry = 0`, so `T = 1,200`, owed in 2028.
+
+**Test:** `packages/engine/test/gainsTax.test.ts` (the worked check, the loss
+carryforward, the stub year, the final-year warning, and deep-equality with a
+`longTerm` plan), `src/planner/gainsTax.test.ts` (the tax lands in the
+"Tax on investments" bucket and reconciles).
