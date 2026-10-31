@@ -1,7 +1,7 @@
-import { memo } from 'react';
+import { Fragment, memo, useState } from 'react';
 import type { Account, AccountClass, OpeningSnapshot, YearSnapshot } from '@northstar/engine';
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engine';
-import { tableMoney } from '../format';
+import { signedTableMoney, tableMoney } from '../format';
 import { accountDetail } from '../detail';
 import { HoverCard } from '../HoverCard';
 import { Cell, YearHeadCell, type CellMagnitude } from './DataTable';
@@ -10,8 +10,12 @@ import { GearIcon } from '../icons';
 import { ACCOUNT_ICON } from '../domainIcons';
 import { classBalances, missingAccountClasses } from '../ledger';
 import { PopMenu } from '../pages/PopMenu';
+import { accountFlowRows } from '../pages/netWorthData';
 import { rememberRow } from '../drawer/rowMorph';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
+
+/** Negatives keep their real minus sign; everything else prints as the table does. */
+const flowMoney = (value: number) => (value < 0 ? signedTableMoney(value) : tableMoney(value));
 
 /**
  * Balances over time (docs/REDESIGN-V5.md §5.1.5): one row per ACCOUNT TYPE
@@ -63,6 +67,15 @@ export const AccountsTab = memo(function AccountsTab({
 
   const focus = focusYear !== undefined ? focusYear : highlightYear;
   const { pickYear, scrollerProps } = useScrollToYear(focus, onFocusYear);
+  // Each class's flows (additions, withdrawals, growth) open under its row, as Cash Flow's groups do.
+  const [expanded, setExpanded] = useState<Set<AccountClass>>(() => new Set());
+  const toggle = (accountClass: AccountClass) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(accountClass)) next.delete(accountClass);
+      else next.add(accountClass);
+      return next;
+    });
   const isDanger = (y: number) => dangerYears?.includes(y) === true;
 
   const yearLabels = years.map((y) => y.year);
@@ -147,7 +160,10 @@ export const AccountsTab = memo(function AccountsTab({
             }
           : {};
 
-        return (
+        const open = expanded.has(accountClass);
+        const flows = open ? accountFlowRows(years, accountClass, liability) : [];
+
+        return [
           <div
             key={accountClass}
             className={`ns-grid ns-row-child ns-row-clickable`}
@@ -155,6 +171,20 @@ export const AccountsTab = memo(function AccountsTab({
             {...rowProps}
           >
             <div className="ns-type-cell">
+              <button
+                type="button"
+                className="ns-group-toggle"
+                aria-expanded={open}
+                aria-label={`${open ? 'Collapse' : 'Expand'} ${spec.label} flows`}
+                onClick={(e) => {
+                  // The row itself opens the account sheet; the chevron only expands.
+                  e.stopPropagation();
+                  toggle(accountClass);
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <ChevronRight size={13} strokeWidth={2} aria-hidden />
+              </button>
               {(() => {
                 const Icon = ACCOUNT_ICON[accountClass];
                 return <Icon size={14} strokeWidth={2} className="ns-type-icon" data-morph="icon" aria-hidden />;
@@ -201,8 +231,22 @@ export const AccountsTab = memo(function AccountsTab({
                 />
               );
             })}
-          </div>
-        );
+          </div>,
+          ...flows.map((flow) => (
+            <div key={flow.key} className="ns-grid ns-row-child ns-flow-line" style={style}>
+              <div title={flow.label}>{flow.label}</div>
+              {showOpening && <Cell value="" divider />}
+              {flow.values.map((v, i) => (
+                <Cell
+                  key={yearLabels[i]}
+                  value={flowMoney(v)}
+                  highlighted={yearLabels[i] === focus}
+                  danger={isDanger(yearLabels[i])}
+                />
+              ))}
+            </div>
+          )),
+        ];
       });
 
   return (
