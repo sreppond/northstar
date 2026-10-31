@@ -97,7 +97,7 @@ export function AccountInsight({
   const flowYear = hover ?? focusYear ?? last;
   const flowIndex = result.years.findIndex((y) => y.year === flowYear);
   const steps = useMemo(
-    () => (flowIndex >= 0 ? classFlowSteps(result.years, flowIndex, accountClass, liability) : []),
+    () => (flowIndex >= 0 ? classFlowSteps(result.years, flowIndex, accountClass, liability, result.opening) : []),
     [result, flowIndex, accountClass, liability],
   );
 

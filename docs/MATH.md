@@ -646,6 +646,17 @@ T_y = taxable × r / 100                  owed in year y+1
   are not paid. If `T ≥ $1`, the plan adds a warning:
   `{account}: $T of tax on {endYear} trading gains falls due after the plan ends.`
 
+- **Closing or selling the account.** An account closed by a termination
+  event (run.ts step 2) turns its opening balance into proceeds, taxed by no
+  rule, for a long-term account as much as an active one, and grows at 0 in the
+  year it closes. So the closing year adds no gain to tax. Every earlier year's
+  gain was already taxed as it arose, and last year's tax still falls due in
+  the closing year. The loss carryforward is simply dropped with the account.
+  Nothing is double-taxed or missed, so no extra step is needed.
+- **SEPP.** A SEPP payment's tax reads `withdrawalTaxRate` directly, not the
+  effective withdrawal rate above. SEPP is a retirement-account mechanism, so
+  this never applies to an active-trading taxable account.
+
 **Worked check** ($100K at 10% a year, full years, `r = 30%`, no carry):
 
 | Year | Open | Growth G | Taxable | Tax paid this year | Close |

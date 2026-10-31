@@ -278,7 +278,9 @@ describe('monarch routes', () => {
     });
     afterEach(() => {
       vi.useRealTimers();
-      process.env.TZ = originalTZ;
+      // Assigning undefined would set the string "undefined", not unset it.
+      if (originalTZ === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTZ;
     });
 
     it('reports a snapshot captured that local evening as zero days old', async () => {

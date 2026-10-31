@@ -88,7 +88,15 @@ describe('describeSchema', () => {
         if (field.kind === 'custom') custom.push(`${kind}.${field.name}`);
       }
     }
-    expect(custom).toEqual(['job.rsuVesting', 'job.compSteps', 'job.phases', 'retirement.incomeRetentionByEvent']);
+    // income.raises and income.overrides are edited by IncomeScheduleEditor (v6 R3).
+    expect(custom).toEqual([
+      'income.raises',
+      'income.overrides',
+      'job.rsuVesting',
+      'job.compSteps',
+      'job.phases',
+      'retirement.incomeRetentionByEvent',
+    ]);
   });
 });
 

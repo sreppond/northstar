@@ -338,6 +338,22 @@
   top: 50%;
   transform: translateY(-50%);
 }
+/* The name is a real button (the row's keyboard route to the account sheet), dressed as plain text. */
+.ns-nw-table .ns-type-open {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ns-nw-table .ns-type-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .ns-nw-table .ns-flow-line > div {
   font-size: 13px;
   color: var(--muted);
@@ -695,16 +711,22 @@
     grid-template-columns: 88px minmax(0, 1fr) 64px;
     gap: 8px;
   }
-  /* The label column is 132px here: the chevron takes the room the 14px indent
-     can't hold, so the class name steps in and the flow lines nest under it. */
-  .ns-nw-table .ns-row-child > div:first-child {
-    padding-left: 26px;
-  }
+  /* The label column is 132px here, so the chevron sits over the 14px hanging
+     indent (it overlays rather than adding to it) and the name keeps its room. */
   .ns-nw-table .ns-type-cell > .ns-group-toggle {
-    left: 4px;
+    left: 0;
+    width: 14px;
+  }
+  /* Nor can the right padding or the (hover-only) gear's slot be spared: a tap
+     on the row already opens the account sheet, so the names get that width. */
+  .ns-nw-table .ns-row-child > div:first-child {
+    padding-right: 6px;
+  }
+  .ns-nw-table .ns-type-cell .ns-gear {
+    display: none;
   }
   .ns-nw-table .ns-flow-line > div:first-child {
-    padding-left: 40px;
+    padding-left: 28px;
   }
 }
 

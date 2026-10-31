@@ -141,32 +141,27 @@ export const AccountsTab = memo(function AccountsTab({
         // The whole row opens the editor, not just its gear
         // (docs/REDESIGN-V3.md "Accounts") — but only when there's an
         // owned account to edit; a synthetic-only row's gear is locked for
-        // the same reason.
-        const rowProps = owned || synthetic.length > 0
+        // the same reason. The row's click is a pointer convenience only: the
+        // keyboard and assistive tech reach the same action through the name,
+        // a real button beside the chevron and gear rather than a button role
+        // wrapped around them.
+        const editable = Boolean(owned) || synthetic.length > 0;
+        const rowProps = editable
           ? {
-              role: 'button' as const,
-              tabIndex: 0,
               onClick: (e: React.MouseEvent<HTMLElement>) => {
                 rememberRow(e.currentTarget, accountClass);
                 onEditType(accountClass);
-              },
-              onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  rememberRow(e.currentTarget, accountClass);
-                  onEditType(accountClass);
-                }
               },
             }
           : {};
 
         const open = expanded.has(accountClass);
-        const flows = open ? accountFlowRows(years, accountClass, liability) : [];
+        const flows = open ? accountFlowRows(years, accountClass, liability, opening) : [];
 
         return [
           <div
             key={accountClass}
-            className={`ns-grid ns-row-child ns-row-clickable`}
+            className="ns-grid ns-row-child ns-row-clickable"
             style={style}
             {...rowProps}
           >
@@ -181,7 +176,6 @@ export const AccountsTab = memo(function AccountsTab({
                   e.stopPropagation();
                   toggle(accountClass);
                 }}
-                onKeyDown={(e) => e.stopPropagation()}
               >
                 <ChevronRight size={13} strokeWidth={2} aria-hidden />
               </button>
@@ -189,9 +183,15 @@ export const AccountsTab = memo(function AccountsTab({
                 const Icon = ACCOUNT_ICON[accountClass];
                 return <Icon size={14} strokeWidth={2} className="ns-type-icon" data-morph="icon" aria-hidden />;
               })()}
-              <span className="ns-type-name" data-morph="label" title={spec.label}>
-                {spec.label}
-              </span>
+              {editable ? (
+                <button type="button" className="ns-type-name ns-type-open" data-morph="label" title={spec.label}>
+                  {spec.label}
+                </button>
+              ) : (
+                <span className="ns-type-name" data-morph="label" title={spec.label}>
+                  {spec.label}
+                </span>
+              )}
               {owned ? (
                 <HoverCard detail={accountDetail(owned, closing, baseRemaining(owned.id))}>
                   <button

@@ -274,4 +274,29 @@ describe("accountFlowRows: the balances table's expanded rows (R1)", () => {
     expect(get('interest')).toBeCloseTo(interest, 0);
     expect(interest).toBeGreaterThan(0);
   });
+
+  it('a mortgage that starts in the first projected year reads as Borrowed when "today" is the prior close', () => {
+    const base = SAMPLE_PLANS[0];
+    const home = base.events.find((e) => e.kind === 'buyAHome')!;
+    const plan: Plan = {
+      ...base,
+      events: base.events.map((e) => (e.id === home.id ? { ...e, startYear: base.settings.startYear } : e)),
+    };
+    const result = runPlan(plan);
+    const principal = result.years[0].accounts
+      .filter((a) => a.accountClass === 'mortgage' && a.isLiability)
+      .reduce((sum, a) => sum + a.principal, 0);
+    const close = result.years[0].accounts
+      .filter((a) => a.accountClass === 'mortgage' && a.isLiability)
+      .reduce((sum, a) => sum + a.close, 0);
+    expect(close).toBeGreaterThan(1);
+
+    // Today there is no mortgage, so the whole loan was borrowed this year: borrowed = close + principal.
+    const withOpening = accountFlowRows(result.years, 'mortgage', true, result.opening);
+    expect(withOpening.find((r) => r.key === 'borrowed')!.values[0]).toBeCloseTo(close + principal, 0);
+    expect(withOpening.find((r) => r.key === 'paid')!.values[0]).toBeCloseTo(-principal, 0);
+    // The home's value is money in, not an opening balance.
+    const homeRows = accountFlowRows(result.years, 'realEstate', false, result.opening);
+    expect(homeRows.find((r) => r.key === 'additions')!.values[0]).toBeGreaterThan(1);
+  });
 });

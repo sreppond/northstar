@@ -231,15 +231,29 @@ export function flowSteps(rows: AccountYear[], liability: boolean, income: reado
  * opens at its initial balance, not last year's close (0). That balance is
  * money put in this year: a loan borrowed, or a deposit made. So the class
  * reads the same whether the balances table or the account sheet asks.
+ *
+ * In the first projected year the prior close is `opening` ("today"), so an
+ * account that is not open yet today (a loan taken out in the stub year) reads
+ * as Borrowed or Additions there too. Without `opening` the first year is
+ * taken as it comes.
  */
-export function classFlowSteps(years: YearSnapshot[], index: number, accountClass: AccountClass, liability: boolean): FlowStep[] {
+export function classFlowSteps(
+  years: YearSnapshot[],
+  index: number,
+  accountClass: AccountClass,
+  liability: boolean,
+  opening?: OpeningSnapshot,
+): FlowStep[] {
   const snapshot = years[index];
-  const prior = index > 0 ? years[index - 1].accounts : [];
+  const priorClose = (accountId: string): number | undefined => {
+    if (index > 0) return years[index - 1].accounts.find((p) => p.accountId === accountId)?.close ?? 0;
+    return opening ? (opening.accounts.find((p) => p.accountId === accountId)?.balance ?? 0) : undefined;
+  };
   const rows = snapshot.accounts
     .filter((r) => r.accountClass === accountClass && r.isLiability === liability)
     .map((r) => {
-      if (index === 0) return r;
-      const before = prior.find((p) => p.accountId === r.accountId)?.close ?? 0;
+      const before = priorClose(r.accountId);
+      if (before === undefined) return r;
       const started = r.open - before;
       if (Math.abs(started) < 1) return r;
       return liability ? { ...r, open: before } : { ...r, open: before, contributions: r.contributions + started };
@@ -272,8 +286,9 @@ export function accountFlowRows(
   years: YearSnapshot[],
   accountClass: AccountClass,
   liability: boolean,
+  opening?: OpeningSnapshot,
 ): AccountFlowRow[] {
-  const perYear = years.map((_snapshot, i) => classFlowSteps(years, i, accountClass, liability));
+  const perYear = years.map((_snapshot, i) => classFlowSteps(years, i, accountClass, liability, opening));
   const row = (key: string, label: string, keys: string[]): AccountFlowRow => ({
     key,
     label,
