@@ -4,6 +4,7 @@ export * from './annuity.js';
 export * from './tax.js';
 export * from './priority.js';
 export * from './events/index.js';
+export { incomeAmounts, type IncomeRaise, type IncomeOverride } from './events/income.js';
 export { runPlan } from './run.js';
 export { deflate, presentValue } from './inflation.js';
 export * from './accountTypes.js';
