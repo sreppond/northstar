@@ -148,6 +148,7 @@ export function Onboarding({ onBegin, onFinish }: { onBegin(): void; onFinish():
           synthetic={[]}
           planStartYear={plan.settings.startYear}
           planEndYear={planEndYear}
+          incomeTaxRate={plan.settings.incomeTaxRate}
           onChange={setAccountDraft}
           onSave={() => {
             upsertAccount(plan.id, accountDraft);

@@ -1,8 +1,8 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 export interface SegmentedOption {
   value: string;
-  label: string;
+  label: ReactNode;
 }
 
 /**

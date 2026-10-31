@@ -11,13 +11,29 @@ import {
 } from './gainsTaxField';
 import { takeAccountFocus } from './sheetFocus';
 
+// The tail of each label hides on a phone (see .ns-gains-long in net-worth.css)
+// so the pair fits on one line; the explainer below carries the full wording.
 const GAINS_TAX_OPTIONS = [
-  { value: 'longTerm', label: 'Long-term — taxed when you sell' },
-  { value: 'activeTrading', label: 'Active trading — taxed every year' },
+  {
+    value: 'longTerm',
+    label: (
+      <>
+        Long-term<span className="ns-gains-long"> — taxed when you sell</span>
+      </>
+    ),
+  },
+  {
+    value: 'activeTrading',
+    label: (
+      <>
+        Active trading<span className="ns-gains-long"> — taxed every year</span>
+      </>
+    ),
+  },
 ];
 
 const GAINS_TAX_EXPLAINER =
-  "Active trading realizes gains every year. They're taxed as ordinary income and paid the following spring, so withdrawals later owe nothing more. Long-term defers the tax until you sell.";
+  "Long-term: gains are taxed when you sell. Active trading: gains are realized every year, taxed as ordinary income and paid the following spring, so withdrawals later owe nothing more.";
 
 /** Withdrawal-tax fields that stop applying under active trading. Kept visible, not deleted. */
 const WITHDRAWAL_TAX_KEYS = ['taxableWithdrawalPercent', 'withdrawalTaxRate'];

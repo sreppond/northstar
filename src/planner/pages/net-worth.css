@@ -758,6 +758,11 @@
 .ns-account-field {
   border-radius: 12px;
 }
+@media (max-width: 640px) {
+  .ns-gains-long {
+    display: none;
+  }
+}
 .ns-account-gains {
   display: flex;
   flex-direction: column;
