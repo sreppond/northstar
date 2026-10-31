@@ -578,7 +578,7 @@ function NewChildSheet({ open, onClose }: { open: boolean; onClose(): void }) {
             ))}
           </div>
           <span className="ns-field-hint">
-            Rounded national estimates; every line is editable on the Budget page afterwards. Housing and transport stay in your shared
+            Rounded national estimates; every line is editable on the Budget page afterwards. Home and transport stay in your shared
             budget.
           </span>
         </div>
