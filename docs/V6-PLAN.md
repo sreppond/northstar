@@ -182,6 +182,9 @@ B2 needs the account fields, and B3 needs A2's relabelled tax bucket in
   - A3: accepted as built.
   - A4: fixed. The first projected year now uses `result.opening` as the prior close (`classFlowSteps`/`accountFlowRows` take `opening`). The class name is a real button beside the chevron and gear instead of a `role=button` row wrapping them. Phone: the chevron overlays the indent and the hidden gear is dropped, so names keep their width.
   - A5: cherry-picked (it was based on old main). Fixed the test's TZ restore, which set the string "undefined".
-- [ ] Wave B: B1 · B2 · B3
-- [ ] Manager review and push
+- [x] Wave B: B1 · B2 · B3 (merged without conflicts; lint, all three workspaces' tests, vite build and cargo check green)
+  - B1: fixed. Two rules can no longer share a year: a new rule takes the next free year and the add button disables when none is left; editing a year onto a taken one keeps the old year (`freeRaiseYear`, tested). The +/- icons are exported from `JobSchedules.tsx` instead of duplicated. Checked in the real EventDrawer: a +$5K rule, a 2030 override, reset, Save, and the Cash Flow income row stepped as expected.
+  - B2: fixed. On a phone the Gains tax labels read "Long-term" / "Active trading" (the tail hides under 640px) and the explainer carries both full descriptions. Onboarding's `AccountDrawer` now gets `incomeTaxRate`. Verified: Active trading shows "Tax on investments" from the year after.
+  - B3: accepted. Footnote and R2 now describe the day-weighted split. `DataTable.columnHeads` is additive (Reports and other users unchanged). Fixed: the first year opens scrolled to the first covered month, and the "before today" header lost its dangling dot.
+- [x] Manager review and push
 - [ ] Tauri build installed to /Applications
