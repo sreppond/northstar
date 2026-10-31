@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   addRaise,
+  canAddRaise,
   clampRaiseYear,
+  freeRaiseYear,
   clearOverride,
   previewRows,
   removeRaise,
@@ -40,9 +42,23 @@ describe('addRaise', () => {
     expect(out.raises).toHaveLength(3);
   });
 
-  it('clamps the new start year to the end of the span', () => {
+  it('takes the nearest free year when the last rule is at the end of the span', () => {
     const config: ScheduleConfig = { raises: [{ fromYear: 2035, kind: 'dollars', value: 1000 }] };
-    expect(addRaise(config, span).raises?.at(-1)?.fromYear).toBe(2035);
+    const out = addRaise(config, span);
+    expect(out.raises?.map((r) => r.fromYear)).toEqual([2034, 2035]);
+  });
+
+  it('adds nothing, and canAddRaise says so, once every year has a rule', () => {
+    const tight = { startYear: 2026, endYear: 2028 };
+    const config: ScheduleConfig = {
+      raises: [
+        { fromYear: 2027, kind: 'percent', value: 1 },
+        { fromYear: 2028, kind: 'percent', value: 2 },
+      ],
+    };
+    expect(canAddRaise(config, tight)).toBe(false);
+    expect(addRaise(config, tight)).toBe(config);
+    expect(canAddRaise({ raises: [{ fromYear: 2028, kind: 'percent', value: 2 }] }, tight)).toBe(true);
   });
 
   it('does not change the config it was given', () => {
@@ -239,5 +255,17 @@ describe('previewRows', () => {
 
   it('returns no rows when the span is empty', () => {
     expect(previewRows({ amount: 1 }, 2030, 2029)).toEqual([]);
+  });
+});
+
+describe('freeRaiseYear', () => {
+  it('moves off a year another rule already uses, then falls back below', () => {
+    expect(freeRaiseYear(2030, span, [2030])).toBe(2031);
+    expect(freeRaiseYear(2035, span, [2035])).toBe(2034);
+    expect(freeRaiseYear(2099, span, [2034, 2035])).toBe(2033);
+  });
+
+  it('is undefined when the span has no free year', () => {
+    expect(freeRaiseYear(2027, { startYear: 2026, endYear: 2027 }, [2027])).toBeUndefined();
   });
 });

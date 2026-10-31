@@ -380,7 +380,7 @@ function nextFreeYear(
   return undefined;
 }
 
-function MinusIcon() {
+export function MinusIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <circle cx="12" cy="12" r="9" />
@@ -389,7 +389,7 @@ function MinusIcon() {
   );
 }
 
-function PlusIcon() {
+export function PlusIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <circle cx="12" cy="12" r="9" />

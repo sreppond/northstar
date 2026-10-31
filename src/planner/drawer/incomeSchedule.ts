@@ -51,15 +51,43 @@ export function clampRaiseYear(year: number, span: Span): number {
 }
 
 /**
- * Adds a rule. It starts the year after the last rule (clamped to the span)
- * and copies the kind of the rule before it. The value starts at 0 for the
- * user to set.
+ * The year nearest `year` inside the span that no other rule starts in, or
+ * undefined when every year is taken. Two rules in one year would make the
+ * engine pick one silently, so the editor never lets them share.
+ */
+export function freeRaiseYear(year: number, span: Span, taken: number[]): number | undefined {
+  const lo = span.startYear + 1;
+  const hi = span.endYear;
+  const used = new Set(taken);
+  const want = clampRaiseYear(year, span);
+  if (want > hi) return undefined;
+  for (let y = want; y <= hi; y++) if (!used.has(y)) return y;
+  for (let y = want - 1; y >= lo; y--) if (!used.has(y)) return y;
+  return undefined;
+}
+
+/** True while some year in the span has no rule starting in it. */
+export function canAddRaise(config: ScheduleConfig, span: Span): boolean {
+  const last = sortRaises(config.raises ?? []).at(-1);
+  const from = last ? last.fromYear + 1 : span.startYear + 1;
+  return freeRaiseYear(from, span, (config.raises ?? []).map((r) => r.fromYear)) !== undefined;
+}
+
+/**
+ * Adds a rule. It starts the year after the last rule, or the next free year
+ * when that is past the span, and copies the kind of the rule before it. The
+ * value starts at 0 for the user to set. With no free year the config is
+ * returned unchanged.
  */
 export function addRaise<T extends ScheduleConfig>(config: T, span: Span): T {
   const raises = sortRaises(config.raises ?? []);
   const last = raises.at(-1);
-  const lastYear = last ? last.fromYear : span.startYear;
-  const fromYear = clampRaiseYear(lastYear + 1, span);
+  const fromYear = freeRaiseYear(
+    (last ? last.fromYear : span.startYear) + 1,
+    span,
+    raises.map((r) => r.fromYear),
+  );
+  if (fromYear === undefined) return config;
   return {
     ...config,
     raises: sortRaises([...raises, { fromYear, kind: last?.kind ?? 'percent', value: 0 }]),

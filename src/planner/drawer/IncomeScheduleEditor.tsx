@@ -11,13 +11,15 @@
  * Numbers commit on blur or Enter, not on each keystroke: typing "65000" into
  * a year-by-year cell must not write an override for "6", then "65", and so on.
  */
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { HoverCard } from '../HoverCard';
+import { MinusIcon, PlusIcon } from './JobSchedules';
 import { formatWithCommas, sanitizeDigits } from './fields';
 import { signedTableMoney, ZERO_DASH } from '../format';
 import {
   addRaise,
-  clampRaiseYear,
+  canAddRaise,
+  freeRaiseYear,
   clearOverride,
   previewRows,
   removeRaise,
@@ -87,7 +89,7 @@ export function IncomeScheduleEditor({ config, startYear, endYear, onChange }: P
             unit="year"
             ariaLabel={`Change ${i + 1}: from year`}
             value={raise.fromYear}
-            clamp={(y) => clampRaiseYear(y, span)}
+            clamp={(y) => freeRaiseYear(y, span, raises.filter((_, j) => j !== i).map((r) => r.fromYear)) ?? raise.fromYear}
             onCommit={(y) => onChange(updateRaise(config, i, { fromYear: y }))}
           />
           <select
@@ -123,7 +125,12 @@ export function IncomeScheduleEditor({ config, startYear, endYear, onChange }: P
         </div>
       ))}
 
-      <button type="button" className="ns-sched-add" onClick={() => onChange(addRaise(config, span))}>
+      <button
+        type="button"
+        className="ns-sched-add"
+        disabled={!canAddRaise(config, span)}
+        onClick={() => onChange(addRaise(config, span))}
+      >
         <PlusIcon />
         Add a change
       </button>
@@ -281,23 +288,4 @@ function parse(raw: string, unit: 'currency' | 'percent' | 'year'): number | und
   if (cleaned === '' || cleaned === '-' || cleaned === '.') return undefined;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : undefined;
-}
-
-// Duplicated from JobSchedules.tsx (not exported there) to keep that file untouched.
-function MinusIcon(): ReactNode {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M8 12h8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PlusIcon(): ReactNode {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 8v8M8 12h8" strokeLinecap="round" />
-    </svg>
-  );
 }
