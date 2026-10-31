@@ -56,3 +56,134 @@
   border-top: 2px dashed var(--ink);
   opacity: 0.55;
 }
+
+/* Raises & changes (IncomeScheduleEditor). The rule rows reuse the shared
+   `.ns-sched-*-3` grid; these classes cover the title explainer and the
+   year-by-year table. */
+.ns-income-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ns-income-explain-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  cursor: help;
+}
+.ns-income-explain-trigger:hover,
+.ns-income-explain-trigger:focus-visible {
+  color: var(--ink);
+  border-color: var(--accent-line);
+  outline: none;
+}
+.ns-income-explain {
+  margin: 0;
+  max-width: 280px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ns-income-subhead {
+  margin-top: 18px;
+  margin-bottom: 4px;
+}
+
+/* A scrolling list, capped so a 30-year span does not push the form off the
+   sheet. The header stays put while the years scroll under it. */
+.ns-income-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.ns-income-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.ns-income-table th,
+.ns-income-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--rule-light);
+  text-align: left;
+  vertical-align: middle;
+  font-weight: 400;
+  color: var(--ink);
+}
+.ns-income-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.ns-income-table tbody tr:last-child th,
+.ns-income-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.ns-income-table .ns-num {
+  text-align: right;
+}
+.ns-income-table tbody th {
+  color: var(--muted);
+}
+
+.ns-income-amount {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ns-income-amount .ns-input-wrap {
+  flex: 0 1 150px;
+  min-width: 0;
+}
+.ns-income-amount .ns-input {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  text-align: right;
+}
+.ns-income-set {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.ns-income-reset {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 2px 2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ns-income-reset:hover,
+.ns-income-reset:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
