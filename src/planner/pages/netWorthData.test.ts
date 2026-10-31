@@ -6,8 +6,10 @@ import { runsDryPlan, healthyPlan, kitchenSinkPlan } from '../planFixtures';
 import { SAMPLE_PLANS } from '../samplePlan';
 import { toHouseholdModel } from '../household';
 import {
+  accountFlowRows,
   agesLabel,
   classBalanceAt,
+  classFlowSteps,
   dangerBand,
   eventMarkers,
   flowSteps,
@@ -176,5 +178,100 @@ describe('dangerBand, ages and markers', () => {
     const markers = eventMarkers(plan, years);
     expect(markers.every((m) => years.includes(m.year))).toBe(true);
     expect(markers.every((m) => ['income', 'cost', 'neutral'].includes(m.tone))).toBe(true);
+  });
+});
+
+describe('flowSteps: liabilities borrow, repay, and pay interest from cash (R1)', () => {
+  const loan = (open: number, close: number, principal: number, interest: number) =>
+    [
+      { accountId: 'm', name: 'Mortgage', accountClass: 'mortgage', isLiability: true, open, growth: 0, contributions: 0, withdrawals: 0, interest, principal, close },
+    ] as Parameters<typeof flowSteps>[0];
+
+  it('shows a loan opened this year as Borrowed, and interest as info that moves nothing', () => {
+    const steps = flowSteps(loan(0, 300_000, 0, 0), true);
+    expect(steps.find((s) => s.key === 'borrowed')).toMatchObject({ kind: 'in', value: 300_000 });
+    expect(steps.at(-1)?.value).toBe(300_000);
+  });
+
+  it('keeps interest out of the running balance', () => {
+    const steps = flowSteps(loan(200_000, 195_000, 5_000, 12_000), true);
+    expect(steps.map((s) => s.key)).toEqual(['open', 'paid', 'interest', 'close']);
+    const interest = steps.find((s) => s.key === 'interest')!;
+    expect(interest).toMatchObject({ kind: 'info', value: 12_000 });
+    expect(interest.from).toBe(interest.to);
+    expect(steps.find((s) => s.key === 'paid')?.to).toBe(195_000);
+  });
+});
+
+describe("accountFlowRows: the balances table's expanded rows (R1)", () => {
+  /** A year's opening for flows: last year's close, so a class starting this year opens at 0. */
+  const flowOpen = (years: ReturnType<typeof runPlan>['years'], i: number, accountClass: string, liability: boolean) => {
+    const sumOf = (snap: (typeof years)[number] | undefined, pick: 'open' | 'close') =>
+      (snap?.accounts ?? [])
+        .filter((a) => a.accountClass === accountClass && a.isLiability === liability)
+        .reduce((s, a) => s + a[pick], 0);
+    return i === 0 ? sumOf(years[0], 'open') : sumOf(years[i - 1], 'close');
+  };
+
+  it.each(plans)('%s: every asset class reconciles open + flows = close within $1, every year', (_n, plan) => {
+    const result = runPlan(plan);
+    const classes = new Set(result.years.flatMap((y) => y.accounts.filter((a) => !a.isLiability).map((a) => a.accountClass)));
+    for (const accountClass of classes) {
+      const rows = accountFlowRows(result.years, accountClass, false);
+      expect(rows.map((r) => r.key)).toEqual(expect.arrayContaining(['additions', 'withdrawals', 'growth']));
+      result.years.forEach((snapshot, i) => {
+        const classRows = snapshot.accounts.filter((a) => a.accountClass === accountClass && !a.isLiability);
+        const close = classRows.reduce((a, r) => a + r.close, 0);
+        const flows = rows.reduce((a, r) => a + r.values[i], 0);
+        expect(Math.abs(flowOpen(result.years, i, accountClass, false) + flows - close)).toBeLessThan(1);
+        // Withdrawals is required distributions, SEPP and plain withdrawals together, printed negative.
+        const withdrawn = classRows.reduce((a, r) => a + r.withdrawals, 0);
+        const withdrawals = rows.find((r) => r.key === 'withdrawals')!.values[i];
+        expect(withdrawals).toBeLessThanOrEqual(0);
+        expect(Math.abs(withdrawals + withdrawn)).toBeLessThan(1);
+      });
+    }
+  });
+
+  it.each(plans)('%s: Inflation adjustment appears exactly when some year needs one', (_n, plan) => {
+    const result = runPlan(plan);
+    const classes = new Set(result.years.flatMap((y) => y.accounts.filter((a) => !a.isLiability).map((a) => a.accountClass)));
+    for (const accountClass of classes) {
+      const rows = accountFlowRows(result.years, accountClass, false);
+      const needed = rows.some((r) => r.key === 'inflation');
+      const anyOther = result.years.some((snapshot) =>
+        flowSteps(snapshot.accounts.filter((a) => a.accountClass === accountClass && !a.isLiability), false, snapshot.income).some(
+          (s) => s.key === 'other',
+        ),
+      );
+      expect(needed).toBe(anyOther);
+    }
+  });
+
+  it('a mortgage that starts mid-plan: Borrowed is the loan, and open + borrowed − principal = close', () => {
+    const result = runPlan(SAMPLE_PLANS[0]);
+    const mortgageAt = (i: number) => flowOpen(result.years, i, 'mortgage', true);
+    const i = result.years.findIndex((_y, k) => k > 0 && mortgageAt(k) < 1 && result.years[k].accounts.some((a) => a.accountClass === 'mortgage' && a.close > 1));
+    expect(i).toBeGreaterThan(0);
+
+    const rows = accountFlowRows(result.years, 'mortgage', true);
+    const get = (key: string) => rows.find((r) => r.key === key)!.values[i];
+    const snapshot = result.years[i].accounts.filter((a) => a.accountClass === 'mortgage' && a.isLiability);
+    const close = snapshot.reduce((s, a) => s + a.close, 0);
+    const principal = snapshot.reduce((s, a) => s + a.principal, 0);
+    const interest = snapshot.reduce((s, a) => s + a.interest, 0);
+
+    const borrowed = get('borrowed');
+    const paid = get('paid');
+    // The loan is the full amount borrowed this year: it is what the balance rose to, plus the principal repaid.
+    expect(borrowed).toBeGreaterThan(0);
+    expect(borrowed).toBeCloseTo(close + principal, 0);
+    expect(paid).toBeCloseTo(-principal, 0);
+    expect(Math.abs(mortgageAt(i) + borrowed + paid - close)).toBeLessThan(1);
+    // The account sheet's waterfall for that year agrees with the table's sub-rows.
+    expect(classFlowSteps(result.years, i, 'mortgage', true).find((s) => s.key === 'borrowed')?.value).toBeCloseTo(borrowed, 6);
+    // Interest is paid from cash: reported beside the flows, never part of the reconciliation above.
+    expect(get('interest')).toBeCloseTo(interest, 0);
+    expect(interest).toBeGreaterThan(0);
   });
 });

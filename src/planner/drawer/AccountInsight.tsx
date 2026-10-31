@@ -4,7 +4,7 @@ import { RangePicker, TimeSeriesChart, type ChartSeries, type DangerBand, type R
 import { money, signedMoney } from '../format';
 import { classBalances } from '../ledger';
 import { accountClassColor } from '../ui';
-import { agesLabel, flowSteps, type FlowStep } from '../pages/netWorthData';
+import { agesLabel, classFlowSteps, type FlowStep } from '../pages/netWorthData';
 
 /**
  * What the account sheet shows above its form (docs/REDESIGN-V5.md §5.1.4):
@@ -95,17 +95,10 @@ export function AccountInsight({
 
   const last = years[years.length - 1];
   const flowYear = hover ?? focusYear ?? last;
-  const snapshot = result.years.find((y) => y.year === flowYear);
+  const flowIndex = result.years.findIndex((y) => y.year === flowYear);
   const steps = useMemo(
-    () =>
-      snapshot
-        ? flowSteps(
-            snapshot.accounts.filter((a) => a.accountClass === accountClass && a.isLiability === liability),
-            liability,
-            snapshot.income,
-          )
-        : [],
-    [snapshot, accountClass, liability],
+    () => (flowIndex >= 0 ? classFlowSteps(result.years, flowIndex, accountClass, liability) : []),
+    [result, flowIndex, accountClass, liability],
   );
 
   if (!hasData) return null;
@@ -155,8 +148,10 @@ export function AccountInsight({
 
 /** A horizontal waterfall: each step floats between the running balance before and after it. */
 function FlowWaterfall({ year, steps }: { year: number; steps: FlowStep[] }) {
-  const lo = Math.min(0, ...steps.flatMap((s) => [s.from, s.to]));
-  const hi = Math.max(...steps.flatMap((s) => [s.from, s.to]), 1);
+  // An `info` figure (interest, paid from cash) moves nothing on the balance, so it gets no bar.
+  const bars = steps.filter((s) => s.kind !== 'info');
+  const lo = Math.min(0, ...bars.flatMap((s) => [s.from, s.to]));
+  const hi = Math.max(...bars.flatMap((s) => [s.from, s.to]), 1);
   const span = hi - lo || 1;
   const pct = (v: number) => ((v - lo) / span) * 100;
 
@@ -165,6 +160,14 @@ function FlowWaterfall({ year, steps }: { year: number; steps: FlowStep[] }) {
       <h3 className="ns-nw-subtitle">In {year}</h3>
       <ul className="ns-nw-flow-list">
         {steps.map((s) => {
+          if (s.kind === 'info') {
+            return (
+              <li key={s.key} className="ns-nw-flow-row ns-nw-flow-info">
+                <span className="ns-nw-flow-label">{s.label}</span>
+                <span className="ns-nw-flow-value ns-num">{money(s.value)}</span>
+              </li>
+            );
+          }
           const left = pct(Math.min(s.from, s.to));
           const width = Math.max(0.8, Math.abs(pct(s.to) - pct(s.from)));
           return (

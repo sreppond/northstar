@@ -137,7 +137,8 @@ export interface FlowStep {
   label: string;
   /** Signed contribution to the balance; for `open` and `close`, the balance itself. */
   value: number;
-  kind: 'total' | 'in' | 'out';
+  /** `info` is a figure beside the balance that moves nothing on it (interest is paid from cash). */
+  kind: 'total' | 'in' | 'out' | 'info';
   /** Where the bar starts and ends on the running balance. */
   from: number;
   to: number;
@@ -166,9 +167,17 @@ export function flowSteps(rows: AccountYear[], liability: boolean, income: reado
   const open = sum((r) => r.open);
   const close = sum((r) => r.close);
 
-  let parts: { key: string; label: string; value: number }[];
+  // `info` parts are shown but never move the running balance, so they stay out of `other` and the crumbs.
+  let parts: { key: string; label: string; value: number; info?: boolean }[];
   if (liability) {
-    parts = [{ key: 'paid', label: 'Principal paid', value: -sum((r) => r.principal) }];
+    // Principal is what the balance fell by, so a loan opened this year shows as Borrowed:
+    // open + borrowed − principal = close.
+    const principal = sum((r) => r.principal);
+    parts = [
+      { key: 'borrowed', label: 'Borrowed', value: Math.max(0, close - open + principal) },
+      { key: 'paid', label: 'Principal paid', value: -principal },
+      { key: 'interest', label: 'Interest (paid from cash)', value: sum((r) => r.interest), info: true },
+    ];
   } else {
     const ids = new Set(rows.map((r) => r.accountId));
     const mine = income.filter((l) => l.accountId !== undefined && ids.has(l.accountId));
@@ -186,7 +195,7 @@ export function flowSteps(rows: AccountYear[], liability: boolean, income: reado
     ];
   }
 
-  const other = close - open - parts.reduce((a, p) => a + p.value, 0);
+  const other = close - open - parts.filter((p) => !p.info).reduce((a, p) => a + p.value, 0);
   const growth = parts.find((p) => p.key === 'growth');
   if (growth && Math.abs(other) < Math.max(1000, 0.005 * Math.abs(open))) {
     growth.value += other;
@@ -198,7 +207,7 @@ export function flowSteps(rows: AccountYear[], liability: boolean, income: reado
   // somewhere: Growth (always drawn) takes them, so the bars land on `close`.
   const visible = (p: { key: string; value: number }) =>
     p.key === 'growth' || p.key === 'contributions' || Math.abs(p.value) >= MIN_ROW;
-  const crumbs = parts.filter((p) => !visible(p)).reduce((a, p) => a + p.value, 0);
+  const crumbs = parts.filter((p) => !p.info && !visible(p)).reduce((a, p) => a + p.value, 0);
   if (growth) growth.value += crumbs;
 
   let running = open;
@@ -206,11 +215,87 @@ export function flowSteps(rows: AccountYear[], liability: boolean, income: reado
   for (const p of parts) {
     if (!visible(p)) continue;
     const from = running;
+    if (p.info) {
+      steps.push({ key: p.key, label: p.label, value: p.value, kind: 'info', from, to: from });
+      continue;
+    }
     running += p.value;
-    steps.push({ ...p, kind: p.value >= 0 ? 'in' : 'out', from, to: running });
+    steps.push({ key: p.key, label: p.label, value: p.value, kind: p.value >= 0 ? 'in' : 'out', from, to: running });
   }
   steps.push({ key: 'close', label: 'Closing', value: close, kind: 'total', from: 0, to: close });
   return steps;
+}
+
+/**
+ * One class's flow steps in year `index`. An account that starts this year
+ * opens at its initial balance, not last year's close (0). That balance is
+ * money put in this year: a loan borrowed, or a deposit made. So the class
+ * reads the same whether the balances table or the account sheet asks.
+ */
+export function classFlowSteps(years: YearSnapshot[], index: number, accountClass: AccountClass, liability: boolean): FlowStep[] {
+  const snapshot = years[index];
+  const prior = index > 0 ? years[index - 1].accounts : [];
+  const rows = snapshot.accounts
+    .filter((r) => r.accountClass === accountClass && r.isLiability === liability)
+    .map((r) => {
+      if (index === 0) return r;
+      const before = prior.find((p) => p.accountId === r.accountId)?.close ?? 0;
+      const started = r.open - before;
+      if (Math.abs(started) < 1) return r;
+      return liability ? { ...r, open: before } : { ...r, open: before, contributions: r.contributions + started };
+    });
+  return flowSteps(rows, liability, snapshot.income);
+}
+
+/** One line under an account class in the balances table; `values` parallel the years. */
+export interface AccountFlowRow {
+  key: string;
+  label: string;
+  values: number[];
+}
+
+/**
+ * The flows under one account class, year by year, for the balances table's
+ * expanded rows. Each year's `flowSteps` is regrouped into the few lines a
+ * reader scans, with the same signs the table prints: asset withdrawals
+ * (required distributions, SEPP and plain withdrawals together) and principal
+ * paid are negative. Assets get Additions, Withdrawals and Growth, plus
+ * Inflation adjustment only when some year has one. Liabilities get Borrowed,
+ * Principal paid and Interest.
+ *
+ * Filters by class the way `classBalances` does, so each year's flows
+ * reconcile to the class row: last year's close + flows = close. The engine
+ * opens a new account at its initial balance, so that balance is taken as
+ * money in this year (Borrowed for a loan, Additions for a deposit).
+ */
+export function accountFlowRows(
+  years: YearSnapshot[],
+  accountClass: AccountClass,
+  liability: boolean,
+): AccountFlowRow[] {
+  const perYear = years.map((_snapshot, i) => classFlowSteps(years, i, accountClass, liability));
+  const row = (key: string, label: string, keys: string[]): AccountFlowRow => ({
+    key,
+    label,
+    values: perYear.map((steps) => steps.filter((s) => keys.includes(s.key)).reduce((a, s) => a + s.value, 0)),
+  });
+
+  if (liability) {
+    return [
+      row('borrowed', 'Borrowed', ['borrowed']),
+      row('paid', 'Principal paid', ['paid']),
+      row('interest', 'Interest (paid from cash)', ['interest']),
+    ];
+  }
+  const rows = [
+    row('additions', 'Additions', ['contributions']),
+    row('withdrawals', 'Withdrawals', ['rmd', 'sepp', 'withdrawals']),
+    row('growth', 'Growth (net of fees)', ['growth']),
+  ];
+  if (perYear.some((steps) => steps.some((s) => s.key === 'other'))) {
+    rows.push(row('inflation', 'Inflation adjustment', ['other']));
+  }
+  return rows;
 }
 
 /**
