@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp, registerCookies, CSRF_HEADER } from '../src/app.ts';
 import { generateEncryptionKey, loadConfig } from '../src/config.ts';
@@ -264,6 +264,32 @@ describe('monarch routes', () => {
 
     const status = (await client.get('/api/monarch/status')).json();
     expect(status).toMatchObject({ snapshotCount: 1, ageDays: 0, stale: false, lastSource: 'live' });
+  });
+
+  describe('snapshot age in a timezone west of UTC', () => {
+    // 2026-10-30 23:30 PDT is 2026-10-31T06:30Z: the UTC calendar has already
+    // turned over, but the capture is dated by the local day (Oct 30). Age
+    // must be measured on that same local calendar, or it reads one day old.
+    const originalTZ = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = 'America/Los_Angeles';
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-31T06:30:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      process.env.TZ = originalTZ;
+    });
+
+    it('reports a snapshot captured that local evening as zero days old', async () => {
+      const { client } = await signedIn(fetchOnce(ACCOUNTS_OK));
+      await client.post('/api/monarch/connect', { cookieString: COOKIES });
+      expect((await client.post('/api/monarch/refresh')).statusCode).toBe(200);
+
+      const status = (await client.get('/api/monarch/status')).json();
+      expect(status.lastCapturedAt).toBe('2026-10-30');
+      expect(status).toMatchObject({ ageDays: 0, stale: false });
+    });
   });
 
   it('flags the connection for reconnect when Monarch rejects a refresh', async () => {

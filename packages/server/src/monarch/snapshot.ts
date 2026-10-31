@@ -14,17 +14,25 @@
 import type { MonarchSnapshot } from '@northstar/engine';
 import type { CashflowTotals, MonarchApiAccount } from './client.ts';
 
+/**
+ * The local calendar date of `date` as YYYY-MM-DD. This is the one definition
+ * of "what day is it" for a snapshot: the capture date is written with it and
+ * the age is measured against it, so the two always agree. Not UTC
+ * (docs/W3-REVIEW.md "Use local dates, not UTC") — `toISOString` reads in UTC,
+ * so an evening in Pacific time would date a capture tomorrow. `en-CA`'s
+ * built-in format is YYYY-MM-DD.
+ */
+export function localCalendarDate(date: Date = new Date()): string {
+  return date.toLocaleDateString('en-CA');
+}
+
 export function toSnapshot(
   accounts: MonarchApiAccount[],
   cashflow: CashflowTotals | null,
   capturedAt = new Date(),
 ): MonarchSnapshot {
   const snapshot: MonarchSnapshot = {
-    // Local calendar date, not UTC (docs/W3-REVIEW.md "Use local dates, not
-    // UTC") — `toISOString` reads in UTC, so a sync run in the evening west
-    // of Greenwich dated the capture tomorrow. `en-CA`'s built-in format is
-    // YYYY-MM-DD.
-    capturedAt: capturedAt.toLocaleDateString('en-CA'),
+    capturedAt: localCalendarDate(capturedAt),
     accounts: accounts.map(toAccount),
   };
 

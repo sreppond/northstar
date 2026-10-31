@@ -15,7 +15,7 @@ import {
   MonarchSessionExpired,
   missingCookies,
 } from '../monarch/client.ts';
-import { defaultCashflowRange, toSnapshot } from '../monarch/snapshot.ts';
+import { defaultCashflowRange, localCalendarDate, toSnapshot } from '../monarch/snapshot.ts';
 import { SealedDataError } from '../auth/crypto.ts';
 
 const connectBody = z.object({
@@ -219,10 +219,16 @@ function monarchFailure(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
-function daysSince(isoDate: string): number {
+/**
+ * Whole local calendar days from `isoDate` (a capture date, YYYY-MM-DD) to
+ * today. Both sides are the same local calendar; the subtraction runs on UTC
+ * midnights of those calendar dates, so it is a pure day count with no DST or
+ * offset drift.
+ */
+function daysSince(isoDate: string, now = new Date()): number {
   const then = new Date(`${isoDate}T00:00:00Z`).getTime();
   if (Number.isNaN(then)) return Number.POSITIVE_INFINITY;
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const [y, m, d] = localCalendarDate(now).split('-').map(Number);
+  const today = Date.UTC(y, m - 1, d);
   return Math.max(0, Math.round((today - then) / 86_400_000));
 }
