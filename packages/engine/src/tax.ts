@@ -1,5 +1,14 @@
 import type { Account } from './types.js';
 
+/**
+ * A taxable account whose gains are taxed every year as they are realized
+ * (`gainsTaxTreatment: 'activeTrading'`, run.ts step 10b). Its withdrawals
+ * owe no further gains tax, because the gains were already taxed.
+ */
+export function isActiveTrading(account: Account): boolean {
+  return account.accountClass === 'taxableInvestment' && account.gainsTaxTreatment === 'activeTrading';
+}
+
 function penaltyApplies(account: Account, ownerAge: number | undefined): boolean {
   return (
     account.penaltyRate > 0 &&
@@ -18,6 +27,7 @@ function penaltyApplies(account: Account, ownerAge: number | undefined): boolean
  * raises the withdrawal.
  */
 export function effectiveWithdrawalRate(account: Account, ownerAge: number | undefined): number {
+  if (isActiveTrading(account)) return 0;
   const taxable = clampPercent(account.taxableWithdrawalPercent) / 100;
   const taxRate = clampPercent(account.withdrawalTaxRate) / 100;
 
@@ -36,6 +46,7 @@ export function effectiveWithdrawalRate(account: Account, ownerAge: number | und
  * it falls out of how much gain is actually left in the account.
  */
 export function effectiveGainRate(account: Account, ownerAge: number | undefined): number {
+  if (isActiveTrading(account)) return 0;
   const taxRate = clampPercent(account.withdrawalTaxRate) / 100;
   let rate = taxRate;
   if (penaltyApplies(account, ownerAge)) rate += clampPercent(account.penaltyRate) / 100;

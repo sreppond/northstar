@@ -35,7 +35,7 @@ import { monthsRemaining, yearFractionRemaining } from './partialYear.js';
 import { planAllocations, planWithdrawals, type WaterfallContext } from './priority.js';
 import { requiredMinimumDistribution, RMD_START_AGE } from './rmd.js';
 import { mandatoryEndYear, seppMethodPayment } from './sepp.js';
-import { costBasisTax, proRataTax } from './tax.js';
+import { costBasisTax, isActiveTrading, proRataTax } from './tax.js';
 import {
   type CashFlowItem,
   type CompileContext,
@@ -182,6 +182,11 @@ export function runPlan(plan: Plan): PlanResult {
   const remainingBasis = new Map<string, number>();
   // A fixed-method SEPP's payment, locked in the year it starts (sepp.ts).
   const seppFixedPayment = new Map<string, number>();
+  // Active-trading accounts only (step 10b): the loss carryforward still to
+  // offset against later gains, and the gains tax each year's gains owe, keyed
+  // by the year it falls due (the year after the gain, step 7).
+  const gainsCarry = new Map<string, number>();
+  const gainsTaxDueByYear = new Map<number, LineItem[]>();
   const years: YearSnapshot[] = [];
 
   // --- phase B: simulate -----------------------------------------------------
@@ -413,6 +418,9 @@ export function runPlan(plan: Plan): PlanResult {
     if (ordinaryTax > EPSILON) {
       taxes.push({ label: 'Income tax', amount: ordinaryTax, category: 'tax' });
     }
+    // Last year's active-trading gains come due now, through the same
+    // waterfall as every other tax line (step 10b wrote them).
+    taxes.push(...(gainsTaxDueByYear.get(year) ?? []));
 
     // 7.5. RMD -- a tax-deferred account whose owner has reached RMD_START_AGE
     //      is drained by IRS-mandated divisor whether or not the household
@@ -715,6 +723,43 @@ export function runPlan(plan: Plan): PlanResult {
           : {}),
         ...(annuityFees > EPSILON ? { annuityFeesDeducted: annuityFees } : {}),
       });
+
+      // 10b. TRADING GAINS -- an active-trading account's realized gain is this
+      //      year's growth, net of fees, as just recorded. A loss adds to a
+      //      carryforward; a gain is reduced by it first. The tax is owed next
+      //      year (step 7). Compounding is untouched: the tax comes out of cash
+      //      flow, not out of the account (docs/MATH.md "Taxable gains").
+      if (isActiveTrading(account)) {
+        let carry = gainsCarry.get(account.id) ?? 0;
+        let taxableGain = 0;
+        if (growth < 0) {
+          carry += -growth;
+        } else {
+          taxableGain = Math.max(0, growth - carry);
+          carry = Math.max(0, carry - growth);
+        }
+        gainsCarry.set(account.id, carry);
+
+        const shortTermRate = account.shortTermGainsRate ?? settings.incomeTaxRate;
+        const gainsTax = taxableGain * (shortTermRate / 100);
+        if (year === endYear) {
+          // The final year's gains fall due after the horizon: not paid here.
+          if (gainsTax >= 1) {
+            warnings.push(
+              `${account.name}: $${Math.round(gainsTax).toLocaleString()} of tax on ${endYear} trading gains falls due after the plan ends.`,
+            );
+          }
+        } else if (gainsTax > EPSILON) {
+          const due = gainsTaxDueByYear.get(year + 1) ?? [];
+          due.push({
+            label: `Tax on ${year} trading gains — ${account.name}`,
+            amount: gainsTax,
+            category: 'gainsTax',
+            accountId: account.id,
+          });
+          gainsTaxDueByYear.set(year + 1, due);
+        }
+      }
     }
 
     const assets = sum(accountRows.filter((r) => !r.isLiability).map((r) => r.close));

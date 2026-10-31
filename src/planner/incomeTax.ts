@@ -13,6 +13,9 @@
  *   -------------------------------------  ----------------------------------
  *   "Withdrawal tax — X" (accountId)       `withdrawalTax` (money drawn from
  *                                          X to cover a gap, not income)
+ *   "Tax on {y} trading gains — X"         `withdrawalTax` too: an active-trading
+ *     (category "gainsTax")                account's gains tax is an investment
+ *                                          cost, not tax on income
  *   "RMD tax — X", "SEPP tax — X"          the RMD / SEPP income line of X
  *     (accountId)
  *   "<Event> — tax" (sourceEventId only,   that event's source (a windfall,
@@ -59,6 +62,8 @@ export interface IncomeWithTax {
 }
 
 const WITHDRAWAL_TAX_PREFIX = 'Withdrawal tax';
+/** `run.ts` step 10b: an active-trading account's gains tax, paid the year after. */
+const GAINS_TAX_CATEGORY = 'gainsTax';
 const SEPP_TAX_PREFIX = 'SEPP tax';
 const UNTAXED_SUFFIX = 'untaxed portion';
 
@@ -118,7 +123,7 @@ export function incomeWithTax(snapshot: YearSnapshot): IncomeWithTax {
   let householdTax = 0;
 
   for (const tax of snapshot.taxes) {
-    if (tax.label.startsWith(WITHDRAWAL_TAX_PREFIX)) {
+    if (tax.category === GAINS_TAX_CATEGORY || tax.label.startsWith(WITHDRAWAL_TAX_PREFIX)) {
       withdrawalTax += tax.amount;
     } else if (tax.accountId) {
       // RMD or SEPP tax: onto that account's matching income line. A SEPP and

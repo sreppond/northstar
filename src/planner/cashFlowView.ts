@@ -166,7 +166,7 @@ export function waterfallBars(flow: YearFlow, noteMoney: (v: number) => string):
   if (flow.withdrawalTax > EPS) {
     bars.push({
       key: 'wtax',
-      label: 'Tax on withdrawals',
+      label: 'Tax on investments',
       kind: 'delta',
       from: running,
       to: running - flow.withdrawalTax,
@@ -440,7 +440,9 @@ export function cashFlowTree(plan: Plan, snapshots: YearSnapshot[]): CashFlowTre
   const wdLines = lineNodes('wd', wdMap);
   const wtax = flows.map((f) => f.withdrawalTax);
   const wdTotal = snapshots.map((s) => s.withdrawals.reduce((sum, w) => sum + w.amount, 0));
-  const withdrawals: FlowNode | undefined = isZero(wdTotal)
+  // The tax can be owed with no withdrawal at all (an active-trading account's
+  // gains, paid out of surplus), so the group also shows for that alone.
+  const withdrawals: FlowNode | undefined = isZero(wdTotal) && isZero(wtax)
     ? undefined
     : {
         key: 'withdrawals',
@@ -448,7 +450,7 @@ export function cashFlowTree(plan: Plan, snapshots: YearSnapshot[]): CashFlowTre
         values: wdTotal,
         children: [
           ...wdLines,
-          ...(isZero(wtax) ? [] : [{ key: 'wd:tax', label: 'Withdrawal tax', values: wtax, link: 'wtax' as const, negate: true }]),
+          ...(isZero(wtax) ? [] : [{ key: 'wd:tax', label: 'Tax on investments', values: wtax, link: 'wtax' as const, negate: true }]),
         ],
       };
 

@@ -189,7 +189,7 @@ function BudgetBody() {
           values: shares.map((e) => e.perAdult.find((a) => a.id === p.id)?.share ?? 0),
         })),
       { key: 'kids', label: 'Kids', color: KIDS_COLOR, values: shares.map((e) => e.kids) },
-      { key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, values: shares.map((e) => e.withdrawalTax) },
+      { key: 'wtax', label: 'Tax on investments', color: WITHDRAWAL_TAX_COLOR, values: shares.map((e) => e.withdrawalTax) },
       // In a gap year this layer is what was still set aside on purpose
       // ("Saved on purpose"), so the upper stack always reaches 100% (V5-REVIEW-2 N1).
       { key: 'saved', label: 'Saved', color: SAVED_COLOR, values: shares.map((e) => e.saved + e.intoSavings) },
@@ -224,7 +224,7 @@ function BudgetBody() {
     { key: 'shared', label: 'Shared', value: env.shared * scale, color: SHARED_FIXED_COLOR },
     ...adults.map((a) => ({ key: a.id, label: a.name, value: a.monthly * scale, color: ownerColor(stored, a.id) })),
     ...(hasKids ? [{ key: 'kids', label: 'Kids', value: env.kids * scale, color: KIDS_COLOR }] : []),
-    ...(env.withdrawalTax >= 0.5 ? [{ key: 'wtax', label: 'Tax on withdrawals', value: env.withdrawalTax * scale, color: WITHDRAWAL_TAX_COLOR }] : []),
+    ...(env.withdrawalTax >= 0.5 ? [{ key: 'wtax', label: 'Tax on investments', value: env.withdrawalTax * scale, color: WITHDRAWAL_TAX_COLOR }] : []),
     // A surplus year saves what is left; a gap year sets aside only what it still
     // pays in, draws on accounts for what they really cover, and shows the rest
     // as unfunded. The keys stay put so the arcs morph rather than remount.
@@ -307,7 +307,7 @@ function BudgetBody() {
     })),
     ...(hasKids ? [{ key: 'kids', label: 'Kids', color: KIDS_COLOR, monthly: env.kids, edited: false, opens: () => setKidsOpen(true) } satisfies EnvRowSpec] : []),
     ...(env.withdrawalTax >= 0.5
-      ? [{ key: 'wtax', label: 'Tax on withdrawals', color: WITHDRAWAL_TAX_COLOR, monthly: env.withdrawalTax, edited: false, derived: true } satisfies EnvRowSpec]
+      ? [{ key: 'wtax', label: 'Tax on investments', color: WITHDRAWAL_TAX_COLOR, monthly: env.withdrawalTax, edited: false, derived: true } satisfies EnvRowSpec]
       : []),
     // What is left. A surplus year is "Saved". A gap year is three rows
     // (V5-REVIEW-2 N1): "Saved on purpose" (money still set aside), "From savings"

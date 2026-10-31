@@ -210,7 +210,7 @@ export function budgetView(plan: Plan, snapshot: YearSnapshot): BudgetView {
     if (s.role === 'shared') continue;
     buckets.push({ key: `person:${s.owner}`, label: s.title, monthly: s.monthly, color: ownerColor(plan, s.owner) });
   }
-  if (withdrawalTax >= 0.5) buckets.push({ key: 'wtax', label: 'Tax on withdrawals', monthly: withdrawalTax, color: WITHDRAWAL_TAX_COLOR });
+  if (withdrawalTax >= 0.5) buckets.push({ key: 'wtax', label: 'Tax on investments', monthly: withdrawalTax, color: WITHDRAWAL_TAX_COLOR });
   if (gap >= 0.5) {
     // A gap year: three separate buckets, never one "From savings" (V5-REVIEW-2 N1).
     buckets.push({ key: 'into-savings', label: 'Saved on purpose', monthly: intoSavings, color: SAVED_COLOR });
