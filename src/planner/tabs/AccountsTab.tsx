@@ -10,9 +10,9 @@ import { GearIcon } from '../icons';
 import { ACCOUNT_ICON } from '../domainIcons';
 import { classBalances, missingAccountClasses } from '../ledger';
 import { PopMenu } from '../pages/PopMenu';
-import { accountFlowRows } from '../pages/netWorthData';
+import { accountFlowRows, overdrawnRows, type OverdrawnBreakdown } from '../pages/netWorthData';
 import { rememberRow } from '../drawer/rowMorph';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus, TriangleAlert } from 'lucide-react';
 
 /** Negatives keep their real minus sign; everything else prints as the table does. */
 const flowMoney = (value: number) => (value < 0 ? signedTableMoney(value) : tableMoney(value));
@@ -77,8 +77,12 @@ export const AccountsTab = memo(function AccountsTab({
       return next;
     });
   const isDanger = (y: number) => dangerYears?.includes(y) === true;
+  // The Overdrawn row's own disclosure; it is not an account class, so it has its own flag.
+  const [overdrawnOpen, setOverdrawnOpen] = useState(false);
 
   const yearLabels = years.map((y) => y.year);
+  // Undefined when no year owes anything, so the row is absent for a plan that is never short.
+  const overdrawn = overdrawnRows(years);
   // +1 for the leading "Today" column when there's an opening snapshot to
   // show one from.
   const style = { ['--cols' as string]: yearLabels.length + (showOpening ? 1 : 0) };
@@ -249,6 +253,60 @@ export const AccountsTab = memo(function AccountsTab({
         ];
       });
 
+  /**
+   * The Overdrawn row under Liabilities (docs/V6.1-PLAN.md B2): the balance the
+   * plan owes from earlier shortfalls. Its chevron shows Borrowed, Paid back
+   * and, when needed, the Inflation adjustment. The row itself opens nothing.
+   */
+  const renderOverdrawn = (breakdown: OverdrawnBreakdown) => {
+    const rowMax = Math.max(1, ...breakdown.balance.map((v) => Math.abs(v)));
+    return [
+      <div key="overdrawn" className="ns-grid ns-row-child" style={style}>
+        <div className="ns-type-cell">
+          <button
+            type="button"
+            className="ns-group-toggle"
+            aria-expanded={overdrawnOpen}
+            aria-label={`${overdrawnOpen ? 'Collapse' : 'Expand'} Overdrawn flows`}
+            onClick={() => setOverdrawnOpen((v) => !v)}
+          >
+            <ChevronRight size={13} strokeWidth={2} aria-hidden />
+          </button>
+          <TriangleAlert size={14} strokeWidth={2} className="ns-type-icon ns-overdrawn-icon" aria-hidden />
+          <span className="ns-type-name" title="Borrowed to cover shortfalls, owed until repaid">
+            Overdrawn
+          </span>
+        </div>
+        {showOpening && <Cell value={tableMoney(0)} divider />}
+        {breakdown.balance.map((v, i) => (
+          <Cell
+            key={yearLabels[i]}
+            value={tableMoney(v)}
+            magnitude={{ fraction: Math.abs(v) / rowMax, tone: 'cost' }}
+            highlighted={yearLabels[i] === focus}
+            danger={isDanger(yearLabels[i])}
+          />
+        ))}
+      </div>,
+      ...(overdrawnOpen
+        ? breakdown.rows.map((flow) => (
+            <div key={`overdrawn-${flow.key}`} className="ns-grid ns-row-child ns-flow-line" style={style}>
+              <div title={flow.label}>{flow.label}</div>
+              {showOpening && <Cell value="" divider />}
+              {flow.values.map((v, i) => (
+                <Cell
+                  key={yearLabels[i]}
+                  value={flowMoney(v)}
+                  highlighted={yearLabels[i] === focus}
+                  danger={isDanger(yearLabels[i])}
+                />
+              ))}
+            </div>
+          ))
+        : []),
+    ];
+  };
+
   return (
     <div {...scrollerProps}>
       <div className="ns-grid ns-row-head" style={style}>
@@ -298,6 +356,7 @@ export const AccountsTab = memo(function AccountsTab({
         ))}
       </div>
       {renderGroup(LIABILITY_CLASSES, true)}
+      {overdrawn && renderOverdrawn(overdrawn)}
     </div>
   );
 });

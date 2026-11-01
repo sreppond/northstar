@@ -17,7 +17,7 @@ import type {
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engine';
 import { monthsIn } from '../budgetView';
 import type { ChartMarker, DangerBand } from '../charts';
-import { healthDangerBand, type PlanHealth } from '../health';
+import { healthDangerBand, shortAmount, type PlanHealth } from '../health';
 import { classBalances } from '../ledger';
 import { toneFor } from '../presentation';
 
@@ -281,11 +281,51 @@ export function accountFlowRows(
 /**
  * The danger band re-unitised per month, for the sheets that sit over this
  * page's "/mo" figures (V5-REVIEW-2 N10). `shortFor` divides each short year's
- * unfunded total by that year's months.
+ * amount (`shortAmount`, which falls back to the balance owed in a carry-over
+ * year) by that year's months.
  */
 export function monthlyDangerBand(health: PlanHealth, plan: Plan, result: PlanResult): DangerBand | undefined {
   const band = healthDangerBand(health, result);
   if (!band) return undefined;
-  const perMonth = new Map(result.years.map((y) => [y.year, (y.unfundedShortfall ?? 0) / (monthsIn(plan, y.year) || 12)]));
+  const perMonth = new Map(
+    result.years.map((y) => [y.year, (shortAmount(y) ?? 0) / (monthsIn(plan, y.year) || 12)]),
+  );
   return { ...band, shortFor: (year) => perMonth.get(year) };
+}
+
+/* --- overdrawn balance (docs/MATH.md "Overdrawn balance") ------------------ */
+
+/** The Overdrawn row under Liabilities: the balance owed each year, and its sub-rows. */
+export interface OverdrawnBreakdown {
+  /** Year-end balance owed, parallel to `years`. */
+  balance: number[];
+  /** Borrowed and Paid back, plus Inflation adjustment when some year needs one. */
+  rows: AccountFlowRow[];
+}
+
+/**
+ * The carried-forward shortfall as a liability row. Undefined when no year owes
+ * anything, so the row is simply absent for a plan that is never short.
+ *
+ * Each year opens on last year's closing balance, the figure the column before
+ * shows. In today's dollars the engine deflates `open` at this year's balance
+ * deflator, so it can sit a year of inflation away from that figure, while the
+ * flows (added, repaid) take the flow deflator. The gap, close − (last close +
+ * added − repaid), is the Inflation adjustment sub-row, as the account sheet
+ * does for accounts (`classFlowSteps`). It is shown only when some year's gap
+ * is a dollar or more.
+ */
+export function overdrawnRows(years: YearSnapshot[]): OverdrawnBreakdown | undefined {
+  if (!years.some((y) => (y.overdrawn?.close ?? 0) > 0)) return undefined;
+  const od = years.map((y) => y.overdrawn ?? { open: 0, added: 0, repaid: 0, close: 0 });
+  const opened = od.map((o, i) => (i === 0 ? o.open : od[i - 1].close));
+  const residue = od.map((o, i) => o.close - (opened[i] + o.added - o.repaid));
+  const rows: AccountFlowRow[] = [
+    { key: 'borrowed', label: 'Borrowed', values: od.map((o) => o.added) },
+    { key: 'paid', label: 'Paid back', values: od.map((o) => -o.repaid) },
+  ];
+  if (residue.some((r) => Math.abs(r) >= 1)) {
+    rows.push({ key: 'inflation', label: 'Inflation adjustment', values: residue });
+  }
+  return { balance: od.map((o) => o.close), rows };
 }

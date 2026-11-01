@@ -217,6 +217,10 @@
 .ns-nw-table .ns-flow-line > div:first-child {
   padding-left: 56px;
 }
+/* The Overdrawn row's icon is the one danger-tinted mark in the table (docs/V6.1-PLAN.md B2). */
+.ns-nw-table .ns-overdrawn-icon {
+  color: var(--danger);
+}
 .ns-nw-h2 {
   margin: 0 0 12px;
   font-size: var(--fs-title);
