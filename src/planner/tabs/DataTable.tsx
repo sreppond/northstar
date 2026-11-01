@@ -195,10 +195,8 @@ export const DataTable = memo(function DataTable({
   onFocusYear,
   dangerYears,
   columnSubLabel,
-  columnHeads,
 }: {
   caption: string;
-  /** One key per column. Year tables pass the years; `columnHeads` tables pass their own. */
   years: number[];
   rows: TableRow[];
   empty?: string;
@@ -221,8 +219,6 @@ export const DataTable = memo(function DataTable({
       `stubYearLabel` (`ledger.ts`) by the caller so every table renders the
       same wording. Returns `undefined` for every ordinary year. */
   columnSubLabel?(year: number): string | undefined;
-  /** Plain headers in place of the year cells, one per column (Cash Flow's month view). */
-  columnHeads?: { label: ReactNode; muted?: boolean }[];
 }) {
   const style = { ['--cols' as string]: years.length };
   const focus = focusYear !== undefined ? focusYear : highlightYear;
@@ -233,22 +229,16 @@ export const DataTable = memo(function DataTable({
     <div {...scrollerProps}>
       <div className="ns-grid ns-row-head" style={style}>
         <div>{caption}</div>
-        {columnHeads
-          ? columnHeads.map((h, i) => (
-              <div key={i} className={h.muted ? 'ns-col-muted' : undefined}>
-                {h.label}
-              </div>
-            ))
-          : years.map((y) => (
-              <YearHeadCell
-                key={y}
-                year={y}
-                focused={y === focus}
-                danger={isDanger(y)}
-                sub={columnSubLabel?.(y)}
-                onFocusYear={pickYear}
-              />
-            ))}
+        {years.map((y) => (
+          <YearHeadCell
+            key={y}
+            year={y}
+            focused={y === focus}
+            danger={isDanger(y)}
+            sub={columnSubLabel?.(y)}
+            onFocusYear={pickYear}
+          />
+        ))}
       </div>
 
       {rows.length === 0 && <div className="ns-empty">{empty ?? 'Nothing to show.'}</div>}
