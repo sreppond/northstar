@@ -27,7 +27,7 @@
 }
 
 /*
- * Phone: one line (V5-REVIEW-2 N6). "Runs dry 2031 · $10.2K short", then the
+ * Phone: one line (V5-REVIEW-2 N6). "Overdrawn 2031 · $10K", then the
  * "See 2031 →" action and ×, all on one row. The stranded-accounts
  * explanation sits behind "Why?" and opens inline, its height animating
  * 0fr -> 1fr like the alert's own dismissal does. The overrides beat ui.css's

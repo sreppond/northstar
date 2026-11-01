@@ -6,7 +6,7 @@ import { DismissibleAlert } from './ui/Alert';
 import { money } from './format';
 import { useBreakpoint } from './useBreakpoint';
 import { requestAccountFocus } from './drawer/sheetFocus';
-import type { PlanHealth, StrandedAccount, StrandedReason } from './health';
+import { overdrawnSummary, type StrandedAccount, type StrandedReason } from './health';
 import './plan-health-alert.css';
 
 /**
@@ -69,21 +69,6 @@ export function strandedClauses(stranded: StrandedAccount[]): { reason: Stranded
       const classes = classList(accounts);
       return { reason, total, text: `${money(total)} in ${classes.text} ${classes.plural ? 'are' : 'is'} ${REASON_PHRASE[reason]}` };
     });
-}
-
-/**
- * The headline for an overdrawn plan (docs/V6.1-PLAN.md B2): the years it owes
- * money, and the largest balance it carries. Undefined when the plan is fine.
- * "Overdrawn from 2034 to 2036" with "up to $207K", or "Overdrawn in 2034" with "$207K".
- */
-export function overdrawnSummary(health: PlanHealth): { span: string; amount: string } | undefined {
-  const from = health.firstShortYear;
-  if (from === undefined) return undefined;
-  const to = health.lastShortYear ?? from;
-  const peak = money(health.overdrawnPeak);
-  return to === from
-    ? { span: `Overdrawn in ${from}`, amount: peak }
-    : { span: `Overdrawn from ${from} to ${to}`, amount: `up to ${peak}` };
 }
 
 export function PlanHealthAlert() {

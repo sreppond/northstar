@@ -14,6 +14,7 @@
 import { isWithdrawable, mandatoryEndYear, pathMarkers } from '@northstar/engine';
 import type { Account, AccountClass, AccountYear, Plan, PlanResult, YearSnapshot } from '@northstar/engine';
 import type { DangerBand } from './charts/types';
+import { money } from './format';
 
 /**
  * Why money that exists is not being spent (V5-REVIEW-1 F6). Checked in this
@@ -156,13 +157,24 @@ export function planHealth(result: PlanResult, plan?: Plan): PlanHealth {
 }
 
 /**
- * The amount a year is short, for the Short readout: this year's NEW shortfall,
- * or, in a carry-over year that owes money from earlier but is not newly short
- * (`unfundedShortfall` is absent), the overdrawn balance it still owes.
- * Undefined when the year has neither.
+ * The one wording of an overdrawn plan, shared by the alert, the sidebar pill
+ * and the Net Worth reading (docs/V6.1-PLAN.md B2): the years it owes money, and
+ * the largest balance it carries. "Overdrawn from 2034 to 2036" with "up to
+ * $207K", or "Overdrawn in 2034" with "$207K". Takes the bare numbers so
+ * `PlanHealth` and the engine's `PathMarkers` both feed it.
  */
-export function shortAmount(year: YearSnapshot): number | undefined {
-  return year.unfundedShortfall ?? year.overdrawn?.close;
+export function overdrawnWording(from: number, to: number, peak: number): { span: string; amount: string } {
+  const amount = money(peak);
+  return to === from
+    ? { span: `Overdrawn in ${from}`, amount }
+    : { span: `Overdrawn from ${from} to ${to}`, amount: `up to ${amount}` };
+}
+
+/** `overdrawnWording` for a plan's health; undefined when the plan is fine. */
+export function overdrawnSummary(health: PlanHealth): { span: string; amount: string } | undefined {
+  const from = health.firstShortYear;
+  if (from === undefined) return undefined;
+  return overdrawnWording(from, health.lastShortYear ?? from, health.overdrawnPeak);
 }
 
 /**
@@ -176,10 +188,14 @@ export function shortAmount(year: YearSnapshot): number | undefined {
  * `perUnit` divides the Short amount for pages that show per-month figures
  * (pass 12) so the pill uses the page's unit; pair it with
  * `ChartReadout`'s `shortUnit` suffix (F10). Undefined when the plan is fine.
+ *
+ * `shortFor` is the year's NEW shortfall only. A year that merely carries an
+ * earlier overdrawn balance has no new amount, and its readout pill says
+ * "Overdrawn" without one rather than printing a balance as a per-period figure.
  */
 export function healthDangerBand(health: PlanHealth, result: PlanResult, perUnit = 1): DangerBand | undefined {
   if (health.status !== 'short' || health.firstShortYear === undefined) return undefined;
-  const byYear = new Map(result.years.map((y) => [y.year, shortAmount(y)]));
+  const byYear = new Map(result.years.map((y) => [y.year, y.unfundedShortfall]));
   return {
     from: health.firstShortYear,
     to: health.shortYears[health.shortYears.length - 1],

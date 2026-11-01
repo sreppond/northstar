@@ -17,7 +17,7 @@ import type {
 import { ACCOUNT_TYPES, ASSET_CLASSES, LIABILITY_CLASSES } from '@northstar/engine';
 import { monthsIn } from '../budgetView';
 import type { ChartMarker, DangerBand } from '../charts';
-import { healthDangerBand, shortAmount, type PlanHealth } from '../health';
+import { healthDangerBand, type PlanHealth } from '../health';
 import { classBalances } from '../ledger';
 import { toneFor } from '../presentation';
 
@@ -281,14 +281,13 @@ export function accountFlowRows(
 /**
  * The danger band re-unitised per month, for the sheets that sit over this
  * page's "/mo" figures (V5-REVIEW-2 N10). `shortFor` divides each short year's
- * amount (`shortAmount`, which falls back to the balance owed in a carry-over
- * year) by that year's months.
+ * new shortfall by that year's months (a carry-over year has none).
  */
 export function monthlyDangerBand(health: PlanHealth, plan: Plan, result: PlanResult): DangerBand | undefined {
   const band = healthDangerBand(health, result);
   if (!band) return undefined;
   const perMonth = new Map(
-    result.years.map((y) => [y.year, (shortAmount(y) ?? 0) / (monthsIn(plan, y.year) || 12)]),
+    result.years.map((y) => [y.year, (y.unfundedShortfall ?? 0) / (monthsIn(plan, y.year) || 12)]),
   );
   return { ...band, shortFor: (year) => perMonth.get(year) };
 }

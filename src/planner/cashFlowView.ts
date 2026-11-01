@@ -236,23 +236,28 @@ export function waterfallBars(flow: YearFlow, noteMoney: (v: number) => string):
         color: 'var(--out)',
       });
     }
-  } else {
-    // The drawn total lands on `running` (the saved figure). Its overdrawn part
-    // is the slice nothing covered: the same split `flow.unfunded` gives the gap.
-    const deficit = -running;
-    const unfunded = Math.min(flow.unfunded, deficit);
-    const covered = deficit - unfunded;
+  }
+  // Whenever the year drew down, the Drawdown bar is there, sized as the table's
+  // Drawdown row is. Usually that is the gap (`running` below zero), but paycheck
+  // contributions can push net cash below zero while Saved above is still
+  // positive; the draw still happened, so the bar still shows it. It stands on
+  // zero, in the plain colour for what came out of savings and in danger colour
+  // for the part nothing covered (Overdrawn).
+  const drawn = Math.max(flow.drawdown, -running, 0);
+  if (drawn > EPS) {
+    const unfunded = Math.min(flow.unfunded, drawn);
+    const covered = drawn - unfunded;
     const segments = [
       { from: 0, to: -covered, color: 'var(--out)' },
-      { from: -covered, to: running, color: 'var(--danger)' },
+      { from: -covered, to: -drawn, color: 'var(--danger)' },
     ].filter((s) => Math.abs(s.to - s.from) > EPS);
     bars.push({
       key: 'drawdown',
       label: 'Drawdown',
       kind: 'total',
       from: 0,
-      to: running,
-      amount: running,
+      to: -drawn,
+      amount: -drawn,
       color: 'var(--out)',
       ...(unfunded > EPS ? { segments } : {}),
     });

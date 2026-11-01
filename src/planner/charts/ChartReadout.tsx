@@ -42,6 +42,10 @@ export interface ChartReadoutProps {
       a hero "Short $67K" next to a donut's "Short $5.6K a month" read as two
       different shortfalls. */
   shortUnit?: string;
+  /** The pill's word. "Short" by default; a year that only carries an earlier
+      shortfall says "Overdrawn" with the balance owed and an empty `shortUnit`,
+      since a balance is not a per-period figure. */
+  shortWord?: string;
   size?: 'hero' | 'compact';
   /** Right-hand slot: RangePicker, What-if. */
   actions?: ReactNode;
@@ -57,6 +61,7 @@ export function ChartReadout({
   short = false,
   shortAmount,
   shortUnit = '/yr',
+  shortWord = 'Short',
   size = 'hero',
   actions,
 }: ChartReadoutProps) {
@@ -65,7 +70,11 @@ export function ChartReadout({
   const announcement = [
     `${yearLabel}${ages ? `, ${ages}` : ''}`,
     `${labelText ?? (typeof label === 'string' ? label : 'Value')} ${value}`,
-    short ? `Short ${shortAmount ? `${shortAmount} ${shortUnit === '/mo' ? 'a month' : 'a year'}` : ''}`.trim() : '',
+    short
+      ? `${shortWord} ${
+          shortAmount ? `${shortAmount}${shortUnit === '/mo' ? ' a month' : shortUnit === '/yr' ? ' a year' : ''}` : ''
+        }`.trim()
+      : '',
   ]
     .filter(Boolean)
     .join('. ');
@@ -73,7 +82,7 @@ export function ChartReadout({
 
   const pill = short ? (
     <span className="ns-readout-short">
-      <span aria-hidden="true">✗</span> Short{shortAmount ? ` ${shortAmount}${shortUnit}` : ''}
+      <span aria-hidden="true">✗</span> {shortWord}{shortAmount ? ` ${shortAmount}${shortUnit}` : ''}
     </span>
   ) : null;
 

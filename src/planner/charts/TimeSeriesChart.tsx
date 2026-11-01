@@ -67,7 +67,7 @@ export interface TimeSeriesChartProps {
   /** Header above the chart; `false` when the page renders its own. */
   readout?: ReadoutSpec | false;
   danger?: DangerBand;
-  /** Called with `'all'` by the "Runs dry YEAR →" chip when the band is off-window. */
+  /** Called with `'all'` by the "Overdrawn YEAR →" chip when the band is off-window. */
   onRequestRange?(range: RangeKey): void;
   markers?: ChartMarker[];
   /** Standing labels above data points, always visible (F11). */
@@ -377,6 +377,7 @@ export function TimeSeriesChart({
         secondary={secondary}
         short={isShort}
         shortAmount={shortAmt !== undefined && shortAmt > 0 ? money(shortAmt) : undefined}
+        shortWord={shortAmt !== undefined && shortAmt > 0 ? 'Short' : 'Overdrawn'}
         shortUnit={spec.shortUnit}
         size={spec.size ?? 'hero'}
         actions={spec.actions}
@@ -405,7 +406,7 @@ export function TimeSeriesChart({
   const dangerOffRight = !!danger && !dangerIn && runs.length > 0 && runs[0].from > win.to + 1e-9;
   const dangerLeft = chipRun ? chipRun.left : 0;
   const dangerRight = chipRun ? chipRun.right : 0;
-  const dangerLabel = danger ? `${danger.label ?? 'Runs dry'}` : '';
+  const dangerLabel = danger ? `${danger.label ?? 'Overdrawn'}` : '';
   // The chip is HTML, so its width isn't known here; estimate it from its
   // text. Full wording when it fits inside the band, just the year on a
   // narrower one (a phone, a one-year band), nothing when even that won't.

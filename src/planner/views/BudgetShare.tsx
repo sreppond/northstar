@@ -204,6 +204,7 @@ export function BudgetShare({
         secondary={secondary}
         short={isShort}
         shortAmount={shortAmount && shortAmount > 0 ? money(shortAmount) : undefined}
+        shortWord={shortAmount && shortAmount > 0 ? 'Short' : 'Overdrawn'}
         shortUnit={perLabel}
         actions={
           <>

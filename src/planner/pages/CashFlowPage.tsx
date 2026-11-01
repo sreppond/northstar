@@ -26,7 +26,7 @@ const LUMP_COLOR = 'color-mix(in srgb, var(--mix-3) 72%, var(--surface))';
  * Cash Flow (docs/REDESIGN-V5.md §5.2): after-tax income against spending as
  * the hero, one year's money as a waterfall, then every year in a grouped
  * table. Running short is read three ways, none of them colour alone: the
- * hatched band on the chart, the ✗ Short pill in the readout, and a Drawdown
+ * hatched band on the chart, the ✗ Short (or Overdrawn) pill in the readout, and a Drawdown
  * row/bar whose overdrawn part is red (§4.2). The page's shell already carries the alert and
  * the rail pill, so this adds neither.
  *
@@ -196,18 +196,16 @@ export function CashFlowPage() {
           yearLabel={stub ? `${activeYear} · ${stub.short}` : String(activeYear)}
           ages={agesFor(activeYear)}
           secondary={[
-            // ChartReadout's pill always says "Short", so an overdrawn-only year
-            // carries its balance here, in the danger colour, instead.
-            ...(carrying ? [{ id: 'overdrawn', label: '✗ Overdrawn', color: 'var(--danger)', value: money(flow.owed) }] : []),
             { id: 'spent', label: 'Spent', color: 'var(--out)', value: money((flow.spent + flow.withdrawalTax) / per) },
             ...(flow.lumps > 0.5 ? [{ id: 'lumps', label: 'One-time', color: LUMP_COLOR, value: money(flow.lumps) }] : []),
             flow.drawdown > 0.5
               ? { id: 'drawdown', label: 'Drawdown', color: 'var(--out)', value: money(flow.drawdown / per) }
               : { id: 'saved', label: 'Saved', color: 'var(--in)', value: money(savedNow) },
           ]}
-          short={newShortfall}
-          shortAmount={newShortfall ? money(flow.unfunded / per) : undefined}
-          shortUnit={`/${unit}`}
+          short={newShortfall || carrying}
+          shortWord={carrying ? 'Overdrawn' : 'Short'}
+          shortAmount={carrying ? money(flow.owed) : newShortfall ? money(flow.unfunded / per) : undefined}
+          shortUnit={carrying ? '' : `/${unit}`}
         />
         <TimeSeriesChart
           years={years}

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { runPlan } from '@northstar/engine';
 import { planHealth, type PlanHealth } from './health';
-import { overdrawnSummary, strandedClauses } from './PlanHealthAlert';
+import { overdrawnSummary } from './health';
+import { strandedClauses } from './PlanHealthAlert';
 import { runsDryPlan } from './planFixtures';
 
 describe('strandedClauses (V5-REVIEW-1 F6)', () => {

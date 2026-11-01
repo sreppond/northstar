@@ -329,9 +329,11 @@ function PlotReadout({
   shortAmount: number | undefined;
 }) {
   const amount = short && shortAmount !== undefined && shortAmount > 0 ? money(shortAmount) : undefined;
+  // A short year with no new amount only carries an earlier overdrawn balance.
+  const word = amount ? 'Short' : 'Overdrawn';
   // One announcement per settled year, not one per scrubbed frame.
   const spoken = useThrottledValue(
-    year === undefined ? '' : `${year}${ages ? `, ${ages}` : ''}${short ? `. Short ${amount ? `${amount} a year` : ''}` : ''}`.trim(),
+    year === undefined ? '' : `${year}${ages ? `, ${ages}` : ''}${short ? `. ${word} ${amount ? `${amount} a year` : ''}` : ''}`.trim(),
     700,
   );
   return (
@@ -340,7 +342,7 @@ function PlotReadout({
       {ages && <span className="ns-rpt-readout-ages">{ages}</span>}
       {short && (
         <span className="ns-readout-short">
-          <span aria-hidden="true">✗</span> Short{amount ? ` ${amount}/yr` : ''}
+          <span aria-hidden="true">✗</span> {word}{amount ? ` ${amount}/yr` : ''}
         </span>
       )}
       <span className="ns-ch-sr" aria-live="polite" aria-atomic="true">

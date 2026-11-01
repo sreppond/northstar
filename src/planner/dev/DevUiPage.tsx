@@ -39,7 +39,7 @@ export function DevUiPage() {
           tone="danger"
           action={{ label: 'See 2071', onClick: () => undefined }}
         >
-          This plan runs out of money in 2071. 21 years go short, $1.37M unfunded.
+          Overdrawn from 2071 to 2091 — up to $1.37M.
         </DismissibleAlert>
         <DismissibleAlert
           planId={planId}

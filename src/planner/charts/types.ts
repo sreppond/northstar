@@ -80,7 +80,7 @@ export interface DangerBand {
       Build it with `healthDangerBand` (planner/health.ts). Without it the
       band is the single stretch `from..to`, the pre-F2 behaviour. */
   years?: number[];
-  /** Chip text, default "Runs dry". The year is appended. */
+  /** Chip text, default "Overdrawn". The year is appended. */
   label?: string;
   /** The unfunded amount in a given year, for the readout's red
       `✗ Short $X` pill. Undefined (or no callback) shows the bare pill. */

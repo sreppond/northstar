@@ -94,7 +94,7 @@ export function TimelinePage() {
   );
 
   // The years the plan can't pay its way (§4.2.4): a hatched band through the
-  // columns for each run of short years, and a "Runs dry" tag on the first year
+  // columns for each run of short years, and an "Overdrawn" tag on the first year
   // of each run. V5-REVIEW-1 F2: from `healthDangerBand`, so a plan that runs
   // dry, recovers and runs dry again hatches only its short years.
   const dry = useMemo(() => {
@@ -431,7 +431,7 @@ function LifeLanes({
                   aria-pressed={y === focusYear}
                 >
                   {y === startYear && <span className="tl-today-tag">Today</span>}
-                  {dry.some((r) => r.from === y) && <span className="tl-dry-tag">Runs dry</span>}
+                  {dry.some((r) => r.from === y) && <span className="tl-dry-tag">Overdrawn</span>}
                   {recoverYears.includes(y) && <span className="tl-recover-tag">Back on track</span>}
                   <span className="tl-year-num">{y}</span>
                 </button>
@@ -756,7 +756,7 @@ function VerticalTimeline({
             <button type="button" className="tlv-year" onClick={() => onPin(row.year)} aria-pressed={row.year === focusYear}>
               <span className="tlv-y">{row.year}</span>
               {row.year === todayYear && <span className="tlv-today">Today</span>}
-              {dryYears.includes(row.year) && <span className="tlv-dry">Runs dry</span>}
+              {dryYears.includes(row.year) && <span className="tlv-dry">Overdrawn</span>}
               {recoverYears.includes(row.year) && <span className="tlv-recover">Back on track</span>}
               <span className="tlv-ages">{agesFor(row.year)}</span>
             </button>

@@ -14,6 +14,7 @@ import { useBreakpoint } from './useBreakpoint';
 import { ThemeToggle } from './ThemeToggle';
 import { HeaderMenu } from './HeaderMenu';
 import { isTauri } from './monarchLocal';
+import { overdrawnSummary } from './health';
 import { HorizonButton } from './HorizonControl';
 import { planEndYear, withHorizon } from '@northstar/engine';
 
@@ -174,32 +175,33 @@ function PlanSwitcherTrigger({ compact }: { compact?: boolean }) {
 }
 
 /**
- * The "runs dry" pill (docs/REDESIGN-V5.md §4.2.2). Unlike the page-top alert
+ * The "overdrawn" pill (docs/REDESIGN-V5.md §4.2.2). Unlike the page-top alert
  * it can't be dismissed: the plan failing stays on screen for as long as it
  * is true, on every page. Clicking pins the first short year and opens Cash
  * Flow, where the shortfall is explained. Shape (the ✗ icon) and text carry
  * the meaning, not just the red (§1.8). `compact` is the mobile top bar's
- * version: no room for "Runs dry in", so it reads "Dry 2071".
+ * version: the same words as the full pill, "Overdrawn 2071".
  */
 function PlanHealthPill({ compact }: { compact?: boolean }) {
   const { health, setFocusYear } = usePlanner();
   const navigate = useNavigate();
   if (health.status !== 'short' || health.firstShortYear === undefined) return null;
   const year = health.firstShortYear;
+  const overdrawnLabel = overdrawnSummary(health)?.span ?? `Overdrawn in ${year}`;
 
   return (
     <button
       type="button"
       className={`ns-rail-health${compact ? ' ns-rail-health-compact' : ''}`}
-      aria-label={`Plan runs dry in ${year}. Open Cash Flow at ${year}.`}
-      title={`Plan runs dry in ${year}`}
+      aria-label={`${overdrawnLabel}. Open Cash Flow at ${year}.`}
+      title={overdrawnLabel}
       onClick={() => {
         setFocusYear(year);
         navigate('/cashflow');
       }}
     >
       <CircleX size={compact ? 13 : 14} strokeWidth={2} aria-hidden />
-      <span>{compact ? `Dry ${year}` : `Runs dry in ${year}`}</span>
+      <span>Overdrawn {year}</span>
     </button>
   );
 }

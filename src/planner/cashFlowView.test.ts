@@ -60,6 +60,36 @@ function lifecyclePlan(): Plan {
   };
 }
 
+/**
+ * $100k in, $60k of living costs, and $50k a year paid into a 401(k) out of the
+ * paycheck. Saved (income less spending) is +40,000, but the paycheck
+ * contribution outruns it, so net cash is -10,000 and Brokerage ($100k, no
+ * growth) covers it. A year that is Saved-positive and drawn at the same time.
+ */
+function contributionPlan(): Plan {
+  const base = lifecyclePlan();
+  const brokerage = base.accounts[0];
+  return {
+    ...base,
+    id: 'contribution',
+    name: 'Contribution',
+    settings: { ...base.settings, baselineIncome: 100_000 },
+    accounts: [
+      { ...brokerage, initialBalance: 100_000 },
+      {
+        ...brokerage,
+        id: 'k',
+        name: '401(k)',
+        accountClass: 'taxDeferredInvestment',
+        initialBalance: 0,
+        yearlyPaycheckContribution: 50_000,
+      },
+    ],
+    events: [],
+    rules: [{ accountId: 'b', ruleType: 'withdrawal', order: 1 }],
+  };
+}
+
 const plans: [string, Plan][] = [
   ['sample (house forecast)', SAMPLE_PLANS[0]],
   ['sample (retirement forecast)', SAMPLE_PLANS[1]],
@@ -68,6 +98,7 @@ const plans: [string, Plan][] = [
   ['runs dry', runsDryPlan()],
   ['healthy', healthyPlan()],
   ['lifecycle (short in 2027, repaid in 2028)', lifecyclePlan()],
+  ['paycheck contributions outrun saved', contributionPlan()],
 ];
 
 /** Every allocation line that is not the overdrawn repayment: what was put into accounts. */
@@ -197,6 +228,27 @@ describe('waterfallBars', () => {
     expect(repaid.to).toBeCloseTo(30_000, 4);
     expect(bars[bars.length - 1].key).toBe('repaid');
     expect(bars.some((b) => b.key === 'drawdown')).toBe(false);
+  });
+
+  it('a year Saved-positive but drawn (paycheck contributions outrun saved) still gets a Drawdown bar', () => {
+    const plan = contributionPlan();
+    const snapshot = runPlan(plan).years[1];
+    const flow = yearFlow(plan, snapshot);
+    // Hand check: 100,000 − 60,000 = 40,000 saved; 50,000 goes to the 401(k) out of pay,
+    // so net is −10,000 and Brokerage covers exactly that.
+    expect(flow.saved).toBeCloseTo(40_000, 4);
+    expect(flow.savedOnPurpose).toBeCloseTo(50_000, 4);
+    expect(flow.drawdown).toBeCloseTo(10_000, 4);
+    const bars = waterfallBars(flow, fmt);
+    expect(bars.find((b) => b.key === 'saved')!.to).toBeCloseTo(40_000, 4);
+    const drawdown = bars.find((b) => b.key === 'drawdown')!;
+    expect(drawdown).toBeDefined();
+    expect(drawdown.kind).toBe('total');
+    expect(drawdown.amount).toBeCloseTo(-10_000, 4);
+    expect(drawdown.segments).toBeUndefined();
+    // ...and the table's Drawdown row says the same figure for that year.
+    const tree = cashFlowTree(plan, runPlan(plan).years);
+    expect(tree.drawdown!.values[1]).toBeCloseTo(10_000, 4);
   });
 
   it('a year with no repayment or drawdown has no Drawdown or repayment bar', () => {

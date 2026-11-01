@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pathMarkers, runPlan } from '@northstar/engine';
 import type { Plan } from '@northstar/engine';
-import { healthDangerBand, planHealth, shortAmount } from './health';
+import { healthDangerBand, planHealth } from './health';
 import { account, basePlan, event, healthyPlan, kitchenSinkPlan, runsDryPlan } from './planFixtures';
 import { SAMPLE_PLANS } from './samplePlan';
 
@@ -292,18 +292,16 @@ describe('overdrawn years (docs/V6.1-PLAN.md B2)', () => {
     expect(health.unfundedTotal).toBeCloseTo(30_000, 6);
   });
 
-  it('shortAmount falls back to the balance owed in a carry-over year, so the Short readout always has an amount', () => {
+  it('the band\'s shortFor is the new shortfall only: a carry-over year has none, so its pill says Overdrawn with no amount', () => {
     const plan = carried();
     const result = runPlan(plan);
     const carryOver = result.years.find((y) => y.year === 2028)!;
     expect(carryOver.unfundedShortfall).toBeUndefined();
-    expect(shortAmount(carryOver)).toBeCloseTo(10_000, 6);
-    expect(shortAmount(result.years.find((y) => y.year === 2027)!)).toBeCloseTo(30_000, 6);
 
     const band = healthDangerBand(planHealth(result, plan), result)!;
     expect(band.years).toEqual([2027, 2028]);
     expect(band.shortFor!(2027)).toBeCloseTo(30_000, 6);
-    expect(band.shortFor!(2028)).toBeCloseTo(10_000, 6);
+    expect(band.shortFor!(2028)).toBeUndefined();
   });
 
   it('a plan that is never short has no overdrawn peak, no last short year, and the stable ok signature', () => {

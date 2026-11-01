@@ -112,7 +112,7 @@ function PlannerShell() {
         {/* Real height only under `html.ns-tauri` (planner.css) — a no-op
             div everywhere else, same idiom as `Sidebar.tsx`'s rail strip. */}
         <div className="ns-drag-strip" data-tauri-drag-region />
-        {/* "Runs dry" on every page, once, above whatever the route renders
+        {/* "Overdrawn" on every page, once, above whatever the route renders
             (docs/REDESIGN-V5.md §4.2.3). The rail pill is its undismissable twin. */}
         <PlanHealthAlert />
         <Routes>

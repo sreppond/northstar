@@ -198,19 +198,19 @@ function describeCostOfBuying(plan: Plan, withHouse: PlanResult, withoutHouse: P
     if (worsens) {
       if (withoutHouseShortfall === undefined) {
         const text = hasRetirement
-          ? `Buying delays your safe retirement — it's what causes the plan to run dry, in ${withHouseShortfall}.`
-          : `Buying is what causes the plan to run dry, in ${withHouseShortfall}.`;
+          ? `Buying delays your safe retirement — it's what first overdraws the plan, in ${withHouseShortfall}.`
+          : `Buying is what first overdraws the plan, in ${withHouseShortfall}.`;
         return { text, tone: 'down' };
       }
       const text = hasRetirement
-        ? `Buying delays your safe retirement — the plan now runs dry in ${withHouseShortfall} instead of ${withoutHouseShortfall}.`
+        ? `Buying delays your safe retirement — the plan is now overdrawn from ${withHouseShortfall} instead of ${withoutHouseShortfall}.`
         : `Buying moves the plan's first shortfall from ${withoutHouseShortfall} to ${withHouseShortfall}.`;
       return { text, tone: 'down' };
     }
 
     const text =
       withHouseShortfall === undefined
-        ? `Buying clears the plan's shortfall — without it, the plan runs dry in ${withoutHouseShortfall}.`
+        ? `Buying clears the plan's shortfall — without it, the plan is overdrawn from ${withoutHouseShortfall}.`
         : `Buying pushes the plan's first shortfall from ${withoutHouseShortfall} to ${withHouseShortfall}.`;
     return { text, tone: 'up' };
   }

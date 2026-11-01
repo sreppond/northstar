@@ -11,7 +11,8 @@
  * engine. Copy is a UI decision.
  */
 import type { PathMarkers, Plan, PlanResult } from '@northstar/engine';
-import { money, percent } from './format';
+import { percent } from './format';
+import { overdrawnWording } from './health';
 
 /** Written out to about a dozen, because "2 kids" in prose reads as a form. */
 const COUNTS = [
@@ -131,17 +132,8 @@ export function heroReading(
   // growth rate of a plan that fails is a statistic about a failure.
   const dry = markers.shortfallYears[0];
   if (dry !== undefined) {
-    const years = markers.shortfallYears.length;
-    return {
-      figure,
-      isAlarm: true,
-      read:
-        years === 1
-          ? `Runs dry in ${dry}, with ${money(markers.shortfallTotal)} of spending unfunded.`
-          : `Runs dry in ${dry}. ${years} years fall short, ${money(
-              markers.shortfallTotal,
-            )} unfunded in total.`,
-    };
+    const { span, amount } = overdrawnWording(dry, markers.shortfallYears[markers.shortfallYears.length - 1], markers.overdrawnPeak);
+    return { figure, isAlarm: true, read: `${span} — ${amount}.` };
   }
 
   const rate = growth === undefined ? null : percent(growth);

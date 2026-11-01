@@ -353,12 +353,12 @@ describe('overdrawnRows: the Overdrawn liability row (docs/V6.1-PLAN.md B2)', ()
     expect(overdrawnRows(real.years)!.rows.some((r) => r.key === 'inflation')).toBe(true);
   });
 
-  it('monthlyDangerBand divides the carried balance by the year\'s months in a carry-over year', () => {
-    // 2028 is not newly short (no unfundedShortfall), so its Short amount is the 10,000 it still owes.
+  it('monthlyDangerBand divides the new shortfall by the year\'s months, and a carry-over year has none', () => {
+    // 2028 is not newly short (no unfundedShortfall) though it still owes 10,000: no per-month amount.
     const plan = oneOffPlan([{ year: 2027, amount: 150_000 }, { year: 2028, amount: 40_000 }]);
     const result = runPlan(plan);
     const band = monthlyDangerBand(planHealth(result, plan), plan, result)!;
-    expect(band.shortFor!(2028)).toBeCloseTo(10_000 / 12, 6);
+    expect(band.shortFor!(2028)).toBe(0);
     expect(band.shortFor!(2027)).toBeCloseTo(30_000 / 12, 6);
   });
 });

@@ -72,7 +72,7 @@ export function ImpactStrip({
             lastsDelta !== undefined
               ? Number.isFinite(lastsDelta)
                 ? { value: `${lastsDelta > 0 ? '+' : '−'}${Math.abs(lastsDelta)} yrs`, tone: lastsDelta > 0 ? 'in' : 'out' }
-                : { value: lastsDelta > 0 ? 'no shortfall' : 'now runs dry', tone: lastsDelta > 0 ? 'in' : 'out' }
+                : { value: lastsDelta > 0 ? 'no shortfall' : 'now overdrawn', tone: lastsDelta > 0 ? 'in' : 'out' }
               : undefined
           }
         />
