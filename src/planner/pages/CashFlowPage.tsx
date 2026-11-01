@@ -26,8 +26,8 @@ const LUMP_COLOR = 'color-mix(in srgb, var(--mix-3) 72%, var(--surface))';
  * Cash Flow (docs/REDESIGN-V5.md §5.2): after-tax income against spending as
  * the hero, one year's money as a waterfall, then every year in a grouped
  * table. Running short is read three ways, none of them colour alone: the
- * hatched band on the chart, the ✗ Short pill in the readout, and an
- * Unfunded row/bar (§4.2). The page's shell already carries the alert and
+ * hatched band on the chart, the ✗ Short pill in the readout, and a Drawdown
+ * row/bar whose overdrawn part is red (§4.2). The page's shell already carries the alert and
  * the rail pill, so this adds neither.
  *
  * One year drives all three parts. Hover previews it, the pinned focus year
@@ -171,7 +171,11 @@ export function CashFlowPage() {
   const stub = stubYearLabel(activeYear, startYear, asOfDate);
   const savedNow = flow.saved / per;
   const unitWord = unit === 'mo' ? 'per month' : 'per year';
-  const isShort = health.shortYears.includes(activeYear);
+  // A new shortfall this year is the Short pill with its amount, per this page's
+  // unit. A year that only carries an earlier shortfall says what it still owes:
+  // the balance is a stock, so it is not divided by the unit.
+  const newShortfall = health.shortYears.includes(activeYear) && flow.unfunded > 0.5;
+  const carrying = !newShortfall && flow.owed > 0.5;
 
   return (
     <Page>
@@ -192,14 +196,17 @@ export function CashFlowPage() {
           yearLabel={stub ? `${activeYear} · ${stub.short}` : String(activeYear)}
           ages={agesFor(activeYear)}
           secondary={[
+            // ChartReadout's pill always says "Short", so an overdrawn-only year
+            // carries its balance here, in the danger colour, instead.
+            ...(carrying ? [{ id: 'overdrawn', label: '✗ Overdrawn', color: 'var(--danger)', value: money(flow.owed) }] : []),
             { id: 'spent', label: 'Spent', color: 'var(--out)', value: money((flow.spent + flow.withdrawalTax) / per) },
             ...(flow.lumps > 0.5 ? [{ id: 'lumps', label: 'One-time', color: LUMP_COLOR, value: money(flow.lumps) }] : []),
-            savedNow >= 0
-              ? { id: 'saved', label: 'Saved', color: 'var(--in)', value: money(savedNow) }
-              : { id: 'saved', label: 'Drawn down', color: 'var(--out)', value: money(-savedNow) },
+            flow.drawdown > 0.5
+              ? { id: 'drawdown', label: 'Drawdown', color: 'var(--out)', value: money(flow.drawdown / per) }
+              : { id: 'saved', label: 'Saved', color: 'var(--in)', value: money(savedNow) },
           ]}
-          short={isShort}
-          shortAmount={isShort && flow.unfunded > 0 ? money(flow.unfunded / per) : undefined}
+          short={newShortfall}
+          shortAmount={newShortfall ? money(flow.unfunded / per) : undefined}
           shortUnit={`/${unit}`}
         />
         <TimeSeriesChart

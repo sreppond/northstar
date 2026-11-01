@@ -130,12 +130,12 @@
   margin: 4px 0 0;
 }
 
-/* Unfunded: the one row that must never read as a figure among figures. */
-.ns-cf-table .ns-grid:has([data-cf-row='unfunded']) > div:not(.ns-zero) {
+/* Overdrawn: the one row that must never read as a figure among figures. */
+.ns-cf-table .ns-grid:has([data-cf-tone='danger']) > div:not(.ns-zero) {
   color: var(--danger);
   font-weight: 700;
 }
-.ns-cf-table .ns-grid:has([data-cf-row='unfunded']) {
+.ns-cf-table .ns-grid:has([data-cf-tone='danger']) {
   background: color-mix(in srgb, var(--danger) 7%, transparent);
   box-shadow: inset 3px 0 0 var(--danger);
 }
@@ -152,7 +152,8 @@
 .ns-cf-table[data-hot='oneTime'] .ns-grid:has([data-cf-row='oneTime']) > div,
 .ns-cf-table[data-hot='wtax'] .ns-grid:has([data-cf-row='wtax']) > div,
 .ns-cf-table[data-hot='saved'] .ns-grid:has([data-cf-row='saved']) > div,
-.ns-cf-table[data-hot='unfunded'] .ns-grid:has([data-cf-row='unfunded']) > div {
+.ns-cf-table[data-hot='drawdown'] .ns-grid:has([data-cf-row='drawdown']) > div,
+.ns-cf-table[data-hot='repaid'] .ns-grid:has([data-cf-row='repaid']) > div {
   background-color: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 .ns-cf-table[data-hot='gross'] .ns-grid:has([data-cf-row='gross']) > div:first-child,
@@ -165,7 +166,8 @@
 .ns-cf-table[data-hot='oneTime'] .ns-grid:has([data-cf-row='oneTime']) > div:first-child,
 .ns-cf-table[data-hot='wtax'] .ns-grid:has([data-cf-row='wtax']) > div:first-child,
 .ns-cf-table[data-hot='saved'] .ns-grid:has([data-cf-row='saved']) > div:first-child,
-.ns-cf-table[data-hot='unfunded'] .ns-grid:has([data-cf-row='unfunded']) > div:first-child {
+.ns-cf-table[data-hot='drawdown'] .ns-grid:has([data-cf-row='drawdown']) > div:first-child,
+.ns-cf-table[data-hot='repaid'] .ns-grid:has([data-cf-row='repaid']) > div:first-child {
   background-color: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
 

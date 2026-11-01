@@ -81,9 +81,9 @@ describe('the gains tax is the investment-tax bucket, not income tax', () => {
   it('is shown in the Cash Flow table as "Tax on investments", even with no withdrawals that year', () => {
     expect(sum(dueYear.withdrawals.map((w) => w.amount))).toBe(0);
     const tree = cashFlowTree(plan, result.years);
-    const withdrawals = tree.withdrawals!;
-    const row = (withdrawals.children ?? []).find((c: FlowNode) => c.label === 'Tax on investments')!;
+    const row: FlowNode = tree.taxOnInvestments!;
     expect(row).toBeDefined();
+    expect(row.label).toBe('Tax on investments');
     const i = tree.years.indexOf(dueYear.year);
     expect(row.values[i]).toBeCloseTo(dueTax, 4);
   });
