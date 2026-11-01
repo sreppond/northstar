@@ -13,6 +13,7 @@ packages/server/dist/
 # local tooling
 .claude/
 .impeccable/
+.playwright-mcp/
 
 # Tauri desktop build artifacts
 src-tauri/target/
