@@ -1,8 +1,8 @@
 /**
  * Pure derivations for the Net Worth page and its sheets (docs/REDESIGN-V5.md
  * §5.1). Split out of the components so the pieces with real logic — which
- * account classes to show, the spending donut's stable slice set, the account
- * sheet's waterfall — are written once and tested without a component tree.
+ * account classes to show, the account sheet's waterfall — are written once and
+ * tested without a component tree.
  */
 import type {
   Account,
@@ -20,7 +20,6 @@ import type { ChartMarker, DangerBand } from '../charts';
 import { healthDangerBand, type PlanHealth } from '../health';
 import { classBalances } from '../ledger';
 import { toneFor } from '../presentation';
-import { spendingGroups, type GroupKey, type SpendingGroup } from '../spendingGroups';
 
 /** "Spencer 40 · Sarah 40" — the included adults' ages at the year's close. */
 export function agesLabel(plan: Plan, snapshot: YearSnapshot | undefined): string | undefined {
@@ -94,40 +93,6 @@ export function openingClassBalance(
   return (opening?.accounts ?? [])
     .filter((a) => a.accountClass === accountClass && a.isLiability === liability)
     .reduce((sum, a) => sum + a.balance, 0);
-}
-
-/* --- spending donut -------------------------------------------------------- */
-
-/** Display order of the spending slices; `saving` is deliberately absent (it isn't spending). */
-const SPENDING_ORDER: Exclude<GroupKey, 'saving'>[] = ['home', 'kids', 'shared', 'personal', 'oneTime'];
-
-export const UNFUNDED_KEY = 'unfunded';
-
-export interface SpendingModel {
-  /** Slices that have money in at least one year, in display order. Stable across years. */
-  meta: { key: Exclude<GroupKey, 'saving'>; label: string; color: string }[];
-  /** Per `result.years` index: that year's groups, `saving` removed. */
-  groups: SpendingGroup[][];
-  /** Months in each year (a stub first year is short), the divisor for the monthly view. */
-  months: number[];
-}
-
-export function spendingModel(plan: Plan, result: PlanResult): SpendingModel {
-  const groups = result.years.map((snapshot) => spendingGroups(plan, snapshot).filter((g) => g.key !== 'saving'));
-  const seen = new Map<string, SpendingGroup>();
-  for (const perYear of groups) {
-    for (const g of perYear) if (g.total > 0 && !seen.has(g.key)) seen.set(g.key, g);
-  }
-  const meta = SPENDING_ORDER.filter((k) => seen.has(k)).map((key) => {
-    const g = seen.get(key)!;
-    return { key, label: g.label, color: g.color };
-  });
-  return { meta, groups, months: result.years.map((y) => monthsIn(plan, y.year) || 12) };
-}
-
-/** A group's monthly total per year, zero where it has nothing: the category sheet's line. */
-export function groupMonthlySeries(model: SpendingModel, key: string): number[] {
-  return model.groups.map((perYear, i) => (perYear.find((g) => g.key === key)?.total ?? 0) / model.months[i]);
 }
 
 /* --- account sheet waterfall ---------------------------------------------- */
@@ -316,7 +281,7 @@ export function accountFlowRows(
 /**
  * The danger band re-unitised per month, for the sheets that sit over this
  * page's "/mo" figures (V5-REVIEW-2 N10). `shortFor` divides each short year's
- * unfunded total by that year's months, like the spending donut does.
+ * unfunded total by that year's months.
  */
 export function monthlyDangerBand(health: PlanHealth, plan: Plan, result: PlanResult): DangerBand | undefined {
   const band = healthDangerBand(health, result);

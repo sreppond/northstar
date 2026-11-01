@@ -13,9 +13,7 @@ import {
   dangerBand,
   eventMarkers,
   flowSteps,
-  groupMonthlySeries,
   presentClasses,
-  spendingModel,
 } from './netWorthData';
 
 const plans: [string, Plan][] = [
@@ -108,26 +106,6 @@ describe('flowSteps: required distributions and the residual (V5-REVIEW-2 N5, N1
     expect(small.find((s) => s.key === 'growth')?.label).toBe('Growth (net of fees)');
     const large = flowSteps(row(103_000), false);
     expect(large.find((s) => s.key === 'other')?.label).toBe('Inflation adjustment');
-  });
-});
-
-describe('spendingModel: the donut keeps one key set across every year', () => {
-  it.each(plans)('%s', (_n, plan) => {
-    const result = runPlan(plan);
-    const model = spendingModel(plan, result);
-    expect(model.groups).toHaveLength(result.years.length);
-    expect(model.months).toHaveLength(result.years.length);
-    // Saving is never a slice.
-    expect(model.meta.map((m) => m.key)).not.toContain('saving');
-    // Every year's groups are a subset of the stable key set, so the donut can zero the rest.
-    const keys = new Set<string>(model.meta.map((m) => m.key));
-    for (const perYear of model.groups) for (const g of perYear) expect(keys.has(g.key)).toBe(true);
-    // A group's monthly line is zero where it has nothing and never negative.
-    for (const m of model.meta) {
-      const line = groupMonthlySeries(model, m.key);
-      expect(line).toHaveLength(result.years.length);
-      expect(line.every((v) => v >= 0)).toBe(true);
-    }
   });
 });
 

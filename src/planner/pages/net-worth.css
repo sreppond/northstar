@@ -181,150 +181,6 @@
   font-weight: 700;
 }
 
-/* --- snapshot + donut ----------------------------------------------------- */
-
-.ns-nw-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 56px;
-  align-items: start;
-}
-
-.ns-nw-snap {
-  min-width: 0;
-}
-.ns-nw-snap-year {
-  font-size: clamp(36px, 4.4vw, 44px);
-  font-weight: 600;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-deep);
-}
-.ns-nw-snap-ages {
-  margin-top: 4px;
-  min-height: 1.3em;
-  font-size: 13px;
-  color: var(--muted);
-}
-.ns-nw-snap-list {
-  list-style: none;
-  margin: 18px 0 0;
-  padding: 0;
-}
-.ns-nw-snap-row {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto 14px;
-  grid-template-areas:
-    'icon name value caret'
-    '. bar bar bar';
-  align-items: center;
-  column-gap: 10px;
-  row-gap: 5px;
-  width: calc(100% + 16px);
-  margin: 0 -8px;
-  padding: 9px 8px 10px;
-  font: inherit;
-  color: var(--ink);
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background-color 120ms ease-out;
-}
-.ns-nw-snap-row:hover,
-.ns-nw-snap-row:focus-visible {
-  background: var(--tint-row);
-  outline: none;
-}
-.ns-nw-snap-row:focus-visible {
-  box-shadow: 0 0 0 2px var(--accent) inset;
-}
-.ns-nw-snap-row:active {
-  background: var(--chip);
-}
-.ns-nw-snap-icon {
-  grid-area: icon;
-  display: inline-flex;
-  color: var(--muted);
-}
-.ns-nw-snap-name {
-  grid-area: name;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ns-nw-snap-value {
-  grid-area: value;
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ns-nw-zero {
-  color: var(--muted-light);
-  font-weight: 500;
-}
-.ns-nw-snap-caret {
-  grid-area: caret;
-  color: var(--muted-light);
-  transition: transform 160ms var(--ease-damped, ease-out);
-}
-.ns-nw-snap-row:hover .ns-nw-snap-caret {
-  transform: translateX(2px);
-  color: var(--ink);
-}
-/* The share bar is a thin hairline of the class hue; liabilities draw in the
-   "money out" hue's tint so a debt never reads like an asset (§1 principle 9). */
-.ns-nw-snap-bar {
-  grid-area: bar;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--track);
-  overflow: hidden;
-}
-.ns-nw-snap-fill {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: var(--c);
-  transition: width var(--spring-duration, 0.38s) var(--ease-damped, ease-out);
-}
-/* V5-REVIEW-2 N4: a liability is not money-out; orange stays for out and danger. */
-.ns-nw-snap-fill-out {
-  background: var(--muted-light);
-  opacity: 0.8;
-}
-.ns-nw-snap-total {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
-  font-weight: 600;
-}
-.ns-nw-snap-total .ns-nw-snap-value {
-  font-size: 16px;
-}
-
-.ns-nw-spend {
-  min-width: 0;
-  display: flex;
-  justify-content: center;
-}
-/* "$22.1K/mo" has to sit on one line inside the ring: tighter side padding and
-   a slightly smaller figure than the kit's default. */
-.ns-nw-spend .ns-donut-center {
-  padding: 0 12%;
-}
-.ns-nw-spend .ns-donut-center-value {
-  font-size: clamp(22px, 2.4vw, 27px);
-  white-space: nowrap;
-}
-
 /* --- balances table ------------------------------------------------------- */
 
 .ns-nw-table {
@@ -502,8 +358,7 @@
   justify-content: flex-end;
   gap: 8px;
 }
-.ns-nw-insight,
-.ns-nw-cat {
+.ns-nw-insight {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -536,8 +391,7 @@
 
 /* The "In {year}" waterfall. Floating bars on one shared scale, in the app's
    in/out hues; the open and close bars are neutral ink. */
-.ns-nw-flow-list,
-.ns-nw-parts {
+.ns-nw-flow-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -592,19 +446,6 @@
 }
 .ns-nw-flow-info .ns-nw-flow-value {
   grid-column: 3;
-}
-
-.ns-nw-parts li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-  font-size: 13.5px;
-  border-bottom: 1px solid var(--rule);
-}
-.ns-nw-parts li:last-child {
-  border-bottom: 0;
 }
 
 /* Annuity contract detail (AnnuityAccountSection). */
@@ -686,12 +527,6 @@
 
 /* --- phone ---------------------------------------------------------------- */
 
-@media (max-width: 860px) {
-  .ns-nw-split {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 40px;
-  }
-}
 @media (max-width: 640px) {
   .ns-nw {
     gap: 32px;
