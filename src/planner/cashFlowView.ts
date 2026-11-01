@@ -11,9 +11,18 @@
  *   gross       = totalIncome
  *   after tax   = gross - (totalTaxes - withdrawalTax)
  *   saved       = after tax - withdrawal tax - spending      (= `savedThisYear`)
+ *   drawdown    = withdrawals drawn + new overdrawn          (= `unfundedShortfall`)
+ *   repaid      = the "Paying back overdrawn" allocation
  *
- * Withdrawal tax is a cost of covering a gap, not a tax on income, so it hangs
- * under Withdrawals rather than under the income it didn't come from.
+ * And the identity the table's rows add up to (tested per year):
+ *
+ *   after tax - spending - withdrawal tax - repaid + drawdown
+ *     = saved on purpose + allocations other than the repayment
+ *
+ * Withdrawal tax is a cost of covering a gap, not a tax on income, so it is its
+ * own row ("Tax on investments"), not part of the income it didn't come from.
+ * Money drawn to cover a gap is the Drawdown row: what came out of savings,
+ * and the part nothing covered (Overdrawn, in danger colour).
  */
 import type { LineItem, Plan, YearSnapshot } from '@northstar/engine';
 import { SAVED_COLOR } from './budgetView';
@@ -32,7 +41,8 @@ export type FlowKey =
   | 'oneTime'
   | 'wtax'
   | 'saved'
-  | 'unfunded';
+  | 'drawdown'
+  | 'repaid';
 
 export type SpendKey = Exclude<GroupKey, 'saving'>;
 
@@ -66,8 +76,17 @@ export interface YearFlow {
   lumps: number;
   /** After tax, less withdrawal tax and spending. Negative is a draw-down. */
   saved: number;
-  /** `snapshot.unfundedShortfall`, 0 when the year is funded. */
+  /**
+   * Money taken to cover a gap: what the waterfall drew from accounts, plus
+   * `unfunded`. Equal to the gap when nothing else in the year moved cash.
+   */
+  drawdown: number;
+  /** `snapshot.unfundedShortfall`: this year's NEW overdrawn, 0 when the year is funded. Part of `drawdown`. */
   unfunded: number;
+  /** Overdrawn balance repaid from this year's surplus (the `overdrawnRepayment` line). */
+  repaid: number;
+  /** Overdrawn balance still owed at year end (`snapshot.overdrawn.close`). */
+  owed: number;
 }
 
 /** budgetView.ts's `oneTime` rule: a lump sum, or an annuity surrender charge. */
@@ -82,6 +101,8 @@ export function yearFlow(plan: Plan, snapshot: YearSnapshot): YearFlow {
     .map((g) => ({ key: g.key, label: g.label, color: g.color, total: g.total }));
   const spent = groups.reduce((sum, g) => sum + g.total, 0);
   const afterTax = inc.total.gross - incomeTax;
+  const drawn = snapshot.withdrawals.reduce((sum, w) => sum + w.amount, 0);
+  const unfunded = snapshot.unfundedShortfall ?? 0;
   return {
     year: snapshot.year,
     gross: inc.total.gross,
@@ -93,7 +114,12 @@ export function yearFlow(plan: Plan, snapshot: YearSnapshot): YearFlow {
     savedOnPurpose: all.find((g) => g.key === 'saving')?.total ?? 0,
     lumps: snapshot.expenses.filter(isLump).reduce((sum, e) => sum + e.amount, 0),
     saved: afterTax - inc.withdrawalTax - spent,
-    unfunded: snapshot.unfundedShortfall ?? 0,
+    drawdown: drawn + unfunded,
+    unfunded,
+    repaid: snapshot.allocations
+      .filter((l) => l.category === 'overdrawnRepayment')
+      .reduce((sum, l) => sum + l.amount, 0),
+    owed: snapshot.overdrawn?.close ?? 0,
   };
 }
 
@@ -129,7 +155,7 @@ export interface WaterfallBarSpec {
   amount: number;
   color: string;
   tone?: 'danger';
-  /** A total split in two (saved: on purpose, and what was left over). */
+  /** A total split in pieces (saved: on purpose, and what was left over; drawdown: from savings, and overdrawn). */
   segments?: { from: number; to: number; color: string }[];
   note?: string;
 }
@@ -137,9 +163,11 @@ export interface WaterfallBarSpec {
 const EPS = 0.5;
 
 /**
- * Gross -> tax -> after tax -> each spending group -> where the year ended up.
- * A short year ends on a red "Unfunded" bar: the draw-down that the accounts
- * covered, then what they could not (docs/REDESIGN-V5.md §5.2, §4.2).
+ * Gross -> tax -> after tax -> each spending group -> tax on investments, then
+ * where the year ended up. A surplus year ends on Saved (and on a repayment,
+ * if there is one). A drawn year ends on one Drawdown bar that stands on zero:
+ * the part taken from savings in the plain colour, and the part nothing covered
+ * (Overdrawn) in danger colour, landing on the saved figure.
  */
 export function waterfallBars(flow: YearFlow, noteMoney: (v: number) => string): WaterfallBarSpec[] {
   const bars: WaterfallBarSpec[] = [];
@@ -197,33 +225,37 @@ export function waterfallBars(flow: YearFlow, noteMoney: (v: number) => string):
         : {}),
       ...(onPurpose > EPS ? { note: `${noteMoney(Math.min(onPurpose, running))} on purpose` } : {}),
     });
-  } else {
-    const deficit = -running;
-    const unfunded = Math.min(flow.unfunded, deficit);
-    const covered = deficit - unfunded;
-    if (covered > EPS || unfunded <= EPS) {
+    if (flow.repaid > EPS) {
       bars.push({
-        key: 'saved',
-        label: 'Drawn down',
-        kind: 'total',
-        from: 0,
-        to: -covered,
-        amount: -covered,
+        key: 'repaid',
+        label: 'Paying back overdrawn',
+        kind: 'delta',
+        from: running,
+        to: running - flow.repaid,
+        amount: -flow.repaid,
         color: 'var(--out)',
       });
     }
-    if (unfunded > EPS) {
-      bars.push({
-        key: 'unfunded',
-        label: 'Unfunded',
-        kind: 'delta',
-        from: -covered,
-        to: -deficit,
-        amount: -unfunded,
-        color: 'var(--danger)',
-        tone: 'danger',
-      });
-    }
+  } else {
+    // The drawn total lands on `running` (the saved figure). Its overdrawn part
+    // is the slice nothing covered: the same split `flow.unfunded` gives the gap.
+    const deficit = -running;
+    const unfunded = Math.min(flow.unfunded, deficit);
+    const covered = deficit - unfunded;
+    const segments = [
+      { from: 0, to: -covered, color: 'var(--out)' },
+      { from: -covered, to: running, color: 'var(--danger)' },
+    ].filter((s) => Math.abs(s.to - s.from) > EPS);
+    bars.push({
+      key: 'drawdown',
+      label: 'Drawdown',
+      kind: 'total',
+      from: 0,
+      to: running,
+      amount: running,
+      color: 'var(--out)',
+      ...(unfunded > EPS ? { segments } : {}),
+    });
   }
   return bars;
 }
@@ -247,6 +279,8 @@ export interface FlowNode {
   note?: 'taxShare';
   /** Print negative (a deduction under a net headline). */
   negate?: boolean;
+  /** `danger`: money the plan could not find. Drawn in the danger colour. */
+  tone?: 'danger';
 }
 
 export interface CashFlowTree {
@@ -256,9 +290,15 @@ export interface CashFlowTree {
   /** Spending, saving left out: Home, Kids, Shared, Personal, One-time. */
   spending: FlowNode;
   saving?: FlowNode;
-  withdrawals?: FlowNode;
-  /** Present only when some year is short. */
-  unfunded?: number[];
+  /**
+   * Money taken to cover a gap, from each account drawn, and the new overdrawn.
+   * Present only when some year draws down.
+   */
+  drawdown?: FlowNode;
+  /** Tax paid on money drawn to cover a gap. Present only when some year owes it. */
+  taxOnInvestments?: FlowNode;
+  /** Overdrawn balance repaid from a surplus. Present only when some year repays. */
+  repaid?: FlowNode;
   /** `flow.saved` per year. */
   saved: number[];
   flows: YearFlow[];
@@ -432,29 +472,44 @@ export function cashFlowTree(plan: Plan, snapshots: YearSnapshot[]): CashFlowTre
     ? undefined
     : { key: 'saving', label: 'Saved on purpose', values: savingValues, link: 'saved', children: savingLines };
 
-  // --- withdrawals --------------------------------------------------------
+  // --- drawdown -----------------------------------------------------------
+  // Each account the waterfall drew from, then the part nothing covered. Both
+  // are money the year took from savings or borrowed against them, so they
+  // print negative (`negate`) and their children do too.
   const wdMap = new Map<string, Acc>();
   snapshots.forEach((s, i) => {
     for (const w of s.withdrawals) accumulate(wdMap, w.label, w.label, i, n, w.amount, w.sourceEventId);
   });
-  const wdLines = lineNodes('wd', wdMap);
-  const wtax = flows.map((f) => f.withdrawalTax);
-  const wdTotal = snapshots.map((s) => s.withdrawals.reduce((sum, w) => sum + w.amount, 0));
-  // The tax can be owed with no withdrawal at all (an active-trading account's
-  // gains, paid out of surplus), so the group also shows for that alone.
-  const withdrawals: FlowNode | undefined = isZero(wdTotal) && isZero(wtax)
+  const drawnLines: FlowNode[] = lineNodes('drawdown', wdMap).map((c) => ({ ...c, negate: true }));
+  const owed = flows.map((f) => f.unfunded);
+  const overdrawnLine: FlowNode[] = isZero(owed)
+    ? []
+    : [{ key: 'drawdown:overdrawn', label: 'Overdrawn', values: owed, tone: 'danger', negate: true }];
+  const drawdownValues = flows.map((f) => f.drawdown);
+  const drawdown: FlowNode | undefined = isZero(drawdownValues)
     ? undefined
     : {
-        key: 'withdrawals',
-        label: 'Withdrawals',
-        values: wdTotal,
-        children: [
-          ...wdLines,
-          ...(isZero(wtax) ? [] : [{ key: 'wd:tax', label: 'Tax on investments', values: wtax, link: 'wtax' as const, negate: true }]),
-        ],
+        key: 'drawdown',
+        label: 'Drawdown',
+        values: drawdownValues,
+        link: 'drawdown',
+        negate: true,
+        children: [...drawnLines, ...overdrawnLine],
       };
 
-  const shortfalls = snapshots.map((s) => s.unfundedShortfall ?? 0);
+  // --- tax on investments -------------------------------------------------
+  // The tax can be owed with no withdrawal at all (an active-trading account's
+  // gains, paid out of surplus), so the row shows for that alone.
+  const wtax = flows.map((f) => f.withdrawalTax);
+  const taxOnInvestments: FlowNode | undefined = isZero(wtax)
+    ? undefined
+    : { key: 'wtax', label: 'Tax on investments', values: wtax, link: 'wtax', negate: true };
+
+  // --- repayment ----------------------------------------------------------
+  const repaidValues = flows.map((f) => f.repaid);
+  const repaid: FlowNode | undefined = isZero(repaidValues)
+    ? undefined
+    : { key: 'repaid', label: 'Paying back overdrawn', values: repaidValues, link: 'repaid', negate: true };
 
   return {
     years: snapshots.map((s) => s.year),
@@ -467,8 +522,9 @@ export function cashFlowTree(plan: Plan, snapshots: YearSnapshot[]): CashFlowTre
     },
     spending: { key: 'spending', label: 'Spending', values: flows.map((f) => f.spent), children: spendChildren },
     ...(saving ? { saving } : {}),
-    ...(withdrawals ? { withdrawals } : {}),
-    ...(shortfalls.some((v) => v > 0) ? { unfunded: shortfalls } : {}),
+    ...(drawdown ? { drawdown } : {}),
+    ...(taxOnInvestments ? { taxOnInvestments } : {}),
+    ...(repaid ? { repaid } : {}),
     saved: flows.map((f) => f.saved),
     flows,
   };

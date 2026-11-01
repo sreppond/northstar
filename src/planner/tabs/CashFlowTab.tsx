@@ -13,12 +13,11 @@ import type { CashFlowTree, FlowKey, FlowNode } from '../cashFlowView';
  * Cash Flow's year-by-year table (docs/REDESIGN-V5.md §5.2): every year in a
  * sideways-scrolling `DataTable`, in groups that open on demand.
  *
- * Top to bottom: Unfunded (red, only when some year is short: pinned above
- * everything so the shortfall is the first thing a row-reader meets, V5-REVIEW-1
- * F12), Income (after tax) with one row per source and its gross and tax
- * underneath, Spending by group, Saved on purpose, Withdrawals, then the net
- * line. Tax lives under the income it came from, so there is no standalone
- * Taxes row (§7.2) (§4.2 item 7).
+ * Top to bottom: Income (after tax) with one row per source and its gross and
+ * tax underneath, Spending by group, Saved on purpose, Drawdown (the money taken
+ * from savings, with the new overdrawn in red as its last child), Tax on
+ * investments, Paying back overdrawn, then the saved line. Income tax lives under
+ * the income it came from, so there is no standalone Taxes row (§7.2) (§4.2 item 7).
  *
  * Memoised (F28): the page re-renders on every hover step of the chart above,
  * and this is the heaviest thing on it. Every prop is stable across a hover,
@@ -115,7 +114,7 @@ export const CashFlowTab = memo(function CashFlowTab({
     }
 
     return (
-      <span className="ns-cf-label" data-cf-row={link} style={{ paddingLeft: depth * 16 }}>
+      <span className="ns-cf-label" data-cf-row={link} data-cf-tone={node.tone} style={{ paddingLeft: depth * 16 }}>
         {hasKids ? (
           <button
             type="button"
@@ -129,7 +128,13 @@ export const CashFlowTab = memo(function CashFlowTab({
         ) : (
           <span className="ns-cf-spacer" aria-hidden="true" />
         )}
-        {name}
+        {node.tone === 'danger' ? (
+          <span className="ns-line-name" title={node.label}>
+            <span aria-hidden="true">✗</span> {node.label}
+          </span>
+        ) : (
+          name
+        )}
         {gear}
       </span>
     );
@@ -152,26 +157,12 @@ export const CashFlowTab = memo(function CashFlowTab({
     if (open) for (const child of node.children ?? []) push(child, depth + 1, tone, link);
   };
 
-  if (tree.unfunded) {
-    rows.push({
-      key: 'unfunded',
-      kind: 'group',
-      label: (
-        <span className="ns-cf-label" data-cf-row="unfunded">
-          <span className="ns-cf-spacer" aria-hidden="true" />
-          <span className="ns-line-name">
-            <span aria-hidden="true">✗</span> Unfunded
-          </span>
-        </span>
-      ),
-      cells: scaled(tree.unfunded).map(tableMoney),
-    });
-  }
-
   push(tree.income, 0, 'income');
   push(tree.spending, 0, 'cost');
   if (tree.saving) push(tree.saving, 0, 'cost');
-  if (tree.withdrawals) push(tree.withdrawals, 0, 'income');
+  if (tree.drawdown) push(tree.drawdown, 0, 'cost');
+  if (tree.taxOnInvestments) push(tree.taxOnInvestments, 0, 'cost');
+  if (tree.repaid) push(tree.repaid, 0, 'cost');
 
   rows.push({
     key: 'saved',
