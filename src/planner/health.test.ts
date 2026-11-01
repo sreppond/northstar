@@ -196,8 +196,10 @@ describe('stranded accounts (V5-REVIEW-1 F6)', () => {
     expect(health.stranded.find((s) => s.accountId === 'k401')).toBeUndefined();
     // ...yet its balance is still not counted as spendable (§4.2): spendable
     // stays penalty-free, so only the cash/brokerage accounts count.
-    const k401Close = snap.accounts.find((a) => a.accountId === 'k401')!.close;
-    expect(k401Close).toBeGreaterThan(0);
+    // The engine draws the whole mid-year balance at the penalty (v6.1 E1), so
+    // the 401(k) may close at 0 in the short year; it still opened with money.
+    const k401Open = snap.accounts.find((a) => a.accountId === 'k401')!.open;
+    expect(k401Open).toBeGreaterThan(0);
     const freeMoney = snap.accounts
       .filter((a) => a.accountClass === 'cash' || a.accountClass === 'taxableInvestment')
       .reduce((n, a) => n + a.close, 0);

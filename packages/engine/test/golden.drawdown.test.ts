@@ -82,6 +82,35 @@ describe('Golden: withdrawal capacity at the mid-year balance', () => {
     expect(y.unfundedShortfall).toBeCloseTo(100_000 * (1 - Math.sqrt(0.9)), 4);
   });
 
+  it('a drained annuity with fees closes at exactly 0: capacity uses gross growth', () => {
+    // Hand check. $100,000 contract at 6%, full year, flat fee $100 and a 1%
+    // asset fee. h = 1.06^(1/2) − 1 (gross, fees NOT netted), so capacity =
+    // 100,000 × 1.06^0.5 ≈ 102,956.30 and the draw empties the contract.
+    // The fee is charged on the post-draw balance and capped at what remains
+    // (nothing), so it is 0 and close = (O − W)(1+r) + W(r − h) = 0.
+    const result = runPlan(
+      plan({
+        settings: { projectionYears: 1, baselineExpenses: 200_000 } as never,
+        accounts: [
+          asset({
+            id: 'ann',
+            name: 'Annuity',
+            accountClass: 'variableAnnuity',
+            initialBalance: 100_000,
+            growthRate: 6,
+            nonTaxableBase: 100_000,
+            annuityAssetFeePercent: 1,
+            annuityFlatFeeAnnual: 100,
+          }),
+        ],
+        rules: [rule('ann', 'withdrawal', 1)],
+      }),
+    );
+    const a = result.years[0].accounts[0];
+    expect(a.withdrawals).toBeCloseTo(100_000 * Math.sqrt(1.06), 4);
+    expect(a.close).toBeCloseTo(0, 2);
+  });
+
   it('a purchase year drains a $796,207 taxable account to 0 and leaves the rest overdrawn', () => {
     // Synthetic version of the bug Spencer found (never his real data).
     // Opening 796,207 at 5%, full year, a $1,000,000 purchase in the same year.
@@ -328,12 +357,16 @@ describe('Golden: markers read the overdrawn span', () => {
   });
 });
 
-describe('Golden: deflate scales overdrawn like a balance', () => {
-  it('divides every overdrawn field by the balance deflator for its year, so the reconciliation survives', () => {
+describe('Golden: deflate scales overdrawn balances and flows separately', () => {
+  it('balances take the balance deflator, flows the flow deflator, and added equals the deflated unfundedShortfall', () => {
     // Nominal lifecycle values (no inflation): 2027 open 0, added 30,000,
     // close 30,000. 2028 open 30,000, repaid 30,000, close 0. Deflating at
-    // 10% from startYear 2026 uses 1.1^(1 + (year − 2026)): 1.1^2 = 1.21 for
-    // 2027 and 1.1^3 = 1.331 for 2028.
+    // 10% from startYear 2026 (a full first year, so the stub fraction is 1):
+    //   balance deflator 1.1^(1 + (year - 2026)): 1.1^2 = 1.21 (2027), 1.1^3 = 1.331 (2028)
+    //   flow deflator    1.1^(year - 2026):       1.1^1 = 1.1  (2027), 1.1^2 = 1.21  (2028)
+    // 2027: added 30,000 / 1.1 = 27,272.7 (a flow), close 30,000 / 1.21 = 24,793.4 (a balance).
+    // 2028: open 30,000 / 1.331 = 22,539.4, repaid 30,000 / 1.21 = 24,793.4, close 0.
+    // open + added - repaid != close in real dollars; the gap is inflation.
     const nominal = runPlan(
       plan({
         settings: { projectionYears: 4, baselineIncome: 120_000, baselineExpenses: 60_000 } as never,
@@ -346,18 +379,18 @@ describe('Golden: deflate scales overdrawn like a balance', () => {
 
     const y27 = real.years.find((y) => y.year === 2027)!;
     expect(y27.overdrawn!.open).toBeCloseTo(0, 6);
-    expect(y27.overdrawn!.added).toBeCloseTo(30_000 / 1.21, 6);
+    expect(y27.overdrawn!.added).toBeCloseTo(30_000 / 1.1, 6);
     expect(y27.overdrawn!.close).toBeCloseTo(30_000 / 1.21, 6);
     expect(y27.liabilities).toBeCloseTo(30_000 / 1.21, 6);
+    // Cash Flow and Net Worth agree: the borrowed flow is the deflated shortfall.
+    expect(y27.overdrawn!.added).toBeCloseTo(y27.unfundedShortfall!, 6);
 
     const y28 = real.years.find((y) => y.year === 2028)!;
     expect(y28.overdrawn!.open).toBeCloseTo(30_000 / 1.331, 6);
-    expect(y28.overdrawn!.repaid).toBeCloseTo(30_000 / 1.331, 6);
+    expect(y28.overdrawn!.repaid).toBeCloseTo(30_000 / 1.21, 6);
     expect(y28.overdrawn!.close).toBeCloseTo(0, 6);
-    expect(y28.overdrawn!.open + y28.overdrawn!.added - y28.overdrawn!.repaid).toBeCloseTo(
-      y28.overdrawn!.close,
-      6,
-    );
+    // Repaid matches the deflated repayment allocation line.
+    expect(y28.overdrawn!.repaid).toBeCloseTo(y28.allocations[0].amount, 6);
 
     // Years that never carried anything stay without the key.
     expect(real.years.find((y) => y.year === 2026)!.overdrawn).toBeUndefined();

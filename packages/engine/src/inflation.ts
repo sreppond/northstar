@@ -113,15 +113,17 @@ export function deflate(result: PlanResult, inflationRate: number): PlanResult {
         ...(snapshot.unfundedShortfall !== undefined
           ? { unfundedShortfall: snapshot.unfundedShortfall / flowF }
           : {}),
-        // The overdrawn balance is a BALANCE carried between years, so every
-        // field takes the balance deflator. That keeps open + added - repaid
-        // = close exact in today's dollars.
+        // `open` and `close` are BALANCES, so they take the balance deflator.
+        // `added` and `repaid` are FLOWS, so they take the flow deflator,
+        // exactly like `unfundedShortfall` (today's-dollars `added` therefore
+        // equals the deflated `unfundedShortfall`). The residue, where
+        // open + added - repaid != close, is inflation, as on account rows.
         ...(snapshot.overdrawn
           ? {
               overdrawn: {
                 open: snapshot.overdrawn.open / balanceF,
-                added: snapshot.overdrawn.added / balanceF,
-                repaid: snapshot.overdrawn.repaid / balanceF,
+                added: snapshot.overdrawn.added / flowF,
+                repaid: snapshot.overdrawn.repaid / flowF,
                 close: snapshot.overdrawn.close / balanceF,
               },
             }

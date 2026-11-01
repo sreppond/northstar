@@ -238,16 +238,16 @@ need draws 110,000 and leaves $10,000 unfunded. The drained balance is
 close is `−10,000 + 10,000 = 0`.
 
 **Choices.**
-- **Only the cap changes.** A tax or gain function still reads the opening
-  balance, not the mid-year one, so a fully funded withdrawal is taxed and
-  grossed up exactly as it was before. The cap is where the new capacity
-  appears: `gross = min(gross-up, capacity)`.
+- **Only the cap changes.** The tax gain and the gross-up still read the
+  OPENING balance (and basis), not the mid-year one, so a fully funded
+  withdrawal is taxed and grossed up exactly as it was before. The cap is where
+  the new capacity appears: `gross = min(gross-up, capacity)`.
 - **Zero growth changes nothing.** `h = 0` makes capacity the balance itself.
 - **Negative growth.** `h` is then negative, so a shrinking account's capacity
   is below its opening balance. Before this change its close was
   `O·(r − h) < 0` once drained. Now it closes at 0. The identity holds for any
   rate, so the capacity applies to every non-zero rate, not only positive ones.
-- **Annuity fees are not netted into `h`.** `annuityFeeForYear` charges its
+- **Annuity fees: capacity uses GROSS growth, not net.** `h` is not reduced by the fee rate. `annuityFeeForYear` charges its
   fee on the year's post-draw balance and caps it at what remains. A drained
   contract therefore pays no fee and closes at exactly 0. Netting the fee rate
   into `h` would leave a residue on a drained contract: a $100,000 contract at
@@ -289,10 +289,15 @@ the allocation rules and the cash sweep share the remainder.
 - **Snapshot.** `YearSnapshot.overdrawn = { open, added, repaid, close }` is
   present only when one of the four is non-zero. A plan that is never short
   has no `overdrawn` key at all.
-- **Today's dollars.** `deflate` divides all four fields by the balance
-  deflator for their year, so `open + added − repaid = close` still holds
-  exactly. This means `overdrawn.added` in today's dollars differs from the
-  flow-deflated `unfundedShortfall` by one year's inflation.
+- **Today's dollars.** `deflate` treats the fields by what they are. `open` and
+  `close` are balances, so they take the balance deflator. `added` and `repaid`
+  are flows, so they take the flow deflator, exactly like `unfundedShortfall`.
+  Today's-dollars `added` therefore equals the deflated `unfundedShortfall`, so
+  Cash Flow and Net Worth agree. The residue, where `open + added − repaid ≠
+  close` in today's dollars, is inflation; readers show it as an "Inflation
+  adjustment" sub-row, as account rows do.
+- **The repaying year is not short.** A year whose surplus repays the balance to
+  0 has `added = 0` and `close = 0`, so it is not in `shortfallYears`.
 
 **Worked check.** Income $120,000 and living costs $60,000 make a steady
 $60,000 surplus. Brokerage does not grow, and a $150,000 one-off lands in 2027.
