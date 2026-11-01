@@ -44,10 +44,14 @@ export interface StrandedAccount {
 export interface PlanHealth {
   status: 'ok' | 'short';
   firstShortYear?: number;
-  /** Years the withdrawal waterfall ran dry, ascending. */
+  /** Years the plan is short (a new shortfall, or an overdrawn balance still owed), ascending. */
   shortYears: number[];
-  /** Total unfunded across `shortYears`, in the result's own dollar mode. */
+  /** The last of `shortYears`: the last year still owing. Undefined when the plan is fine. */
+  lastShortYear?: number;
+  /** Total NEW unfunded across `shortYears` (sum of `unfundedShortfall`), in the result's own dollar mode. */
   unfundedTotal: number;
+  /** The largest overdrawn balance carried at any year end, in the result's own dollar mode. 0 when never overdrawn. */
+  overdrawnPeak: number;
   /** Per year (parallel to `result.years`): the year-end balance that could be spent. */
   spendable: number[];
   /**
@@ -127,6 +131,7 @@ export function planHealth(result: PlanResult, plan?: Plan): PlanHealth {
   const shortYears = markers.shortfallYears;
   const unfundedTotal = markers.shortfallTotal;
   const firstShortYear = shortYears[0];
+  const lastShortYear = shortYears[shortYears.length - 1];
 
   const gate = plan ? spendableGate(plan) : undefined;
   const spendable = result.years.map((snapshot) =>
@@ -139,13 +144,25 @@ export function planHealth(result: PlanResult, plan?: Plan): PlanHealth {
   return {
     status: shortYears.length > 0 ? 'short' : 'ok',
     ...(firstShortYear !== undefined ? { firstShortYear } : {}),
+    ...(lastShortYear !== undefined ? { lastShortYear } : {}),
     shortYears,
     unfundedTotal,
+    overdrawnPeak: markers.overdrawnPeak,
     spendable,
     stranded: plan && gate && firstShortYear !== undefined ? strandedAt(result, gate, firstShortYear) : [],
     signature:
       firstShortYear === undefined ? 'ok' : `${firstShortYear}:${Math.round(unfundedTotal / 1000) * 1000}`,
   };
+}
+
+/**
+ * The amount a year is short, for the Short readout: this year's NEW shortfall,
+ * or, in a carry-over year that owes money from earlier but is not newly short
+ * (`unfundedShortfall` is absent), the overdrawn balance it still owes.
+ * Undefined when the year has neither.
+ */
+export function shortAmount(year: YearSnapshot): number | undefined {
+  return year.unfundedShortfall ?? year.overdrawn?.close;
 }
 
 /**
@@ -162,7 +179,7 @@ export function planHealth(result: PlanResult, plan?: Plan): PlanHealth {
  */
 export function healthDangerBand(health: PlanHealth, result: PlanResult, perUnit = 1): DangerBand | undefined {
   if (health.status !== 'short' || health.firstShortYear === undefined) return undefined;
-  const byYear = new Map(result.years.map((y) => [y.year, y.unfundedShortfall]));
+  const byYear = new Map(result.years.map((y) => [y.year, shortAmount(y)]));
   return {
     from: health.firstShortYear,
     to: health.shortYears[health.shortYears.length - 1],

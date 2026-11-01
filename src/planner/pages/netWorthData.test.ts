@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { runPlan } from '@northstar/engine';
+import { deflate, runPlan } from '@northstar/engine';
 import type { Plan, PlanResult } from '@northstar/engine';
 import { planHealth } from '../health';
-import { runsDryPlan, healthyPlan, kitchenSinkPlan } from '../planFixtures';
+import { account, basePlan, event, runsDryPlan, healthyPlan, kitchenSinkPlan } from '../planFixtures';
 import { SAMPLE_PLANS } from '../samplePlan';
 import { toHouseholdModel } from '../household';
 import {
@@ -13,8 +13,34 @@ import {
   dangerBand,
   eventMarkers,
   flowSteps,
+  monthlyDangerBand,
+  overdrawnRows,
   presentClasses,
 } from './netWorthData';
+
+/**
+ * Income 120k and living costs 60k make a steady 60k surplus; the brokerage
+ * does not grow. Each one-off lands in its year, so the shortfalls and the
+ * repayments are plain sums. Years 2026 to 2029 by default.
+ */
+function oneOffPlan(oneOffs: { year: number; amount: number }[]): Plan {
+  return basePlan({
+    settings: {
+      ...basePlan().settings,
+      projectionYears: 4,
+      baselineIncome: 120_000,
+      baselineExpenses: 60_000,
+      inflationRate: 0,
+      incomeTaxRate: 0,
+    },
+    accounts: [account({ id: 'b', accountClass: 'taxableInvestment', initialBalance: 0, growthRateMethod: 'noChange' })],
+    events: oneOffs.map((o) => event({ id: `one-off-${o.year}`, kind: 'otherExpense', startYear: o.year, config: { amount: o.amount } })),
+    rules: [
+      { accountId: 'b', ruleType: 'allocation', order: 1 },
+      { accountId: 'b', ruleType: 'withdrawal', order: 1 },
+    ],
+  });
+}
 
 const plans: [string, Plan][] = [
   ['sample house', SAMPLE_PLANS[0]],
@@ -276,5 +302,63 @@ describe("accountFlowRows: the balances table's expanded rows (R1)", () => {
     // The home's value is money in, not an opening balance.
     const homeRows = accountFlowRows(result.years, 'realEstate', false, result.opening);
     expect(homeRows.find((r) => r.key === 'additions')!.values[0]).toBeGreaterThan(1);
+  });
+});
+
+describe('overdrawnRows: the Overdrawn liability row (docs/V6.1-PLAN.md B2)', () => {
+  // 2027: 150k one-off, the 60k surplus leaves 30k unfunded, so owed 30k.
+  // 2028: 40k one-off, the 60k surplus leaves 20k to repay, so owed 10k.
+  // 2029: the 60k surplus repays the last 10k, so owed 0.
+  const nominal = () => runPlan(oneOffPlan([{ year: 2027, amount: 150_000 }, { year: 2028, amount: 40_000 }])).years;
+
+  it('is absent for a plan that is never short', () => {
+    expect(overdrawnRows(runPlan(healthyPlan()).years)).toBeUndefined();
+  });
+
+  it('nominal: the balance, Borrowed and Paid back match the engine, with no Inflation row', () => {
+    const row = overdrawnRows(nominal())!;
+    expect(row.balance).toEqual([0, 30_000, 10_000, 0].map((v) => expect.closeTo(v, 6)));
+    const values = (key: string) => row.rows.find((r) => r.key === key)!.values;
+    expect(values('borrowed')).toEqual([0, 30_000, 0, 0].map((v) => expect.closeTo(v, 6)));
+    expect(values('paid')).toEqual([0, 0, -20_000, -10_000].map((v) => expect.closeTo(v, 6)));
+    expect(row.rows.map((r) => r.key)).toEqual(['borrowed', 'paid']);
+  });
+
+  it('today\'s dollars: each column bridges from last year\'s balance within $1, Inflation adjustment included', () => {
+    // Deflating at 10% from 2026 (a full first year). The balance takes 1.1^(1 + t),
+    // the flows 1.1^t, with t = year − 2026.
+    //   2027: balance 30,000 / 1.21 = 24,793.4; borrowed 30,000 / 1.1 = 27,272.7.
+    //         Opening is 0, so the residue is 24,793.4 − 27,272.7 = −2,479.3.
+    //   2028: balance 10,000 / 1.331 = 7,513.1; paid back 20,000 / 1.21 = 16,528.9.
+    //         Opening is last year's 24,793.4, so the residue is
+    //         10,000/1.331 − 10,000/1.21 = −751.3, and 24,793.4 − 16,528.9 − 751.3 = 7,513.1.
+    const real = deflate(runPlan(oneOffPlan([{ year: 2027, amount: 150_000 }, { year: 2028, amount: 40_000 }])), 10);
+    const row = overdrawnRows(real.years)!;
+    const get = (key: string) => row.rows.find((r) => r.key === key)!.values;
+    const inflation = get('inflation');
+    expect(inflation[1]).toBeCloseTo(30_000 / 1.21 - 30_000 / 1.1, 4);
+    expect(inflation[2]).toBeCloseTo(10_000 / 1.331 - 10_000 / 1.21, 4);
+
+    real.years.forEach((_y, i) => {
+      const opening = i === 0 ? 0 : row.balance[i - 1];
+      const bridged = opening + get('borrowed')[i] + get('paid')[i] + inflation[i];
+      expect(Math.abs(bridged - row.balance[i])).toBeLessThan(1);
+    });
+  });
+
+  it('today\'s dollars: the Inflation adjustment appears only when some year has a residue of a dollar or more', () => {
+    // Nominal values carry no residue, so no row. Deflated, the residue is real.
+    expect(overdrawnRows(nominal())!.rows.some((r) => r.key === 'inflation')).toBe(false);
+    const real = deflate(runPlan(oneOffPlan([{ year: 2027, amount: 150_000 }])), 10);
+    expect(overdrawnRows(real.years)!.rows.some((r) => r.key === 'inflation')).toBe(true);
+  });
+
+  it('monthlyDangerBand divides the carried balance by the year\'s months in a carry-over year', () => {
+    // 2028 is not newly short (no unfundedShortfall), so its Short amount is the 10,000 it still owes.
+    const plan = oneOffPlan([{ year: 2027, amount: 150_000 }, { year: 2028, amount: 40_000 }]);
+    const result = runPlan(plan);
+    const band = monthlyDangerBand(planHealth(result, plan), plan, result)!;
+    expect(band.shortFor!(2028)).toBeCloseTo(10_000 / 12, 6);
+    expect(band.shortFor!(2027)).toBeCloseTo(30_000 / 12, 6);
   });
 });

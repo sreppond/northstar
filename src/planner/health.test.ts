@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pathMarkers, runPlan } from '@northstar/engine';
 import type { Plan } from '@northstar/engine';
-import { healthDangerBand, planHealth } from './health';
+import { healthDangerBand, planHealth, shortAmount } from './health';
 import { account, basePlan, event, healthyPlan, kitchenSinkPlan, runsDryPlan } from './planFixtures';
 import { SAMPLE_PLANS } from './samplePlan';
 
@@ -252,5 +252,65 @@ describe('healthDangerBand (V5-REVIEW-1 F2)', () => {
 
     const fine = healthyPlan();
     expect(healthDangerBand(planHealth(runPlan(fine), fine), runPlan(fine))).toBeUndefined();
+  });
+});
+
+describe('overdrawn years (docs/V6.1-PLAN.md B2)', () => {
+  // Income 120k, living costs 60k: a 60k surplus a year. Brokerage does not grow.
+  //   2027: a 150k one-off leaves 30k unfunded, so owed 30k (a new shortfall).
+  //   2028: a 40k one-off, so the 60k surplus repays 20k and owes 10k (carry-over, not new).
+  //   2029: the 60k surplus repays the last 10k, so owed 0. Not short.
+  // shortYears = [2027, 2028]; unfundedTotal = 30k (new only); overdrawnPeak = 30k.
+  const carried = (): Plan =>
+    basePlan({
+      settings: {
+        ...basePlan().settings,
+        projectionYears: 4,
+        baselineIncome: 120_000,
+        baselineExpenses: 60_000,
+        inflationRate: 0,
+        incomeTaxRate: 0,
+      },
+      accounts: [account({ id: 'b', accountClass: 'taxableInvestment', initialBalance: 0, growthRateMethod: 'noChange' })],
+      events: [
+        event({ id: 'big', kind: 'otherExpense', startYear: 2027, config: { amount: 150_000 } }),
+        event({ id: 'later', kind: 'otherExpense', startYear: 2028, config: { amount: 40_000 } }),
+      ],
+      rules: [
+        { accountId: 'b', ruleType: 'allocation', order: 1 },
+        { accountId: 'b', ruleType: 'withdrawal', order: 1 },
+      ],
+    });
+
+  it('reports the overdrawn peak and the last year still owing', () => {
+    const plan = carried();
+    const health = planHealth(runPlan(plan), plan);
+    expect(health.shortYears).toEqual([2027, 2028]);
+    expect(health.firstShortYear).toBe(2027);
+    expect(health.lastShortYear).toBe(2028);
+    expect(health.overdrawnPeak).toBeCloseTo(30_000, 6);
+    expect(health.unfundedTotal).toBeCloseTo(30_000, 6);
+  });
+
+  it('shortAmount falls back to the balance owed in a carry-over year, so the Short readout always has an amount', () => {
+    const plan = carried();
+    const result = runPlan(plan);
+    const carryOver = result.years.find((y) => y.year === 2028)!;
+    expect(carryOver.unfundedShortfall).toBeUndefined();
+    expect(shortAmount(carryOver)).toBeCloseTo(10_000, 6);
+    expect(shortAmount(result.years.find((y) => y.year === 2027)!)).toBeCloseTo(30_000, 6);
+
+    const band = healthDangerBand(planHealth(result, plan), result)!;
+    expect(band.years).toEqual([2027, 2028]);
+    expect(band.shortFor!(2027)).toBeCloseTo(30_000, 6);
+    expect(band.shortFor!(2028)).toBeCloseTo(10_000, 6);
+  });
+
+  it('a plan that is never short has no overdrawn peak, no last short year, and the stable ok signature', () => {
+    const fine = healthyPlan();
+    const health = planHealth(runPlan(fine), fine);
+    expect(health.overdrawnPeak).toBe(0);
+    expect(health.lastShortYear).toBeUndefined();
+    expect(health.signature).toBe('ok');
   });
 });
