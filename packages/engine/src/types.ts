@@ -555,12 +555,27 @@ export interface YearSnapshot {
 
   accounts: AccountYear[];
 
+  /**
+   * Includes `overdrawn.close` (docs/V6.1-PLAN.md E1): the carried-forward
+   * shortfall is a debt the household owes the plan, so it is a liability.
+   */
   assets: number;
   liabilities: number;
   netWorth: number;
 
-  /** Set when the withdrawal waterfall ran dry: the plan fails this year. */
+  /** Set when the withdrawal waterfall ran dry this year: this year's NEW shortfall only. */
   unfundedShortfall?: number;
+
+  /**
+   * The balance of unfunded shortfalls carried forward from earlier years
+   * (docs/MATH.md "Overdrawn balance"). A shortfall the waterfall could not
+   * fund becomes `added`; a later surplus repays `min(net, open)` of it first,
+   * before any allocation rule sees a dollar, as `repaid`. No interest accrues.
+   * `close = open + added - repaid`. `close` is part of `liabilities`, so
+   * `netWorth` already subtracts it. Present only when any of the four is
+   * non-zero, so a plan that is never short carries no `overdrawn` at all.
+   */
+  overdrawn?: { open: number; added: number; repaid: number; close: number };
 }
 
 /** One account's contribution to `OpeningSnapshot` — see there. */
