@@ -187,6 +187,10 @@ export function runPlan(plan: Plan): PlanResult {
   // by the year it falls due (the year after the gain, step 7).
   const gainsCarry = new Map<string, number>();
   const gainsTaxDueByYear = new Map<number, LineItem[]>();
+  // Shortfalls the waterfall could not fund, carried forward as a debt with no
+  // interest (docs/MATH.md "Overdrawn balance"). Repaid from later surpluses
+  // before any allocation rule sees the money.
+  let overdrawn = 0;
   const years: YearSnapshot[] = [];
 
   // --- phase B: simulate -----------------------------------------------------
@@ -524,6 +528,19 @@ export function runPlan(plan: Plan): PlanResult {
     const net = totalIncome - expenseTotal - taxTotalBeforeWithdrawals;
 
     // 9. ALLOCATE or WITHDRAW
+    // Mid-year withdrawal capacity (docs/MATH.md "Withdrawal capacity under
+    // the mid-year convention"): a growing account can give up its opening
+    // balance PLUS the half-period growth it has earned by the time money
+    // leaves. Same rate, year fraction and closed-account rule as step 10.
+    // Fees are not netted in; see the MATH.md section for why.
+    const midYearUplift = new Map<string, number>();
+    for (const account of accounts) {
+      if (account.isLiability || closed.has(account.id)) continue;
+      const openBalance = opening.get(account.id) ?? 0;
+      const halfFactor = effectiveRateForFraction(growthRateFor(account, year), yearFraction / 2);
+      if (openBalance !== 0 && halfFactor !== 0) midYearUplift.set(account.id, openBalance * halfFactor);
+    }
+
     const waterfall: WaterfallContext = {
       year,
       accounts: accountById,
@@ -532,6 +549,7 @@ export function runPlan(plan: Plan): PlanResult {
       ageForAccount: (id) => ageForAccount(id, year),
       planStartYear: startYear,
       lockedAccountIds: seppLocked,
+      midYearUplift,
     };
 
     const contributionsByAccount = new Map<string, number>();
@@ -542,10 +560,28 @@ export function runPlan(plan: Plan): PlanResult {
       );
     }
 
+    const overdrawnOpen = overdrawn;
+    let overdrawnAdded = 0;
+    let overdrawnRepaid = 0;
     let unfundedShortfall = 0;
 
     if (net > EPSILON) {
-      const allocation = planAllocations(net, plan.rules, waterfall);
+      // Overdrawn balances come first (docs/V6.1-PLAN.md E1): the surplus
+      // pays them down before any allocation rule sees a dollar. The
+      // repayment is a line in `allocations` so readers can show it.
+      overdrawnRepaid = Math.min(net, overdrawnOpen);
+      if (overdrawnRepaid > EPSILON) {
+        allocationLines.push({
+          label: 'Paying back overdrawn',
+          amount: overdrawnRepaid,
+          category: 'overdrawnRepayment',
+        });
+      }
+    }
+
+    const surplus = net - overdrawnRepaid;
+    if (surplus > EPSILON) {
+      const allocation = planAllocations(surplus, plan.rules, waterfall);
       for (const draw of allocation.draws) {
         const account = accountById.get(draw.accountId);
         if (!account) continue;
@@ -579,7 +615,9 @@ export function runPlan(plan: Plan): PlanResult {
           accountId: sweepAccount.id,
         });
       }
-    } else if (net < -EPSILON) {
+    }
+
+    if (net < -EPSILON) {
       const withdrawal = planWithdrawals(-net, plan.rules, waterfall);
       for (const draw of withdrawal.draws) {
         const account = accountById.get(draw.accountId);
@@ -619,11 +657,20 @@ export function runPlan(plan: Plan): PlanResult {
       // rather than letting a balance drift negative.
       if (withdrawal.unfunded > EPSILON) {
         unfundedShortfall = withdrawal.unfunded;
+        // The unfunded remainder is not forgiven: it is owed, and carried
+        // forward until a later surplus repays it (docs/MATH.md "Overdrawn
+        // balance"). `unfundedShortfall` stays this year's NEW amount only.
+        overdrawnAdded = withdrawal.unfunded;
         warnings.push(
           `${year}: shortfall of ${Math.round(withdrawal.unfunded).toLocaleString()} could not be funded.`,
         );
       }
     }
+
+    overdrawn = Math.max(0, overdrawnOpen + overdrawnAdded - overdrawnRepaid);
+    if (overdrawn <= EPSILON) overdrawn = 0;
+    const overdrawnOut =
+      overdrawnOpen > EPSILON || overdrawnAdded > EPSILON || overdrawnRepaid > EPSILON || overdrawn > EPSILON;
 
     // 10. GROWTH and debt balances, then snapshot.
     //     Growth applies to the balance each account OPENED the year with, so
@@ -702,7 +749,10 @@ export function runPlan(plan: Plan): PlanResult {
         ? 0
         : annuityFeeForYear(account, growthBase, grossGrowth, yearFraction);
       const growth = grossGrowth - annuityFees;
-      const close = growthBase + contributions + growth;
+      // A fully drained growing account lands on exactly 0 in real arithmetic
+      // (docs/MATH.md "Withdrawal capacity"); clamp the float residue so it
+      // never reads as a tiny negative balance.
+      const close = Math.max(0, growthBase + contributions + growth);
 
       balances.set(account.id, close);
 
@@ -763,7 +813,9 @@ export function runPlan(plan: Plan): PlanResult {
     }
 
     const assets = sum(accountRows.filter((r) => !r.isLiability).map((r) => r.close));
-    const liabilities = sum(accountRows.filter((r) => r.isLiability).map((r) => r.close));
+    // The overdrawn balance is owed, so it is a liability (docs/V6.1-PLAN.md E1).
+    const liabilities =
+      sum(accountRows.filter((r) => r.isLiability).map((r) => r.close)) + overdrawn;
     const totalTaxes = sum(taxes.map((l) => l.amount));
 
     years.push({
@@ -783,6 +835,16 @@ export function runPlan(plan: Plan): PlanResult {
       liabilities,
       netWorth: assets - liabilities,
       ...(unfundedShortfall > EPSILON ? { unfundedShortfall } : {}),
+      ...(overdrawnOut
+        ? {
+            overdrawn: {
+              open: overdrawnOpen,
+              added: overdrawnAdded,
+              repaid: overdrawnRepaid,
+              close: overdrawn,
+            },
+          }
+        : {}),
     });
   }
 

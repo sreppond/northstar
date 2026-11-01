@@ -77,6 +77,15 @@ export interface WaterfallContext {
    * them and no surplus may land in them (either would modify the schedule).
    */
   lockedAccountIds?: Set<string>;
+  /**
+   * Extra withdrawal capacity per account, on top of `balances`: the mid-year
+   * growth an account has earned by the moment a withdrawal lands
+   * (docs/MATH.md "Withdrawal capacity under the mid-year convention"), i.e.
+   * `openingBalance × h` with `h = (1+r)^(f/2) − 1`. Absent or 0 for an
+   * account that does not grow this year. `balances` still holds the opening
+   * balance net of draws, so `run.ts`'s growth step is unchanged.
+   */
+  midYearUplift?: Map<string, number>;
 }
 
 /** Withdrawal gating: `withdrawalTiming` plus `withdrawalStartingYear`. */
@@ -115,8 +124,17 @@ export function planWithdrawals(
     if (ctx.lockedAccountIds?.has(account.id)) continue;
     if (!isWithdrawable(account, ctx.year)) continue;
 
-    const available = ctx.balances.get(rule.accountId) ?? 0;
-    if (available <= EPSILON) continue;
+    // `balance` is the opening balance net of anything already drawn; the
+    // account can give up that plus its mid-year growth (`midYearUplift`), so
+    // a draw never strands the half-year it has already earned.
+    const balance = ctx.balances.get(rule.accountId) ?? 0;
+    const capacity = balance + (ctx.midYearUplift?.get(rule.accountId) ?? 0);
+    if (capacity <= EPSILON) continue;
+
+    // The tax and gain functions still see the opening-basis `balance`, not
+    // the capacity, so every withdrawal that is fully funded is taxed exactly
+    // as before; only the CAP changes (docs/MATH.md "Withdrawal capacity").
+    const available = balance;
 
     const age = ctx.ageForAccount(rule.accountId);
     let gross: number;
@@ -136,7 +154,7 @@ export function planWithdrawals(
       const basis = ctx.remainingBasis.get(rule.accountId) ?? account.nonTaxableBase;
       gross = grossUpFn(remaining, available, basis, gainRate);
       if (rule.config?.maxAnnual !== undefined) gross = Math.min(gross, rule.config.maxAnnual);
-      gross = Math.min(gross, available);
+      gross = Math.min(gross, capacity);
       if (gross <= EPSILON) continue;
 
       const applied = taxFn(gross, available, basis, gainRate);
@@ -146,7 +164,7 @@ export function planWithdrawals(
       const rate = effectiveWithdrawalRate(account, age);
       gross = grossUp(remaining, rate);
       if (rule.config?.maxAnnual !== undefined) gross = Math.min(gross, rule.config.maxAnnual);
-      gross = Math.min(gross, available);
+      gross = Math.min(gross, capacity);
       if (gross <= EPSILON) continue;
       tax = gross * rate;
     }
@@ -166,7 +184,11 @@ export function planWithdrawals(
       surrenderCharge: surrender,
       net,
     });
-    ctx.balances.set(rule.accountId, available - gross);
+    // Debits the OPENING-units balance, not the capacity: the growth step
+    // (run.ts) applies the mid-year identity to exactly this number. A fully
+    // drained growing account ends here at `-uplift`, which is the point where
+    // that identity closes at exactly 0.
+    ctx.balances.set(rule.accountId, balance - gross);
     remaining -= net;
   }
 

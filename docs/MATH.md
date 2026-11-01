@@ -200,6 +200,126 @@ RMD growth test), `packages/engine/test/rmd.test.ts`.
 
 ---
 
+## Withdrawal capacity under the mid-year convention
+
+**The bug.** The mid-year convention above already gives a withdrawal half a
+period of growth: money that leaves during the year forgoes only half of it.
+That means the account is worth `O·(1+h)` at the moment the money leaves,
+where `O` is the opening balance and `h = (1+r)^(f/2) − 1`. The waterfall
+used to cap a draw at `O`, which stranded that half-year of growth. A drained
+account closed at `O·h` while the year was still reported short, so the
+half-year of growth showed up as money that was neither spent nor withdrawn.
+
+**Formula.** For each account that is not a liability and not closed this
+year, with `O` the opening balance and `balance_now` the waterfall's running
+balance (`O` less every draw so far this year, RMD and SEPP included):
+
+```
+capacity = balance_now + O·h        h = effectiveRateForFraction(r, f/2)
+         = O·(1+h) − (withdrawals already drawn this year)
+```
+
+The waterfall debits `balance_now` by the gross draw, not by the capacity.
+The growth step then runs unchanged. With `W` the year's total withdrawals
+from the account, its close is
+
+```
+close = (O − W)(1+r) + W(r − h) = O(1+r) − W(1+h)  =  (O(1+h) − W)(1+h)
+```
+
+which is exactly the mid-year close above. The three forms agree, so the
+capacity never disagrees with the growth the account is credited.
+
+**Worked check (a drained account closes at 0).** $100,000 at 21%, full year:
+`h = 1.21^(1/2) − 1 = 0.1`, capacity `= 100,000 × 1.1 = 110,000`. A $120,000
+need draws 110,000 and leaves $10,000 unfunded. The drained balance is
+`100,000 − 110,000 = −10,000`. Growth is
+`−10,000 × 0.21 + 110,000 × (0.21 − 0.1) = −2,100 + 12,100 = 10,000`, so the
+close is `−10,000 + 10,000 = 0`.
+
+**Choices.**
+- **Only the cap changes.** A tax or gain function still reads the opening
+  balance, not the mid-year one, so a fully funded withdrawal is taxed and
+  grossed up exactly as it was before. The cap is where the new capacity
+  appears: `gross = min(gross-up, capacity)`.
+- **Zero growth changes nothing.** `h = 0` makes capacity the balance itself.
+- **Negative growth.** `h` is then negative, so a shrinking account's capacity
+  is below its opening balance. Before this change its close was
+  `O·(r − h) < 0` once drained. Now it closes at 0. The identity holds for any
+  rate, so the capacity applies to every non-zero rate, not only positive ones.
+- **Annuity fees are not netted into `h`.** `annuityFeeForYear` charges its
+  fee on the year's post-draw balance and caps it at what remains. A drained
+  contract therefore pays no fee and closes at exactly 0. Netting the fee rate
+  into `h` would leave a residue on a drained contract: a $100,000 contract at
+  6% with a $100 flat fee, capacity taken at the net half-year rate, closes at
+  about $400, which the cap does not absorb. A partially drawn contract still
+  pays its fee in the growth step, as before.
+- **Float residue.** The growth step clamps `close` at 0, so a drained account
+  reads exactly 0 rather than a balance of about −10⁻¹¹.
+
+**Tests:** `packages/engine/test/golden.drawdown.test.ts`
+("Golden: withdrawal capacity at the mid-year balance": the $100K/21% case, a
+shrinking-account case, and a synthetic purchase-year case).
+
+---
+
+## Overdrawn balance
+
+**Formula.** Let `O_t` be the overdrawn balance at the start of year `t` (0 at
+the plan's start), `U_t` the year's unfunded remainder from the withdrawal
+waterfall, and `net_t` the year's net cash flow after step 8.
+
+```
+shortfall year (net < 0):  added_t = U_t,      repaid_t = 0
+surplus year   (net > 0):  repaid_t = min(net_t, O_t),  added_t = 0
+close_t = O_t + added_t − repaid_t
+```
+
+On a surplus year, the repayment is the first allocation line, pushed before
+any rule runs: `{ label: 'Paying back overdrawn', amount, category:
+'overdrawnRepayment' }`. Only `net_t − repaid_t` goes to `planAllocations`, so
+the allocation rules and the cash sweep share the remainder.
+
+- **No interest.** A carried shortfall is a planning signal, not a loan. The
+  engine does not model what it costs to carry one, so `O_t` does not grow.
+- **Liabilities and net worth.** `close_t` is added to `liabilities`, so
+  `netWorth = assets − liabilities` includes the debt in every year.
+- **`unfundedShortfall` keeps its meaning.** It is still this year's new `U_t`,
+  not the balance, so every consumer of the old field is unchanged.
+- **Snapshot.** `YearSnapshot.overdrawn = { open, added, repaid, close }` is
+  present only when one of the four is non-zero. A plan that is never short
+  has no `overdrawn` key at all.
+- **Today's dollars.** `deflate` divides all four fields by the balance
+  deflator for their year, so `open + added − repaid = close` still holds
+  exactly. This means `overdrawn.added` in today's dollars differs from the
+  flow-deflated `unfundedShortfall` by one year's inflation.
+
+**Worked check.** Income $120,000 and living costs $60,000 make a steady
+$60,000 surplus. Brokerage does not grow, and a $150,000 one-off lands in 2027.
+
+| Year | Net | Waterfall | Overdrawn (open → added / repaid → close) | Net worth |
+|---|---|---|---|---|
+| 2026 | +60,000 | allocated to Brokerage: 60,000 | — | +60,000 |
+| 2027 | −90,000 | drew 60,000, 30,000 unfunded | 0 → +30,000 → 30,000 | −30,000 |
+| 2028 | +60,000 | "Paying back overdrawn" 30,000, then 30,000 to Brokerage | 30,000 → −30,000 → 0 | +30,000 |
+
+In 2028 the repayment comes first, so only the remaining 30,000 is allocated.
+Net worth rises by 60,000, the year's surplus, and no money is created or
+lost in the repayment. In 2027 net worth falls by 90,000, the year's deficit.
+
+**Markers.** `pathMarkers` (`markers.ts`) reads both fields. `shortfallYears`
+holds every year with `U_t > 0` or `close_t > 0`, so a span runs from the
+first short year to the last year still owing. The year that repays the
+balance to 0 is not in the list. `shortfallTotal` is `Σ U_t`, the new
+shortfalls only. `overdrawnPeak` is `max close_t`, or 0.
+
+**Tests:** `packages/engine/test/golden.drawdown.test.ts` ("Golden: overdrawn
+balance carried forward", "markers read the overdrawn span", "deflate scales
+overdrawn like a balance", and "a plan that is never short is unchanged by
+E1", which pins the pre-E1 output with a digest).
+
+---
+
 ## Flat income tax
 
 **Formula** (`run.ts` step 7): `tax = max(0, taxableIncome − pretaxContributions) × incomeTaxRate/100`.

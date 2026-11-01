@@ -36,10 +36,17 @@ export interface PathMarkers {
   peakValue?: number;
   /** The largest peak-to-trough fall, when there is one worth naming. */
   drawdown?: DrawdownMarker;
-  /** Years the withdrawal waterfall ran dry. The plan fails in these years. */
+  /**
+   * Years the plan is short: a NEW shortfall this year (`unfundedShortfall`),
+   * or an overdrawn balance still owed at year end (`overdrawn.close`). A
+   * shortfall span therefore runs from its first year until the overdrawn
+   * balance is repaid, sorted and unique.
+   */
   shortfallYears: number[];
-  /** Total unfunded across those years. */
+  /** Total NEW unfunded across the plan (sum of `unfundedShortfall`). */
   shortfallTotal: number;
+  /** The largest overdrawn balance carried at any year end, or 0 if never overdrawn. */
+  overdrawnPeak: number;
 }
 
 /** A fall smaller than this is noise, not a story. */
@@ -47,14 +54,17 @@ const MIN_DRAWDOWN_PERCENT = 2;
 
 export function pathMarkers(result: PlanResult): PathMarkers {
   const years = result.years;
-  const out: PathMarkers = { shortfallYears: [], shortfallTotal: 0 };
+  const out: PathMarkers = { shortfallYears: [], shortfallTotal: 0, overdrawnPeak: 0 };
   if (years.length === 0) return out;
 
+  // `years` is in calendar order and each year is visited once, so the list
+  // is already sorted and unique.
   for (const y of years) {
-    if (y.unfundedShortfall && y.unfundedShortfall > 0) {
-      out.shortfallYears.push(y.year);
-      out.shortfallTotal += y.unfundedShortfall;
-    }
+    const unfunded = y.unfundedShortfall ?? 0;
+    const owed = y.overdrawn?.close ?? 0;
+    if (unfunded > 0 || owed > 0) out.shortfallYears.push(y.year);
+    if (unfunded > 0) out.shortfallTotal += unfunded;
+    out.overdrawnPeak = Math.max(out.overdrawnPeak, owed);
   }
 
   // Peak, but only when it is not simply the end of a rising line.

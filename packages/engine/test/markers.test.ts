@@ -81,6 +81,8 @@ describe('pathMarkers — shortfalls', () => {
 
 describe('pathMarkers — empty', () => {
   it('survives a result with no years', () => {
-    expect(pathMarkers(result([]))).toEqual({ shortfallYears: [], shortfallTotal: 0 });
+    // `overdrawnPeak` joined the markers in E1 (docs/V6.1-PLAN.md): an empty
+    // plan carries no overdrawn balance, so the peak is 0, not absent.
+    expect(pathMarkers(result([]))).toEqual({ shortfallYears: [], shortfallTotal: 0, overdrawnPeak: 0 });
   });
 });

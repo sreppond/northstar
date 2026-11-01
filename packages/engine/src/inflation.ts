@@ -113,6 +113,19 @@ export function deflate(result: PlanResult, inflationRate: number): PlanResult {
         ...(snapshot.unfundedShortfall !== undefined
           ? { unfundedShortfall: snapshot.unfundedShortfall / flowF }
           : {}),
+        // The overdrawn balance is a BALANCE carried between years, so every
+        // field takes the balance deflator. That keeps open + added - repaid
+        // = close exact in today's dollars.
+        ...(snapshot.overdrawn
+          ? {
+              overdrawn: {
+                open: snapshot.overdrawn.open / balanceF,
+                added: snapshot.overdrawn.added / balanceF,
+                repaid: snapshot.overdrawn.repaid / balanceF,
+                close: snapshot.overdrawn.close / balanceF,
+              },
+            }
+          : {}),
       };
     }),
   };
